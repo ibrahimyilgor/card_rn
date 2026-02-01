@@ -1,0 +1,65 @@
+﻿{
+	"expo": {
+		"name": "MemoDeck",
+		"slug": "card_rn",
+		"version": "1.0.0",
+		"orientation": "portrait",
+		"icon": "./assets/icon.png",
+		"userInterfaceStyle": "light",
+		"newArchEnabled": false,
+		"splash": {
+			"image": "./assets/splash-icon.png",
+			"resizeMode": "contain",
+			"backgroundColor": "#ffffff"
+		},
+		"ios": {
+			"supportsTablet": true,
+			"bundleIdentifier": "com.yilgor.memodeck",
+			"googleServicesFile": "./GoogleService-Info.plist"
+		},
+		"android": {
+			"adaptiveIcon": {
+				"foregroundImage": "./assets/adaptive-icon.png",
+				"backgroundColor": "#ffffff"
+			},
+			"edgeToEdgeEnabled": true,
+			"package": "com.yilgor.memodeck",
+			"googleServicesFile": "./google-services.json"
+		},
+		"web": {
+			"favicon": "./assets/favicon.png"
+		},
+		"extra": {
+			"apiUrl": "http://localhost:5000",
+			"eas": {
+				"projectId": "a81e9c2d-f0dc-4935-ae68-9c577c6c28d8"
+			}
+		},
+		"owner": "iyilmak",
+		"plugins": [
+			[
+				"expo-build-properties",
+				{
+					"android": {
+						"targetSdkVersion": 34,
+						"buildToolsVersion": "34.0.0",
+						"compileSdkVersion": 34
+					},
+					"ios": {
+						"useFrameworks": "static"
+					}
+				}
+			],
+			"@react-native-firebase/app",
+			"@react-native-firebase/auth",
+			"@react-native-google-signin/google-signin",
+			[
+				"react-native-google-mobile-ads",
+				{
+					"androidAppId": "ca-app-pub-3940256099942544~3347511713",
+					"iosAppId": "ca-app-pub-3940256099942544~1458002511"
+				}
+			]
+		]
+	}
+}

@@ -1,0 +1,46 @@
+{
+	"project_info": {
+		"project_number": "512218778452",
+		"project_id": "memodeck-ef09f",
+		"storage_bucket": "memodeck-ef09f.firebasestorage.app"
+	},
+	"client": [
+		{
+			"client_info": {
+				"mobilesdk_app_id": "1:512218778452:android:77891545a94885ad2916c1",
+				"android_client_info": {
+					"package_name": "com.yilgor.memodeck"
+				}
+			},
+			"oauth_client": [
+				{
+					"client_id": "512218778452-8jdo74nvlmnl47vrsn2jp2ciueanir4b.apps.googleusercontent.com",
+					"client_type": 3
+				}
+			],
+			"api_key": [
+				{
+					"current_key": "AIzaSyDCiYJ8qYUFuzAnRKdnswadUOskTIwoD_0"
+				}
+			],
+			"services": {
+				"appinvite_service": {
+					"other_platform_oauth_client": [
+						{
+							"client_id": "512218778452-8jdo74nvlmnl47vrsn2jp2ciueanir4b.apps.googleusercontent.com",
+							"client_type": 3
+						},
+						{
+							"client_id": "512218778452-vki96cuf6tn01v3c1kv0pdjd4qum7tfg.apps.googleusercontent.com",
+							"client_type": 2,
+							"ios_info": {
+								"bundle_id": "com.yilgor.memodeck"
+							}
+						}
+					]
+				}
+			}
+		}
+	],
+	"configuration_version": "1"
+}

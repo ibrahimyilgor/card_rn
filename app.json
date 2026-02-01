@@ -1,0 +1,57 @@
+{
+	"expo": {
+		"name": "MemoDeck",
+		"slug": "card_rn",
+		"version": "1.0.0",
+		"orientation": "portrait",
+		"icon": "./assets/icon.png",
+		"userInterfaceStyle": "light",
+		"newArchEnabled": false,
+		"cli": {
+			"appVersionSource": "remote"
+		},
+		"splash": {
+			"image": "./assets/splash-icon.png",
+			"resizeMode": "contain",
+			"backgroundColor": "#ffffff"
+		},
+		"ios": {
+			"supportsTablet": true,
+			"bundleIdentifier": "com.yilgor.memodeck",
+			"googleServicesFile": "./GoogleService-Info.plist"
+		},
+		"android": {
+			"adaptiveIcon": {
+				"foregroundImage": "./assets/adaptive-icon.png",
+				"backgroundColor": "#ffffff"
+			},
+			"edgeToEdgeEnabled": true,
+			"package": "com.yilgor.memodeck",
+			"googleServicesFile": "./google-services.json"
+		},
+		"web": {
+			"favicon": "./assets/favicon.png"
+		},
+		"extra": {
+			"apiUrl": "http://localhost:5000",
+			"eas": {
+				"projectId": "a9595537-cfee-4aa5-823d-82fcc3898574"
+			}
+		},
+		"owner": "memodeck26",
+		"plugins": [
+			[
+				"expo-build-properties",
+				{
+					"android": {
+						"usesCleartextTraffic": true,
+						"newArchEnabled": false
+					},
+					"ios": {
+						"useFrameworks": "static"
+					}
+				}
+			]
+		]
+	}
+}

@@ -4,7 +4,7 @@ import { API_URL } from "@env";
 import { getIdToken, signOut as firebaseSignOut } from "./firebase";
 
 // Fallback to localhost if env not loaded
-const BASE_URL = API_URL || "http://10.0.2.2:5000";
+const BASE_URL = API_URL || "https://card-p33o.onrender.com";
 
 // Create axios instance
 const api = axios.create({
@@ -22,6 +22,20 @@ api.interceptors.request.use(
 			const token = await getIdToken();
 			if (token) {
 				config.headers.Authorization = `Bearer ${token}`;
+				console.log("[API] Token attached, length:", token.length);
+			} else {
+				console.warn(
+					"[API] No Firebase token available for request:",
+					config.url,
+				);
+			}
+
+			// Log outgoing request method and full URL for diagnostics
+			try {
+				const method = (config.method || "GET").toString().toUpperCase();
+				console.log(`[API] Request: ${method} ${config.baseURL || ""}${config.url}`);
+			} catch (e) {
+				// swallow logging errors
 			}
 		} catch (error) {
 			console.error("Error getting Firebase token:", error);
@@ -98,6 +112,8 @@ export const accountAPI = {
 	getPlans: () => api.get("/account/plans"),
 
 	getCurrentPlan: () => api.get("/account/my-plan"),
+
+	getLimitStatus: () => api.get("/account/limit-status"),
 
 	deleteAccount: () => api.delete("/account/delete"),
 
@@ -225,17 +241,32 @@ export const authHelpers = {
 	},
 
 	// Sync Firebase user with backend and store accountId
-	syncWithBackend: async (displayName) => {
-		try {
-			const response = await authAPI.sync(displayName);
-			const { accountId } = response.data;
-			if (accountId) {
-				await AsyncStorage.setItem("accountId", accountId.toString());
+	syncWithBackend: async (displayName, retries = 3) => {
+		for (let attempt = 1; attempt <= retries; attempt++) {
+			try {
+				// Small delay to ensure Firebase token is ready
+				if (attempt > 1) {
+					await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+				}
+				const response = await authAPI.sync(displayName);
+				const { accountId } = response.data;
+				if (accountId) {
+					await AsyncStorage.setItem("accountId", accountId.toString());
+				}
+				return response.data;
+			} catch (error) {
+				console.error(
+					`Sync attempt ${attempt}/${retries} failed:`,
+					error?.message || error,
+				);
+				if (attempt === retries) {
+					console.error(
+						"Failed to sync with backend after all retries:",
+						error,
+					);
+					throw error;
+				}
 			}
-			return response.data;
-		} catch (error) {
-			console.error("Failed to sync with backend:", error);
-			throw error;
 		}
 	},
 };

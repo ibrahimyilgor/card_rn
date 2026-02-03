@@ -13,7 +13,7 @@ import {
 	Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { BarChart, LineChart } from "react-native-chart-kit";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -23,8 +23,15 @@ import * as FileSystem from "expo-file-system/legacy";
 import { Asset } from "expo-asset";
 import { useTheme } from "../context/ThemeContext";
 import { useI18n } from "../context/I18nContext";
+import { usePlan } from "../context/PlanContext";
 import { statsAPI } from "../services/api";
-import { ThemedView, ThemedText, Card, LoadingState } from "../components/ui";
+import {
+	ThemedView,
+	ThemedText,
+	Card,
+	LoadingState,
+	Button,
+} from "../components/ui";
 import { spacing, borderRadius } from "../styles/theme";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -154,6 +161,8 @@ const CardPerformanceRow = ({ card, theme, t }) => {
 const StatsScreen = () => {
 	const { theme, chartColors } = useTheme();
 	const { t } = useI18n();
+	const { advancedStats, planCode } = usePlan();
+	const navigation = useNavigation();
 
 	// Loading states
 	const [loading, setLoading] = useState(true);
@@ -1001,6 +1010,101 @@ const StatsScreen = () => {
 		return decksData.find((d) => d.id === selectedDeck)?.title || selectedDeck;
 	}, [selectedDeck, decksData, t]);
 
+	// Navigate to plans screen
+	const handleUpgrade = () => {
+		navigation.navigate("Settings", { screen: "Plans" });
+	};
+
+	// Show locked state for free plan users
+	if (!advancedStats) {
+		return (
+			<ThemedView variant="gradient" style={styles.container}>
+				<SafeAreaView style={styles.safeArea} edges={["top"]}>
+					<View style={styles.lockedContainer}>
+						<View
+							style={[
+								styles.lockedIconContainer,
+								{ backgroundColor: theme.primary.main + "20" },
+							]}
+						>
+							<MaterialCommunityIcons
+								name="lock"
+								size={64}
+								color={theme.primary.main}
+							/>
+						</View>
+						<ThemedText variant="h2" style={styles.lockedTitle}>
+							{t("stats_locked") || "Statistics Locked"}
+						</ThemedText>
+						<ThemedText color="secondary" style={styles.lockedMessage}>
+							{t("stats_locked_message") ||
+								"Advanced statistics are only available for Pro and Premium users. Upgrade your plan to unlock detailed insights about your learning progress."}
+						</ThemedText>
+						<View style={[styles.planBadge, { backgroundColor: "#64748b20" }]}>
+							<ThemedText style={[styles.planBadgeText, { color: "#64748b" }]}>
+								{t("current_plan") || "Current Plan"}:{" "}
+								{planCode.charAt(0).toUpperCase() + planCode.slice(1)}
+							</ThemedText>
+						</View>
+						<Button
+							variant="primary"
+							onPress={handleUpgrade}
+							style={styles.upgradeButton}
+						>
+							{t("upgrade_to_pro") || "Upgrade to Pro"}
+						</Button>
+						{/* <View style={styles.featuresList}>
+							<ThemedText color="secondary" style={styles.featuresTitle}>
+								{t("pro_features_include") || "Pro features include:"}
+							</ThemedText>
+							<View style={styles.featureItem}>
+								<MaterialCommunityIcons
+									name="check-circle"
+									size={18}
+									color={theme.success.main}
+								/>
+								<ThemedText style={styles.featureText}>
+									{t("detailed_progress_charts") || "Detailed progress charts"}
+								</ThemedText>
+							</View>
+							<View style={styles.featureItem}>
+								<MaterialCommunityIcons
+									name="check-circle"
+									size={18}
+									color={theme.success.main}
+								/>
+								<ThemedText style={styles.featureText}>
+									{t("card_performance_analysis") ||
+										"Card performance analysis"}
+								</ThemedText>
+							</View>
+							<View style={styles.featureItem}>
+								<MaterialCommunityIcons
+									name="check-circle"
+									size={18}
+									color={theme.success.main}
+								/>
+								<ThemedText style={styles.featureText}>
+									{t("export_to_pdf") || "Export statistics to PDF"}
+								</ThemedText>
+							</View>
+							<View style={styles.featureItem}>
+								<MaterialCommunityIcons
+									name="check-circle"
+									size={18}
+									color={theme.success.main}
+								/>
+								<ThemedText style={styles.featureText}>
+									{t("no_ads") || "No advertisements"}
+								</ThemedText>
+							</View>
+						</View> */}
+					</View>
+				</SafeAreaView>
+			</ThemedView>
+		);
+	}
+
 	if (loading && !filteredStats) {
 		return (
 			<ThemedView variant="gradient" style={styles.container}>
@@ -1795,6 +1899,63 @@ const styles = StyleSheet.create({
 		padding: spacing.md,
 		paddingHorizontal: spacing.lg,
 		borderBottomWidth: 1,
+	},
+	// Locked state styles
+	lockedContainer: {
+		flex: 1,
+		alignItems: "center",
+		justifyContent: "center",
+		padding: spacing.xl,
+	},
+	lockedIconContainer: {
+		width: 120,
+		height: 120,
+		borderRadius: 60,
+		alignItems: "center",
+		justifyContent: "center",
+		marginBottom: spacing.lg,
+	},
+	lockedTitle: {
+		textAlign: "center",
+		marginBottom: spacing.md,
+	},
+	lockedMessage: {
+		textAlign: "center",
+		lineHeight: 22,
+		marginBottom: spacing.lg,
+		paddingHorizontal: spacing.md,
+	},
+	planBadge: {
+		paddingHorizontal: spacing.md,
+		paddingVertical: spacing.xs,
+		borderRadius: borderRadius.full || 999,
+		marginBottom: spacing.lg,
+	},
+	planBadgeText: {
+		fontSize: 12,
+		fontWeight: "600",
+	},
+	upgradeButton: {
+		width: "100%",
+		maxWidth: 300,
+		marginBottom: spacing.xl,
+	},
+	featuresList: {
+		width: "100%",
+		maxWidth: 300,
+	},
+	featuresTitle: {
+		fontSize: 14,
+		marginBottom: spacing.sm,
+	},
+	featureItem: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: spacing.sm,
+		paddingVertical: spacing.xs,
+	},
+	featureText: {
+		fontSize: 14,
 	},
 });
 

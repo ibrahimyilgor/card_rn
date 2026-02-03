@@ -409,5 +409,11 @@
 	"coming_soon": "Yakında!",
 	"success": "Başarılı",
 	"error": "Hata",
-	"statistics_report": "İstatistik Raporu"
+	"statistics_report": "İstatistik Raporu",
+	"stats_locked": "Gelişmiş istatistiklerin kilidini açmak için planınızı yükseltin",
+	"stats_locked_message": "Öğrenme alışkanlıklarınızı daha derinlemesine analiz etmek için premium istatistik özelliklerimizi kullanın.",
+	"upgrade_to_pro": "Planı Yükselt",
+	"upgrade_plan": "Planı Yükselt",
+	"deck_limit_reached": "Plan limiti aşıldı",
+	"deck_limit_message": "Mevcut planınızla oluşturabileceğiniz maksimum deste sayısına ulaştınız. Yeni desteler oluşturmak için lütfen planınızı yükseltin."
 }

@@ -409,5 +409,11 @@
 	"coming_soon": "Coming soon!",
 	"success": "Success",
 	"error": "Error",
-	"statistics_report": "Statistics Report"
+	"statistics_report": "Statistics Report",
+	"stats_locked": "Upgrade your plan to unlock advanced statistics",
+	"stats_locked_message": "Get deeper insights into your learning patterns with our premium statistics features.",
+	"upgrade_to_pro": "Upgrade Plan",
+	"upgrade_plan": "Upgrade Plan",
+	"deck_limit_reached": "Deck limit reached",
+	"deck_limit_message": "You have reached the maximum number of decks you can create with your current plan. Please upgrade your plan to create new decks."
 }

@@ -27,6 +27,7 @@ import * as Sharing from "expo-sharing";
 import * as DocumentPicker from "expo-document-picker";
 import { useTheme } from "../context/ThemeContext";
 import { useI18n } from "../context/I18nContext";
+import { usePlan } from "../context/PlanContext";
 import { decksAPI, flashcardsAPI } from "../services/api";
 import {
 	ThemedView,
@@ -39,11 +40,13 @@ import {
 	Input,
 	ConfirmDialog,
 } from "../components/ui";
+import LimitWarningModal from "../components/LimitWarningModal";
 import { spacing, borderRadius } from "../styles/theme";
 
 const HomeScreen = ({ navigation, onLogout }) => {
 	const { theme, shadows } = useTheme();
 	const { t } = useI18n();
+	const { canCreateDeck, canCreateFlashcard, refreshPlanData } = usePlan();
 
 	const [decks, setDecks] = useState([]);
 	const [loading, setLoading] = useState(true);
@@ -61,6 +64,8 @@ const HomeScreen = ({ navigation, onLogout }) => {
 	const [deckMode, setDeckMode] = useState("standard");
 	const [saving, setSaving] = useState(false);
 	const [flashcardsModalVisible, setFlashcardsModalVisible] = useState(false);
+	const [limitModalVisible, setLimitModalVisible] = useState(false);
+	const [limitModalType, setLimitModalType] = useState("deck");
 
 	// Import modal states
 	const [importModalVisible, setImportModalVisible] = useState(false);
@@ -171,6 +176,12 @@ const HomeScreen = ({ navigation, onLogout }) => {
 
 	// Deck CRUD operations
 	const handleCreateDeck = () => {
+		// Check if user can create more decks
+		if (!canCreateDeck) {
+			setLimitModalType("deck");
+			setLimitModalVisible(true);
+			return;
+		}
 		setSelectedDeck(null);
 		setDeckTitle("");
 		setDeckDescription("");
@@ -212,6 +223,8 @@ const HomeScreen = ({ navigation, onLogout }) => {
 			}
 			setDeckModalVisible(false);
 			fetchDecks(accountId);
+			// Refresh plan data to update limits
+			refreshPlanData();
 		} catch (error) {
 			console.error("Error saving deck:", error);
 		} finally {
@@ -228,6 +241,8 @@ const HomeScreen = ({ navigation, onLogout }) => {
 			setDeleteDialogVisible(false);
 			setSelectedDeck(null);
 			fetchDecks(accountId);
+			// Refresh plan data to update limits
+			refreshPlanData();
 		} catch (error) {
 			console.error("Error deleting deck:", error);
 		} finally {
@@ -424,6 +439,8 @@ const HomeScreen = ({ navigation, onLogout }) => {
 
 			// Refresh decks
 			await loadAccountAndDecks();
+			// Refresh plan data to update limits
+			refreshPlanData();
 
 			// Close modal and reset
 			setImportModalVisible(false);
@@ -442,6 +459,12 @@ const HomeScreen = ({ navigation, onLogout }) => {
 
 	// Open import modal
 	const handleOpenImportModal = () => {
+		// Check if user can create more decks
+		if (!canCreateDeck) {
+			setLimitModalType("deck");
+			setLimitModalVisible(true);
+			return;
+		}
 		setImportTitle("");
 		setImportDescription("");
 		setImportFlashcards([]);
@@ -922,6 +945,12 @@ const HomeScreen = ({ navigation, onLogout }) => {
 					theme={theme}
 					t={t}
 					onUpdate={() => fetchDecks(accountId, true)}
+					canCreateFlashcard={canCreateFlashcard}
+					onLimitReached={() => {
+						setLimitModalType("flashcard");
+						setLimitModalVisible(true);
+					}}
+					refreshPlanData={refreshPlanData}
 				/>
 
 				{/* Import Deck Modal */}
@@ -1149,13 +1178,30 @@ const HomeScreen = ({ navigation, onLogout }) => {
 						</Button>
 					</View>
 				</Modal>
+
+				{/* Limit Warning Modal */}
+				<LimitWarningModal
+					visible={limitModalVisible}
+					onClose={() => setLimitModalVisible(false)}
+					limitType={limitModalType}
+				/>
 			</SafeAreaView>
 		</ThemedView>
 	);
 };
 
 // Flashcards Modal Component
-const FlashcardsModal = ({ visible, onClose, deck, theme, t, onUpdate }) => {
+const FlashcardsModal = ({
+	visible,
+	onClose,
+	deck,
+	theme,
+	t,
+	onUpdate,
+	canCreateFlashcard,
+	onLimitReached,
+	refreshPlanData,
+}) => {
 	const [flashcards, setFlashcards] = useState([]);
 	const [loading, setLoading] = useState(false);
 	const [addModalVisible, setAddModalVisible] = useState(false);
@@ -1213,6 +1259,11 @@ const FlashcardsModal = ({ visible, onClose, deck, theme, t, onUpdate }) => {
 	};
 
 	const handleAddCard = () => {
+		// Check if user can create more flashcards
+		if (!canCreateFlashcard) {
+			if (onLimitReached) onLimitReached();
+			return;
+		}
 		setEditingCard(null);
 		setFrontText("");
 		setBackText("");
@@ -1243,6 +1294,8 @@ const FlashcardsModal = ({ visible, onClose, deck, theme, t, onUpdate }) => {
 			setAddModalVisible(false);
 			fetchFlashcards();
 			if (onUpdate) onUpdate();
+			// Refresh plan data to update limits
+			if (refreshPlanData) refreshPlanData();
 		} catch (error) {
 			console.error("Error saving card:", error);
 		} finally {
@@ -1255,6 +1308,8 @@ const FlashcardsModal = ({ visible, onClose, deck, theme, t, onUpdate }) => {
 			await flashcardsAPI.delete(cardId);
 			fetchFlashcards();
 			if (onUpdate) onUpdate();
+			// Refresh plan data to update limits
+			if (refreshPlanData) refreshPlanData();
 		} catch (error) {
 			console.error("Error deleting card:", error);
 		}

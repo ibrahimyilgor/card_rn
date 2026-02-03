@@ -4,6 +4,7 @@ import { View, ActivityIndicator } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../context/ThemeContext";
 import { useI18n } from "../context/I18nContext";
+import { PlanProvider } from "../context/PlanContext";
 import { accountAPI, authHelpers } from "../services/api";
 import {
 	onAuthStateChanged,
@@ -136,7 +137,9 @@ const RootNavigator = () => {
 	return (
 		<NavigationContainer theme={navigationTheme}>
 			{isAuthenticated ? (
-				<MainTabs onLogout={handleLogout} />
+				<PlanProvider user={user}>
+					<MainTabs onLogout={handleLogout} />
+				</PlanProvider>
 			) : (
 				<AuthStack onLogin={handleLogin} />
 			)}

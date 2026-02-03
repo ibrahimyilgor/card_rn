@@ -18,6 +18,7 @@ import { useTheme } from "../context/ThemeContext";
 import { useI18n } from "../context/I18nContext";
 import { useAchievement } from "../context/AchievementContext";
 import { useAds } from "../context/AdContext";
+import { usePlan } from "../context/PlanContext";
 import { gamesAPI, statsAPI, achievementsAPI, decksAPI } from "../services/api";
 import {
 	ThemedView,
@@ -27,6 +28,7 @@ import {
 	LoadingState,
 	Modal,
 } from "../components/ui";
+import LimitWarningModal from "../components/LimitWarningModal";
 import FlipCard from "../components/game/FlipCard";
 import { useTimer, useLives } from "../hooks";
 import sounds from "../utils/sounds";
@@ -100,6 +102,7 @@ const GameScreen = ({ route, navigation }) => {
 	const { t } = useI18n();
 	const { showAchievements } = useAchievement();
 	const { showInterstitial } = useAds();
+	const { canPlay, hasAds, isOverLimit } = usePlan();
 
 	// Game state
 	const [gameState, setGameState] = useState("mode_select"); // 'mode_select' | 'playing' | 'summary'
@@ -114,6 +117,7 @@ const GameScreen = ({ route, navigation }) => {
 	const [wrongCount, setWrongCount] = useState(0);
 	const [loading, setLoading] = useState(false);
 	const [accountId, setAccountId] = useState(null);
+	const [limitModalVisible, setLimitModalVisible] = useState(false);
 
 	// Settings state
 	const [cardDirection, setCardDirection] = useState("normal"); // 'normal' | 'reverse'
@@ -317,6 +321,12 @@ const GameScreen = ({ route, navigation }) => {
 
 	// Save settings and start game
 	const startGame = async () => {
+		// Check if user can play (not over limit)
+		if (!canPlay) {
+			setLimitModalVisible(true);
+			return;
+		}
+
 		const mode = selectedMode;
 		const challenge = selectedChallengeType;
 
@@ -363,6 +373,12 @@ const GameScreen = ({ route, navigation }) => {
 
 	// Restart game without saving settings (for play again)
 	const restartGame = () => {
+		// Check if user can play (not over limit)
+		if (!canPlay) {
+			setLimitModalVisible(true);
+			return;
+		}
+
 		const mode = gameMode;
 		setGameState("playing");
 		setCurrentIndex(0);
@@ -634,8 +650,10 @@ const GameScreen = ({ route, navigation }) => {
 		timer.pause();
 		sounds.complete();
 
-		// Her oturum sonunda interstitial reklam göster
-		await showInterstitial();
+		// Show interstitial ad only for free plan users
+		if (hasAds) {
+			await showInterstitial();
+		}
 
 		setGameState("summary");
 
@@ -1965,6 +1983,13 @@ const GameScreen = ({ route, navigation }) => {
 				{gameState === "playing" && renderPlaying()}
 				{gameState === "summary" && renderSummary()}
 			</SafeAreaView>
+
+			{/* Limit Warning Modal */}
+			<LimitWarningModal
+				visible={limitModalVisible}
+				onClose={() => setLimitModalVisible(false)}
+				limitType="game"
+			/>
 		</ThemedView>
 	);
 };

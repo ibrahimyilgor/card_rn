@@ -1,0 +1,74 @@
+﻿node.exe : 2026-01-29T11:42:40.423Z expo:telemetry Recording 1 event(s)
+At D:\npx.ps1:29 char:3
++   & $NODE_EXE $NPX_CLI_JS $args
++   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (2026-01-29T11:4...ding 1 event(s):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+2026-01-29T11:42:40.470Z expo:env Loaded environment variables from: C:\Users\ibrah\OneDrive\Masaüstü\Code\card_rn\.env
+2026-01-29T11:42:40.470Z expo:env C:\Users\ibrah\OneDrive\Masaüstü\Code\card_rn\.env.development does not exist, skipping this env file
+2026-01-29T11:42:40.470Z expo:env C:\Users\ibrah\OneDrive\Masaüstü\Code\card_rn\.env.local does not exist, skipping this env file
+2026-01-29T11:42:40.470Z expo:env C:\Users\ibrah\OneDrive\Masaüstü\Code\card_rn\.env.development.local does not exist, skipping this en
+v file
+env: load .env
+env: export API_URL WEB_CLIENT_ID
+- Creating native directory (./android)
+2026-01-29T11:42:40.572Z expo:prebuild:resolveLocalTemplate Using local template from Expo package: C:\Users\ibrah\OneDrive\Masaüstü\Co
+de\card_rn\node_modules\expo\template.tgz
+2026-01-29T11:42:40.746Z expo:prebuild:copyTemplateFiles All platforms have an internal gitignore: true
+2026-01-29T11:42:40.984Z expo:prebuild:copyTemplateFiles Got files to transform: ["app.json"]
+2026-01-29T11:42:40.985Z expo:prebuild:copyTemplateFiles Renaming app name in file: C:\Users\ibrah\OneDrive\Masaüstü\Code\card_rn\app.j
+son
+√ Created native directory
+- Updating package.json
+√ Updated package.json | no changes
+2026-01-29T11:42:41.153Z expo:config-plugins:ios:maps Google Maps API Key: null
+2026-01-29T11:42:41.184Z expo:prebuild-config:expo-splash-screen:ios config: null
+2026-01-29T11:42:41.195Z expo:prebuild-config Skipping unlinked auto plugin: expo-firebase-analytics
+2026-01-29T11:42:41.195Z expo:prebuild-config Skipping unlinked auto plugin: expo-firebase-core
+2026-01-29T11:42:41.195Z expo:prebuild-config Skipping unlinked auto plugin: expo-google-sign-in
+2026-01-29T11:42:41.195Z expo:prebuild-config Skipping unlinked auto plugin: expo-app-auth
+2026-01-29T11:42:41.195Z expo:prebuild-config Skipping unlinked auto plugin: expo-av
+2026-01-29T11:42:41.195Z expo:prebuild-config Skipping unlinked auto plugin: expo-background-fetch
+2026-01-29T11:42:41.196Z expo:prebuild-config Skipping unlinked auto plugin: expo-brightness
+2026-01-29T11:42:41.196Z expo:prebuild-config Skipping unlinked auto plugin: expo-calendar
+2026-01-29T11:42:41.196Z expo:prebuild-config Skipping unlinked auto plugin: expo-camera
+2026-01-29T11:42:41.196Z expo:prebuild-config Skipping unlinked auto plugin: expo-cellular
+2026-01-29T11:42:41.196Z expo:prebuild-config Skipping unlinked auto plugin: expo-dev-menu
+2026-01-29T11:42:41.196Z expo:prebuild-config Skipping unlinked auto plugin: expo-dev-launcher
+2026-01-29T11:42:41.197Z expo:prebuild-config Skipping unlinked auto plugin: expo-image-picker
+2026-01-29T11:42:41.200Z expo:prebuild-config Skipping unlinked auto plugin: expo-location
+2026-01-29T11:42:41.201Z expo:prebuild-config Skipping unlinked auto plugin: expo-media-library
+2026-01-29T11:42:41.201Z expo:prebuild-config Skipping unlinked auto plugin: expo-screen-orientation
+2026-01-29T11:42:41.201Z expo:prebuild-config Skipping unlinked auto plugin: expo-sensors
+2026-01-29T11:42:41.201Z expo:prebuild-config Skipping unlinked auto plugin: expo-task-manager
+2026-01-29T11:42:41.201Z expo:prebuild-config Skipping unlinked auto plugin: expo-local-authentication
+2026-01-29T11:42:41.227Z expo:config-plugins:mod-compiler run in order: dangerous, manifest, colors, strings, gradleProperties, styles,
+ mainActivity, colorsNight, settingsGradle, projectBuildGradle, appBuildGradle
+android.dangerous: withDefaultBaseMods ➜ withAndroidBaseMods ➜ withGeneratedBaseMods ➜ withAndroidDangerousBaseMod
+2026-01-29T11:42:41.228Z expo:config-plugins:base-mods mods.android.dangerous: file path: [skipped]
+android.dangerous: withAndroidExpoPlugins ➜ withPlugins ➜ withStaticPlugin ➜ withPackageRefactor ➜ withDangerousMod
+2026-01-29T11:42:41.231Z expo:config-plugins:android:package Found package "null" for type "debug"
+Prebuild failed
+AssertionError [ERR_ASSERTION]: [android.dangerous]: withAndroidDangerousBaseMod: Project file "MainApplication" does not exist in andr
+oid project for root "C:\Users\ibrah\OneDrive\Masaüstü\Code\card_rn"
+AssertionError [ERR_ASSERTION]: Project file "MainApplication" does not exist in android project for root "C:\Users\ibrah\OneDrive\Masa
+üstü\Code\card_rn"
+    at getProjectFilePath (C:\Users\ibrah\OneDrive\Masaüstü\Code\card_rn\node_modules\@expo\config-plugins\build\android\Paths.js:71:25
+)
+    at getCurrentPackageName (C:\Users\ibrah\OneDrive\Masaüstü\Code\card_rn\node_modules\@expo\config-plugins\build\android\Package.js:
+104:59)
+    at getCurrentPackageNameForType (C:\Users\ibrah\OneDrive\Masaüstü\Code\card_rn\node_modules\@expo\config-plugins\build\android\Pack
+age.js:121:12)
+    at renameJniOnDiskForType (C:\Users\ibrah\OneDrive\Masaüstü\Code\card_rn\node_modules\@expo\config-plugins\build\android\Package.js
+:156:30)
+    at renamePackageOnDisk (C:\Users\ibrah\OneDrive\Masaüstü\Code\card_rn\node_modules\@expo\config-plugins\build\android\Package.js:13
+6:11)
+    at async C:\Users\ibrah\OneDrive\Masaüstü\Code\card_rn\node_modules\@expo\config-plugins\build\android\Package.js:92:5
+    at async action (C:\Users\ibrah\OneDrive\Masaüstü\Code\card_rn\node_modules\@expo\config-plugins\build\plugins\withMod.js:199:23)
+    at async interceptingMod (C:\Users\ibrah\OneDrive\Masaüstü\Code\card_rn\node_modules\@expo\config-plugins\build\plugins\withMod.js:
+104:21)
+    at async action (C:\Users\ibrah\OneDrive\Masaüstü\Code\card_rn\node_modules\@expo\config-plugins\build\plugins\createBaseMod.js:60:
+21)
+    at async interceptingMod (C:\Users\ibrah\OneDrive\Masaüstü\Code\card_rn\node_modules\@expo\config-plugins\build\plugins\withMod.js:
+104:21)

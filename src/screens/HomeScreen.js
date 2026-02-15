@@ -58,7 +58,6 @@ const HomeScreen = ({ navigation, onLogout }) => {
 	const [selectedDeck, setSelectedDeck] = useState(null);
 	const [deckTitle, setDeckTitle] = useState("");
 	const [deckDescription, setDeckDescription] = useState("");
-	const [deckMode, setDeckMode] = useState("standard");
 	const [saving, setSaving] = useState(false);
 	const [flashcardsModalVisible, setFlashcardsModalVisible] = useState(false);
 
@@ -72,40 +71,6 @@ const HomeScreen = ({ navigation, onLogout }) => {
 	const [importLoading, setImportLoading] = useState(false);
 	// Sort modal
 	const [sortModalVisible, setSortModalVisible] = useState(false);
-
-	// Game mode options
-	const MODE_OPTIONS = [
-		{
-			value: "standard",
-			label: t("mode_standard") || "Standard Mode",
-			color: "#3b82f6",
-		},
-		{
-			value: "timed",
-			label: t("mode_timed") || "Timed Mode",
-			color: "#f59e0b",
-		},
-		{
-			value: "survival",
-			label: t("mode_survival") || "Survival Mode",
-			color: "#ef4444",
-		},
-		{
-			value: "write",
-			label: t("mode_write") || "Write Mode",
-			color: "#22c55e",
-		},
-		{
-			value: "multiple_choice",
-			label: t("mode_multiple_choice") || "Multiple Choice",
-			color: "#8b5cf6",
-		},
-		{
-			value: "match",
-			label: t("mode_match") || "Match Mode",
-			color: "#ec4899",
-		},
-	];
 
 	useFocusEffect(
 		useCallback(() => {
@@ -180,7 +145,6 @@ const HomeScreen = ({ navigation, onLogout }) => {
 		setSelectedDeck(null);
 		setDeckTitle("");
 		setDeckDescription("");
-		setDeckMode("standard");
 		setDeckModalVisible(true);
 	};
 
@@ -188,7 +152,6 @@ const HomeScreen = ({ navigation, onLogout }) => {
 		setSelectedDeck(deck);
 		setDeckTitle(deck.title);
 		setDeckDescription(deck.description || "");
-		setDeckMode(deck.mode || "standard");
 		setDeckModalVisible(true);
 	};
 
@@ -211,10 +174,6 @@ const HomeScreen = ({ navigation, onLogout }) => {
 					deckDescription.trim(),
 				);
 				deckId = response.data?.deck?.id;
-			}
-			// Update deck settings (mode)
-			if (deckId) {
-				await decksAPI.updateSettings(deckId, { mode: deckMode });
 			}
 			setDeckModalVisible(false);
 			fetchDecks(accountId);
@@ -824,72 +783,6 @@ const HomeScreen = ({ navigation, onLogout }) => {
 						numberOfLines={3}
 					/>
 
-					{/* Game Options Section */}
-					<View
-						style={[
-							styles.gameOptionsSection,
-							{
-								backgroundColor: theme.primary.main + "15",
-								borderColor: theme.primary.main + "25",
-							},
-						]}
-					>
-						<View style={styles.gameOptionsHeader}>
-							<Ionicons
-								name="settings-outline"
-								size={18}
-								color={theme.primary.main}
-							/>
-							<Text
-								style={[styles.gameOptionsTitle, { color: theme.text.primary }]}
-							>
-								{t("game_options") || "Game Options"}
-							</Text>
-						</View>
-
-						<Text
-							style={[styles.gameOptionLabel, { color: theme.text.secondary }]}
-						>
-							{t("game_mode") || "Game Mode"}
-						</Text>
-						<View style={styles.modeOptionsContainer}>
-							{MODE_OPTIONS.map((option) => (
-								<Pressable
-									key={option.value}
-									onPress={() => setDeckMode(option.value)}
-									style={[
-										styles.modeOption,
-										{
-											backgroundColor:
-												deckMode === option.value
-													? option.color + "20"
-													: theme.background.paper,
-											borderColor:
-												deckMode === option.value
-													? option.color
-													: theme.border.main,
-											borderWidth: deckMode === option.value ? 2 : 1,
-										},
-									]}
-								>
-									<Text
-										style={[
-											styles.modeOptionText,
-											{
-												color:
-													deckMode === option.value
-														? option.color
-														: theme.text.secondary,
-												fontWeight: deckMode === option.value ? "700" : "500",
-											},
-										]}
-									>
-										{option.label}
-									</Text>
-								</Pressable>
-							))}
-						</View>
-					</View>
 				</Modal>
 
 				{/* Delete Confirmation */}
@@ -1666,40 +1559,6 @@ const styles = StyleSheet.create({
 	},
 	iconButton: {
 		padding: spacing.xs,
-	},
-	gameOptionsSection: {
-		marginTop: spacing.md,
-		padding: spacing.md,
-		borderRadius: borderRadius.lg,
-		borderWidth: 1,
-	},
-	gameOptionsHeader: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: spacing.sm,
-		marginBottom: spacing.md,
-	},
-	gameOptionsTitle: {
-		fontSize: 15,
-		fontWeight: "600",
-	},
-	gameOptionLabel: {
-		fontSize: 13,
-		fontWeight: "500",
-		marginBottom: spacing.sm,
-	},
-	modeOptionsContainer: {
-		flexDirection: "row",
-		flexWrap: "wrap",
-		gap: spacing.xs,
-	},
-	modeOption: {
-		paddingHorizontal: spacing.md,
-		paddingVertical: spacing.sm,
-		borderRadius: borderRadius.md,
-	},
-	modeOptionText: {
-		fontSize: 12,
 	},
 	modalFooter: {
 		flexDirection: "row",

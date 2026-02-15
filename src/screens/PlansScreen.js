@@ -100,33 +100,20 @@ const PlansScreen = ({ navigation }) => {
 			});
 		}
 
-		// Stats
-		features.push({
-			text: plan.advanced_stats
-				? t("plan_feature_advanced_stats")
-				: t("plan_feature_basic_stats"),
-			included: true,
-		});
-
-		// Achievements (all plans)
-		features.push({ text: t("plan_feature_achievements"), included: true });
-
-		// Premium features
-		if (plan.code !== "free") {
-			features.push({ text: t("plan_feature_export"), included: true });
+		// Advanced stats row: show for all plans, but inactive for free
+		if (plan.code === "free") {
+			features.push({ text: t("plan_feature_advanced_stats"), included: false });
+		} else {
 			features.push({
-				text: t("plan_feature_priority_support"),
+				text: plan.advanced_stats
+					? t("plan_feature_advanced_stats")
+					: t("plan_feature_basic_stats"),
 				included: true,
 			});
-			features.push({ text: t("plan_feature_no_ads"), included: true });
-		} else {
-			features.push({ text: t("plan_feature_export"), included: false });
-			features.push({
-				text: t("plan_feature_priority_support"),
-				included: false,
-			});
-			features.push({ text: t("plan_feature_no_ads"), included: false });
 		}
+
+		// No-ads only for paid plans
+		features.push({ text: t("plan_feature_no_ads"), included: plan.code !== "free" });
 
 		return features;
 	};

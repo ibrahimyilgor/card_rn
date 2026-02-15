@@ -2086,14 +2086,15 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		flexWrap: "wrap",
 		gap: spacing.sm,
-		justifyContent: "center",
+		justifyContent: "space-between",
 	},
 	modeCard: {
-		width: (SCREEN_WIDTH - spacing.lg * 2 - spacing.sm * 2) / 3,
+		width: (SCREEN_WIDTH - spacing.lg * 2 - spacing.sm) / 2,
 		paddingVertical: spacing.md,
 		paddingHorizontal: spacing.sm,
 		borderRadius: borderRadius.lg,
 		alignItems: "center",
+		marginBottom: spacing.sm,
 	},
 	modeIconContainer: {
 		width: 44,

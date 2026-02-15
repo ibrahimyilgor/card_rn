@@ -18,7 +18,12 @@ import { useTheme } from "../context/ThemeContext";
 import { useI18n } from "../context/I18nContext";
 import { useAchievement } from "../context/AchievementContext";
 import { useAds } from "../context/AdContext";
-import { gamesAPI, statsAPI, achievementsAPI, decksAPI } from "../services/api";
+import {
+	gamesAPI,
+	statsAPI,
+	achievementsAPI,
+	decksAPI,
+} from "../services/api";
 import {
 	ThemedView,
 	ThemedText,
@@ -99,7 +104,7 @@ const GameScreen = ({ route, navigation }) => {
 	const { theme, shadows } = useTheme();
 	const { t } = useI18n();
 	const { showAchievements } = useAchievement();
-	const { showInterstitial } = useAds();
+	const { showInterstitial, showVideoAd } = useAds();
 
 	// Game state
 	const [gameState, setGameState] = useState("mode_select"); // 'mode_select' | 'playing' | 'summary'
@@ -154,6 +159,14 @@ const GameScreen = ({ route, navigation }) => {
 	const swipeAnim = useRef(new Animated.ValueXY()).current;
 	const swipeOpacity = useRef(new Animated.Value(1)).current;
 	const handleAnswerRef = useRef(null);
+	const advancingRef = useRef(false);
+	const endedRef = useRef(false);
+	const finishingRef = useRef(false);
+	const sessionRecordedRef = useRef(false);
+	const lastAnswerTimeRef = useRef(0);
+	const [finishing, setFinishing] = useState(false);
+	const lastAnswerRef = useRef(false);
+	const [answering, setAnswering] = useState(false);
 
 	const panResponder = useRef(
 		PanResponder.create({
@@ -181,9 +194,13 @@ const GameScreen = ({ route, navigation }) => {
 							useNativeDriver: true,
 						}),
 					]).start(() => {
-						if (handleAnswerRef.current) handleAnswerRef.current(true);
+						// reset animated values first so the next card isn't rendered off-screen
 						swipeAnim.setValue({ x: 0, y: 0 });
 						swipeOpacity.setValue(1);
+						// advance game after a tiny delay to ensure native driver has applied reset
+						setTimeout(() => {
+							if (handleAnswerRef.current) handleAnswerRef.current(true);
+						}, 10);
 					});
 				} else if (gestureState.dx < -SWIPE_THRESHOLD) {
 					// Swiped left - incorrect
@@ -199,9 +216,13 @@ const GameScreen = ({ route, navigation }) => {
 							useNativeDriver: true,
 						}),
 					]).start(() => {
-						if (handleAnswerRef.current) handleAnswerRef.current(false);
+						// reset animated values first so the next card isn't rendered off-screen
 						swipeAnim.setValue({ x: 0, y: 0 });
 						swipeOpacity.setValue(1);
+						// advance game after a tiny delay to ensure native driver has applied reset
+						setTimeout(() => {
+							if (handleAnswerRef.current) handleAnswerRef.current(false);
+						}, 10);
 					});
 				} else {
 					// Reset position
@@ -350,6 +371,12 @@ const GameScreen = ({ route, navigation }) => {
 		setMatchAttempts(0);
 		setIsCheckingMatch(false);
 		gameStartTime.current = Date.now();
+		endedRef.current = false;
+		lastAnswerRef.current = false;
+		advancingRef.current = false;
+		finishingRef.current = false;
+		sessionRecordedRef.current = false;
+		setAnswering(false);
 
 		fetchCards(mode, hardModeEnabled);
 
@@ -363,6 +390,8 @@ const GameScreen = ({ route, navigation }) => {
 
 	// Restart game without saving settings (for play again)
 	const restartGame = () => {
+		// Prevent restarting while endGame flow is still finishing
+		if (finishingRef.current) return;
 		const mode = gameMode;
 		setGameState("playing");
 		setCurrentIndex(0);
@@ -378,6 +407,12 @@ const GameScreen = ({ route, navigation }) => {
 		setMatchAttempts(0);
 		setIsCheckingMatch(false);
 		gameStartTime.current = Date.now();
+		endedRef.current = false;
+		lastAnswerRef.current = false;
+		advancingRef.current = false;
+		finishingRef.current = false;
+		sessionRecordedRef.current = false;
+		setAnswering(false);
 
 		fetchCards(mode, hardModeEnabled);
 
@@ -395,6 +430,26 @@ const GameScreen = ({ route, navigation }) => {
 	};
 
 	const handleAnswer = async (isCorrect) => {
+		// Timestamp debounce: ignore taps within 400ms of the last accepted tap
+		const now = Date.now();
+		if (now - lastAnswerTimeRef.current < 400) return;
+		lastAnswerTimeRef.current = now;
+
+		// Prevent any answer processing if game already ended
+		if (endedRef.current || finishingRef.current) return;
+
+		// Prevent double-advancing (swipe + button, or double swipe)
+		if (advancingRef.current) return;
+
+		// If this is the final card, only allow one answer
+		if (lastAnswerRef.current) return;
+		if (cards && cards.length > 0 && currentIndex === cards.length - 1) {
+			lastAnswerRef.current = true;
+		}
+
+		advancingRef.current = true;
+		setAnswering(true);
+
 		// Reset swipe animation for next card
 		resetSwipeAnimation();
 
@@ -434,6 +489,8 @@ const GameScreen = ({ route, navigation }) => {
 				if (gameMode === "multiple_choice" && shuffled[0]) {
 					setMcOptions(shuffled[0].options || []);
 				}
+				// allow advancing again
+				advancingRef.current = false;
 			} else {
 				// Pass the updated counts to endGame
 				endGame(newCorrectCount, newWrongCount);
@@ -449,6 +506,9 @@ const GameScreen = ({ route, navigation }) => {
 	});
 
 	const nextCard = () => {
+		// allow next advances
+		advancingRef.current = false;
+		setAnswering(false);
 		setIsFlipped(false);
 		setCurrentIndex((prev) => prev + 1);
 		setUserAnswer("");
@@ -508,6 +568,10 @@ const GameScreen = ({ route, navigation }) => {
 	const handleWriteSubmit = async () => {
 		if (!userAnswer.trim()) return;
 
+		// Prevent double submission
+		if (advancingRef.current || endedRef.current || finishingRef.current) return;
+		advancingRef.current = true;
+
 		try {
 			const correctAnswer = getBackText(currentCard);
 			const response = await gamesAPI.validateAnswer(
@@ -551,6 +615,10 @@ const GameScreen = ({ route, navigation }) => {
 	};
 
 	const handleMCSelect = async (optionIndex) => {
+		// Prevent double selection
+		if (advancingRef.current || endedRef.current || finishingRef.current) return;
+		advancingRef.current = true;
+
 		setSelectedOption(optionIndex);
 		const option = mcOptions[optionIndex];
 		// Options come as objects with {text, isCorrect} from backend
@@ -631,11 +699,26 @@ const GameScreen = ({ route, navigation }) => {
 	};
 
 	const endGame = async (finalCorrect = null, finalWrong = null) => {
+		// Prevent endGame from running twice per session
+		if (endedRef.current || finishingRef.current) return;
+		endedRef.current = true;
+		finishingRef.current = true;
+		setFinishing(true);
+
 		timer.pause();
 		sounds.complete();
 
-		// Her oturum sonunda interstitial reklam göster
-		await showInterstitial();
+		// Ads are handled by AdContext which checks the user's plan via PlanContext.
+		// Free plan users see ads; premium and pro users skip ads entirely.
+		try {
+			if (showVideoAd) {
+				await showVideoAd();
+			} else {
+				await showInterstitial();
+			}
+		} catch (e) {
+			console.error("Ad display failed:", e);
+		}
 
 		setGameState("summary");
 
@@ -664,8 +747,9 @@ const GameScreen = ({ route, navigation }) => {
 			isMatchMode,
 		});
 
-		// Record session
-		if (accountId) {
+		// Record session (only once per game - sessionRecordedRef prevents duplicates)
+		if (accountId && !sessionRecordedRef.current) {
+			sessionRecordedRef.current = true;
 			try {
 				await statsAPI.recordSession({
 					deckId: deck.id,
@@ -697,6 +781,12 @@ const GameScreen = ({ route, navigation }) => {
 				console.error("Error recording session:", error);
 			}
 		}
+
+		// Allow restarting — clear advancing/finishing flags.
+		// endedRef stays true to block any late callbacks; it resets in startGame/restartGame.
+		advancingRef.current = false;
+		finishingRef.current = false;
+		setFinishing(false);
 	};
 
 	const getSuccessRate = () => {
@@ -1385,8 +1475,9 @@ const GameScreen = ({ route, navigation }) => {
 					<Button
 						variant="danger"
 						onPress={() => handleAnswer(false)}
-						style={styles.answerButton}
+						style={[styles.answerButton, answering && { opacity: 0.5 }]}
 						size="large"
+						disabled={answering}
 					>
 						<View style={styles.answerButtonContent}>
 							<Ionicons name="close" size={20} color="#ffffff" />
@@ -1396,8 +1487,9 @@ const GameScreen = ({ route, navigation }) => {
 					<Button
 						variant="success"
 						onPress={() => handleAnswer(true)}
-						style={styles.answerButton}
+						style={[styles.answerButton, answering && { opacity: 0.5 }]}
 						size="large"
+						disabled={answering}
 					>
 						<View style={styles.answerButtonContent}>
 							<Ionicons name="checkmark" size={20} color="#ffffff" />
@@ -1891,11 +1983,13 @@ const GameScreen = ({ route, navigation }) => {
 				<View style={styles.summaryActions}>
 					<Pressable
 						onPress={restartGame}
+						disabled={finishing}
 						style={({ pressed }) => [
 							styles.summaryButton,
 							styles.summaryButtonPrimary,
 							{ backgroundColor: theme.primary.main },
 							pressed && { opacity: 0.8 },
+							finishing && { opacity: 0.6 },
 						]}
 					>
 						<Ionicons name="refresh" size={20} color="#fff" />
@@ -2540,6 +2634,8 @@ const styles = StyleSheet.create({
 		padding: spacing.lg,
 		alignItems: "center",
 		paddingBottom: spacing.xl * 2,
+		flexGrow: 1,
+		justifyContent: "center",
 	},
 	trophyContainer: {
 		width: 80,

@@ -23,8 +23,15 @@ import * as FileSystem from "expo-file-system/legacy";
 import { Asset } from "expo-asset";
 import { useTheme } from "../context/ThemeContext";
 import { useI18n } from "../context/I18nContext";
-import { statsAPI } from "../services/api";
-import { ThemedView, ThemedText, Card, LoadingState } from "../components/ui";
+import { statsAPI, accountAPI } from "../services/api";
+import {
+	ThemedView,
+	ThemedText,
+	Card,
+	LoadingState,
+	Button,
+} from "../components/ui";
+import { useNavigation } from "@react-navigation/native";
 import { spacing, borderRadius } from "../styles/theme";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -154,6 +161,10 @@ const CardPerformanceRow = ({ card, theme, t }) => {
 const StatsScreen = () => {
 	const { theme, chartColors } = useTheme();
 	const { t } = useI18n();
+	const navigation = useNavigation();
+
+	// Plan state
+	const [plan, setPlan] = useState(null);
 
 	// Loading states
 	const [loading, setLoading] = useState(true);
@@ -263,6 +274,23 @@ const StatsScreen = () => {
 			}
 		};
 		fetchDecks();
+	}, []);
+
+	// Fetch current plan
+	useEffect(() => {
+		let mounted = true;
+		const fetchPlan = async () => {
+			try {
+				const res = await accountAPI.getCurrentPlan();
+				const userPlan = res.data?.plan;
+				if (mounted) setPlan(userPlan?.code || "free");
+			} catch (error) {
+				console.error("Error fetching plan:", error);
+				if (mounted) setPlan("free");
+			}
+		};
+		fetchPlan();
+		return () => (mounted = false);
 	}, []);
 
 	// Initialize with 30d preset
@@ -1005,6 +1033,55 @@ const StatsScreen = () => {
 		return (
 			<ThemedView variant="gradient" style={styles.container}>
 				<LoadingState fullScreen message={t("loading")} />
+			</ThemedView>
+		);
+	}
+
+	// If plan fetched and user is on free plan, show locked screen
+	if (plan === "free") {
+		return (
+			<ThemedView variant="gradient" style={styles.container}>
+				<SafeAreaView style={styles.safeArea} edges={["top"]}>
+					<View style={styles.lockContainer}>
+						<MaterialCommunityIcons
+							name="lock-outline"
+							size={60}
+							color={theme.text.primary}
+						/>
+						<ThemedText variant="h2" style={{ marginTop: spacing.md }}>
+							{t("unlock_advanced_stats_title") ||
+								"Upgrade your plan to unlock advanced statistics"}
+						</ThemedText>
+						<ThemedText
+							color="secondary"
+							style={{ textAlign: "center", marginTop: spacing.sm }}
+						>
+							{t("unlock_advanced_stats_message") ||
+								"Get deeper insights into your learning patterns with our premium statistics features."}
+						</ThemedText>
+						<View
+							style={{
+								flexDirection: "row",
+								gap: spacing.sm,
+								marginTop: spacing.md,
+							}}
+						>
+							<Button
+								onPress={() =>
+									navigation.navigate("Settings", { screen: "Plans" })
+								}
+							>
+								{t("upgrade") || "Upgrade"}
+							</Button>
+							<Button
+								variant="ghost"
+								onPress={() => navigation.navigate("Home")}
+							>
+								{t("go_home") || "Go Home"}
+							</Button>
+						</View>
+					</View>
+				</SafeAreaView>
 			</ThemedView>
 		);
 	}
@@ -1795,6 +1872,12 @@ const styles = StyleSheet.create({
 		padding: spacing.md,
 		paddingHorizontal: spacing.lg,
 		borderBottomWidth: 1,
+	},
+	lockContainer: {
+		flex: 1,
+		alignItems: "center",
+		justifyContent: "center",
+		padding: spacing.lg,
 	},
 });
 

@@ -70,6 +70,8 @@ const HomeScreen = ({ navigation, onLogout }) => {
 	const [importFileName, setImportFileName] = useState("");
 	const [importError, setImportError] = useState("");
 	const [importLoading, setImportLoading] = useState(false);
+	// Sort modal
+	const [sortModalVisible, setSortModalVisible] = useState(false);
 
 	// Game mode options
 	const MODE_OPTIONS = [
@@ -160,10 +162,14 @@ const HomeScreen = ({ navigation, onLogout }) => {
 			switch (sortBy) {
 				case "oldest":
 					return new Date(a.created_at) - new Date(b.created_at);
-				case "name":
+				case "name_asc":
 					return a.title.localeCompare(b.title);
-				case "cards":
+				case "name_desc":
+					return b.title.localeCompare(a.title);
+				case "cards_desc":
 					return (b.flashcard_count || 0) - (a.flashcard_count || 0);
+				case "cards_asc":
+					return (a.flashcard_count || 0) - (b.flashcard_count || 0);
 				default: // newest
 					return new Date(b.created_at) - new Date(a.created_at);
 			}
@@ -631,6 +637,20 @@ const HomeScreen = ({ navigation, onLogout }) => {
 					autoCapitalize="none"
 					returnKeyType="search"
 				/>
+
+				{/* Sort button to open sort options modal */}
+				<Pressable
+					onPress={() => setSortModalVisible(true)}
+					style={styles.sortIconButton}
+					hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+				>
+					<Ionicons
+						name="filter-outline"
+						size={18}
+						color={theme.text.secondary}
+					/>
+				</Pressable>
+
 				{searchQuery ? (
 					<Pressable
 						onPress={handleClearSearch}
@@ -653,41 +673,10 @@ const HomeScreen = ({ navigation, onLogout }) => {
 			<View style={styles.titleRow}>
 				<ThemedText variant="h2">{t("my_decks")}</ThemedText>
 				<ThemedText color="secondary">
-					{decks.length} {t("decks_total")}
+					{searchQuery.trim()
+						? `${filteredDecks.length}/${decks.length} ${t("decks_total")}`
+						: `${decks.length} ${t("decks_total")}`}
 				</ThemedText>
-			</View>
-
-			{/* Sort Options */}
-			<View style={styles.sortRow}>
-				{["newest", "oldest", "name", "cards"].map((option) => (
-					<Pressable
-						key={option}
-						onPress={() => setSortBy(option)}
-						style={[
-							styles.sortButton,
-							{
-								backgroundColor:
-									sortBy === option
-										? theme.primary.main
-										: theme.background.paper,
-								borderColor: theme.border.main,
-							},
-						]}
-					>
-						<Text
-							style={{
-								color:
-									sortBy === option
-										? theme.primary.contrastText
-										: theme.text.secondary,
-								fontSize: 12,
-								fontWeight: "600",
-							}}
-						>
-							{t(`sort_${option}`)}
-						</Text>
-					</Pressable>
-				))}
 			</View>
 
 			{/* Create and Import Buttons */}
@@ -925,6 +914,59 @@ const HomeScreen = ({ navigation, onLogout }) => {
 				/>
 
 				{/* Import Deck Modal */}
+
+				{/* Sort Options Modal */}
+				<Modal
+					visible={sortModalVisible}
+					onClose={() => setSortModalVisible(false)}
+					title={t("sort_options") || "Sort"}
+				>
+					<View style={{ gap: spacing.sm }}>
+						{[
+							{ value: "newest", label: t("sort_newest") || "Newest" },
+							{ value: "oldest", label: t("sort_oldest") || "Oldest" },
+							{ value: "name_asc", label: t("sort_name_asc") || "Name (A-Z)" },
+							{
+								value: "name_desc",
+								label: t("sort_name_desc") || "Name (Z-A)",
+							},
+							{
+								value: "cards_desc",
+								label: t("sort_most_cards") || "Most cards",
+							},
+							{
+								value: "cards_asc",
+								label: t("sort_fewest_cards") || "Fewest cards",
+							},
+						].map((option) => (
+							<Pressable
+								key={option.value}
+								onPress={() => {
+									setSortBy(option.value);
+									setSortModalVisible(false);
+								}}
+								style={styles.sortOptionRow}
+							>
+								<Text
+									style={[
+										{ color: theme.text.primary, flex: 1 },
+										styles.modeOptionText,
+									]}
+								>
+									{option.label}
+								</Text>
+								{sortBy === option.value && (
+									<Ionicons
+										name="checkmark"
+										size={18}
+										color={theme.success.main}
+									/>
+								)}
+							</Pressable>
+						))}
+					</View>
+				</Modal>
+
 				<Modal
 					visible={importModalVisible}
 					onClose={() => setImportModalVisible(false)}
@@ -1515,6 +1557,21 @@ const styles = StyleSheet.create({
 		gap: spacing.xs,
 		marginBottom: spacing.md,
 		flexWrap: "wrap",
+	},
+	sortIconButton: {
+		paddingHorizontal: spacing.sm,
+		paddingVertical: spacing.xs,
+		marginLeft: spacing.xs,
+		borderRadius: 8,
+	},
+	sortOptionRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		paddingVertical: spacing.sm,
+		paddingHorizontal: spacing.sm,
+		borderRadius: borderRadius.md,
+		borderWidth: 1,
+		borderColor: "transparent",
 	},
 	sortButton: {
 		paddingHorizontal: spacing.sm,

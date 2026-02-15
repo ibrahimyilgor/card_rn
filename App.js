@@ -8,6 +8,7 @@ import { ThemeProvider } from "./src/context/ThemeContext";
 import { I18nProvider } from "./src/context/I18nContext";
 import { AchievementProvider } from "./src/context/AchievementContext";
 import { AdProvider } from "./src/context/AdContext";
+import { PlanProvider } from "./src/context/PlanContext";
 import RootNavigator from "./src/navigation/RootNavigator";
 
 export default function App() {
@@ -33,12 +34,14 @@ export default function App() {
 			<SafeAreaProvider>
 				<ThemeProvider>
 					<I18nProvider>
-						<AdProvider>
-							<AchievementProvider>
-								<RootNavigator />
-								<StatusBar style="auto" />
-							</AchievementProvider>
-						</AdProvider>
+						<PlanProvider>
+							<AdProvider>
+								<AchievementProvider>
+									<RootNavigator />
+									<StatusBar style="auto" />
+								</AchievementProvider>
+							</AdProvider>
+						</PlanProvider>
 					</I18nProvider>
 				</ThemeProvider>
 			</SafeAreaProvider>

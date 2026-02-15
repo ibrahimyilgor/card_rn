@@ -4,6 +4,7 @@ import { View, ActivityIndicator } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../context/ThemeContext";
 import { useI18n } from "../context/I18nContext";
+import { usePlan } from "../context/PlanContext";
 import { accountAPI, authHelpers } from "../services/api";
 import {
 	onAuthStateChanged,
@@ -19,6 +20,7 @@ const RootNavigator = () => {
 		syncFromDatabase: syncTheme,
 	} = useTheme();
 	const { syncFromDatabase: syncLanguage } = useI18n();
+	const { refreshPlan } = usePlan();
 	const [user, setUser] = useState(null);
 	const [isLoading, setIsLoading] = useState(true);
 
@@ -58,6 +60,8 @@ const RootNavigator = () => {
 					await authHelpers.syncWithBackend();
 					// Sync preferences
 					await syncPreferencesFromDatabase();
+					// Refresh plan data (for ad gating, limits, etc.)
+					await refreshPlan();
 				} catch (error) {
 					console.error("Error syncing with backend:", error);
 				}

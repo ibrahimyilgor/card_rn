@@ -103,6 +103,8 @@ export const accountAPI = {
 
 	getCurrentPlan: () => api.get("/account/my-plan"),
 
+	getLimitStatus: () => api.get("/account/limit-status"),
+
 	deleteAccount: () => api.delete("/account/delete"),
 
 	resetStatistics: () => api.delete("/stats/reset"),

@@ -27,10 +27,14 @@ export const AchievementProvider = ({ children }) => {
 		setAchievementQueue((prev) => [...prev, achievement]);
 	}, []);
 
-	// Show multiple achievements
+	// Show multiple achievements (deduplicated by id)
 	const showAchievements = useCallback((achievements) => {
 		if (achievements && achievements.length > 0) {
-			setAchievementQueue((prev) => [...prev, ...achievements]);
+			setAchievementQueue((prev) => {
+				const existingIds = new Set(prev.map((a) => a.id));
+				const unique = achievements.filter((a) => !existingIds.has(a.id));
+				return [...prev, ...unique];
+			});
 		}
 	}, []);
 

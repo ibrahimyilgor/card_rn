@@ -192,7 +192,6 @@ const StatsScreen = () => {
 		{ key: "7d", label: t("7_days") || "7D", days: 7 },
 		{ key: "30d", label: t("30_days") || "30D", days: 30 },
 		{ key: "90d", label: t("90_days") || "90D", days: 90 },
-		{ key: "all", label: t("all_time_short") || "All", days: null },
 		{ key: "custom", label: t("custom") || "Custom", days: -1 },
 	];
 
@@ -203,6 +202,7 @@ const StatsScreen = () => {
 			today.setHours(23, 59, 59, 999);
 
 			if (preset === "all") {
+				// 'all' preset removed from UI; keep backward compatibility
 				return { start: null, end: null };
 			}
 
@@ -373,7 +373,7 @@ const StatsScreen = () => {
 
 		const formatDateForFilename = (date) => {
 			const d = new Date(date);
-			return `${d.getFullYear()}_${(d.getMonth() + 1).toString().padStart(2, "0")}_${d.getDate().toString().padStart(2, "0")}`;
+			return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, "0")}-${d.getDate().toString().padStart(2, "0")}`;
 		};
 
 		const dateRangeText =
@@ -387,7 +387,7 @@ const StatsScreen = () => {
 				: decksData.find((d) => d.id === selectedDeck)?.title || selectedDeck;
 
 		const reportDate = formatDate(new Date());
-		const fileName = `stats_report_${formatDateForFilename(new Date())}`;
+		const fileName = `stats-report-${formatDateForFilename(new Date())}`;
 
 		// Generate chart data for PDF
 		const chartDataForPDF = chartData.data || [];

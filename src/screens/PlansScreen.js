@@ -43,6 +43,16 @@ const PlansScreen = ({ navigation }) => {
 		}
 	};
 
+	// Convert hex color to rgba string with specified alpha
+	const hexToRgba = (hex, alpha = 1) => {
+		const sanitized = hex.replace("#", "");
+		const bigint = parseInt(sanitized, 16);
+		const r = (bigint >> 16) & 255;
+		const g = (bigint >> 8) & 255;
+		const b = bigint & 255;
+		return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+	};
+
 	// Animations
 	const headerAnim = useRef(new Animated.Value(0)).current;
 	const planAnims = useRef([
@@ -272,6 +282,7 @@ const PlansScreen = ({ navigation }) => {
 										currentPlan === plan.id && {
 											borderColor: getPlanColor(plan.id),
 											borderWidth: 2,
+											backgroundColor: hexToRgba(getPlanColor(plan.id), 0.06),
 										},
 									]}
 								>

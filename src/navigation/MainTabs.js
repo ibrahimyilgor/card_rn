@@ -143,7 +143,8 @@ const MainTabs = ({ onLogout }) => {
 				listeners={({ navigation }) => ({
 					tabPress: (e) => {
 						if (navigation.isFocused()) {
-							navigation.dispatch(StackActions.popToTop());
+							// Ensure the Home stack returns to its root screen
+							navigation.navigate("Home", { screen: "HomeMain" });
 						}
 					},
 				})}
@@ -183,9 +184,8 @@ const MainTabs = ({ onLogout }) => {
 				}}
 				listeners={({ navigation }) => ({
 					tabPress: (e) => {
-						if (navigation.isFocused()) {
-							navigation.dispatch(StackActions.popToTop());
-						}
+						// Always reset Settings stack to its root when the tab is pressed
+						navigation.navigate("Settings", { screen: "SettingsMain" });
 					},
 				})}
 			>

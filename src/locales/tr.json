@@ -1,7 +1,7 @@
 {
 	"vs_last_week": "geçen haftaya göre",
 	"edit_deck": "Düzenle",
-	"member_since": "Üyelik tarihi:",
+	"member_since": "Hesap oluşturulma tarihi:",
 	"ok": "Tamam",
 	"error": "Hata",
 	"success": "Başarılı",
@@ -151,7 +151,7 @@
 	"login_subtitle": "Öğrenme yolculuğunuza devam etmek için giriş yapın",
 	"create_account": "Hesap Oluştur",
 	"signup_subtitle": "Öğrenme yolculuğunuza bugün başlayın",
-	"settings_subtitle": "Deneyiminizi özelleştirin",
+	"settings_subtitle": "Öğrenme deneyiminizi özelleştirin",
 	"appearance": "Görünüm",
 	"account": "Hesap",
 	"loading_cards": "Kartlar yükleniyor...",

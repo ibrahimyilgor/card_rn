@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+﻿import React, { useState, useEffect, useRef } from "react";
 import {
 	View,
 	StyleSheet,
@@ -22,6 +22,44 @@ import {
 import { spacing, borderRadius } from "../styles/theme";
 import { Ionicons } from "@expo/vector-icons";
 
+// Module-level flag — persists across context-triggered remounts within the same app session
+let _settingsAnimated = false;
+
+// Defined outside the component so React never sees it as a new component type on re-render
+const SettingsItem = ({
+	icon,
+	label,
+	children,
+	onPress,
+	showArrow = false,
+	theme,
+}) => (
+	<Card style={styles.settingsItem} onPress={onPress}>
+		<View style={styles.settingsItemLeft}>
+			<View
+				style={[
+					styles.iconContainer,
+					{ backgroundColor: theme.primary.main + "20" },
+				]}
+			>
+				<Ionicons name={icon} size={22} color={theme.primary.main} />
+			</View>
+			<ThemedText style={styles.settingsLabel}>{label}</ThemedText>
+		</View>
+		<View style={styles.settingsItemRight}>
+			{children}
+			{showArrow && (
+				<Ionicons
+					name="chevron-forward"
+					size={20}
+					color={theme.text.secondary}
+					style={styles.arrowIcon}
+				/>
+			)}
+		</View>
+	</Card>
+);
+
 const SettingsScreen = ({ navigation, onLogout }) => {
 	const { theme, mode, setTheme, isDark } = useTheme();
 	const { t, language, setLanguage } = useI18n();
@@ -29,20 +67,24 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 	const [soundEnabled, setSoundEnabled] = useState(true);
 	const [loading, setLoading] = useState(false);
 	const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+	const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
 
 	// Section entrance animations
-	const headerAnim = useRef(new Animated.Value(0)).current;
-	const sectionAnims = useRef([
-		new Animated.Value(0),
-		new Animated.Value(0),
-		new Animated.Value(0),
-		new Animated.Value(0),
-		new Animated.Value(0),
-		new Animated.Value(0),
-	]).current;
+	const headerAnim = useRef(
+		new Animated.Value(_settingsAnimated ? 1 : 0),
+	).current;
+	const sectionAnims = useRef(
+		Array.from(
+			{ length: 6 },
+			() => new Animated.Value(_settingsAnimated ? 1 : 0),
+		),
+	).current;
 
 	useEffect(() => {
-		// Staggered entrance for sections
+		// Run entrance animations only once per app session
+		if (_settingsAnimated) return;
+		_settingsAnimated = true;
+
 		Animated.timing(headerAnim, {
 			toValue: 1,
 			duration: 350,
@@ -79,82 +121,54 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 	}, []);
 
 	// Handle theme change with backend sync
-	const handleThemeChange = async (value) => {
-		const newMode = value ? "dark" : "light";
-		setTheme(newMode);
-
-		try {
-			await accountAPI.updateTheme(newMode);
-		} catch (error) {
-			console.error("Error updating theme:", error);
-		}
-	};
+	const handleThemeChange = React.useCallback(
+		async (value) => {
+			const newMode = value ? "dark" : "light";
+			setTheme(newMode);
+			try {
+				await accountAPI.updateTheme(newMode);
+			} catch (error) {
+				console.error("Error updating theme:", error);
+			}
+		},
+		[setTheme],
+	);
 
 	// Handle language change with backend sync
-	const handleLanguageChange = async (newLanguage) => {
-		setLanguage(newLanguage);
-
-		try {
-			await accountAPI.updateLanguage(newLanguage);
-		} catch (error) {
-			console.error("Error updating language:", error);
-		}
-	};
+	const handleLanguageChange = React.useCallback(
+		async (newLanguage) => {
+			setLanguage(newLanguage);
+			try {
+				await accountAPI.updateLanguage(newLanguage);
+			} catch (error) {
+				console.error("Error updating language:", error);
+			}
+		},
+		[setLanguage],
+	);
 
 	// Handle sound change with backend sync
-	const handleSoundChange = async (value) => {
+	const handleSoundChange = React.useCallback(async (value) => {
 		setSoundEnabled(value);
-
 		try {
 			await accountAPI.updateSoundEffects(value);
 		} catch (error) {
 			console.error("Error updating sound:", error);
 		}
-	};
+	}, []);
 
-	const handleLogout = () => {
+	const handleLogout = React.useCallback(() => {
 		setShowLogoutDialog(true);
-	};
+	}, []);
 
-	const confirmLogout = async () => {
+	const confirmLogout = React.useCallback(async () => {
 		await authHelpers.clearAuth();
 		if (onLogout) {
 			onLogout();
 		}
-	};
+	}, [onLogout]);
 
-	const SettingsItem = ({
-		icon,
-		label,
-		children,
-		onPress,
-		showArrow = false,
-	}) => (
-		<Card style={styles.settingsItem} onPress={onPress}>
-			<View style={styles.settingsItemLeft}>
-				<View
-					style={[
-						styles.iconContainer,
-						{ backgroundColor: theme.primary.main + "20" },
-					]}
-				>
-					<Ionicons name={icon} size={22} color={theme.primary.main} />
-				</View>
-				<ThemedText style={styles.settingsLabel}>{label}</ThemedText>
-			</View>
-			<View style={styles.settingsItemRight}>
-				{children}
-				{showArrow && (
-					<Ionicons
-						name="chevron-forward"
-						size={20}
-						color={theme.text.secondary}
-						style={styles.arrowIcon}
-					/>
-				)}
-			</View>
-		</Card>
-	);
+	// SettingsItem is defined at module level to avoid re-mounting on every render
 
 	return (
 		<ThemedView variant="gradient" style={styles.container}>
@@ -177,7 +191,12 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 							},
 						]}
 					>
-						<ThemedText variant="h2">{t("settings")}</ThemedText>
+						<View style={styles.headerTitle}>
+							<Ionicons name="settings" size={26} color={theme.primary.main} />
+							<ThemedText variant="h2" style={styles.headerTitleText}>
+								{t("settings")}
+							</ThemedText>
+						</View>
 						<ThemedText color="secondary">{t("settings_subtitle")}</ThemedText>
 					</Animated.View>
 
@@ -202,16 +221,37 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 							{t("appearance")}
 						</ThemedText>
 
-						<SettingsItem icon="moon-outline" label={t("dark_mode")}>
-							<Switch
-								value={mode === "dark"}
-								onValueChange={handleThemeChange}
-								trackColor={{
-									false: theme.background.elevated,
-									true: theme.primary.main,
-								}}
-								thumbColor={mode === "dark" ? "#fff" : "#f4f3f4"}
-							/>
+						<SettingsItem
+							theme={theme}
+							icon="color-palette-outline"
+							label={t("theme") || "Tema"}
+						>
+							<View style={styles.themeToggle}>
+								<Ionicons
+									name="sunny-outline"
+									size={20}
+									color={
+										mode === "dark" ? theme.text.secondary : theme.primary.main
+									}
+								/>
+								<Switch
+									value={mode === "dark"}
+									onValueChange={handleThemeChange}
+									trackColor={{
+										false: theme.background.elevated,
+										true: theme.primary.main,
+									}}
+									thumbColor={mode === "dark" ? "#fff" : "#f4f3f4"}
+									style={{ marginHorizontal: spacing.sm }}
+								/>
+								<Ionicons
+									name="moon-outline"
+									size={20}
+									color={
+										mode === "dark" ? theme.primary.main : theme.text.secondary
+									}
+								/>
+							</View>
 						</SettingsItem>
 					</Animated.View>
 
@@ -236,51 +276,68 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 							{t("language")}
 						</ThemedText>
 
+						{/* Language Dropdown Trigger */}
 						<Card
-							style={[
-								styles.languageOption,
-								language === "en" && {
-									borderColor: theme.primary.main,
-									borderWidth: 2,
-								},
-							]}
-							onPress={() => handleLanguageChange("en")}
+							style={styles.languageOption}
+							onPress={() => setShowLanguageDropdown((v) => !v)}
 						>
 							<View style={styles.languageContent}>
-								<Text style={styles.flag}>🇬🇧</Text>
-								<ThemedText style={styles.languageLabel}>English</ThemedText>
+								<Text style={styles.flag}>
+									{language === "tr" ? "🇹🇷" : "🇬🇧"}
+								</Text>
+								<ThemedText style={styles.languageLabel}>
+									{language === "tr" ? "Türkçe" : "English"}
+								</ThemedText>
 							</View>
-							{language === "en" && (
-								<Ionicons
-									name="checkmark-circle"
-									size={24}
-									color={theme.primary.main}
-								/>
-							)}
+							<Ionicons
+								name={showLanguageDropdown ? "chevron-up" : "chevron-down"}
+								size={20}
+								color={theme.text.secondary}
+							/>
 						</Card>
 
-						<Card
-							style={[
-								styles.languageOption,
-								language === "tr" && {
-									borderColor: theme.primary.main,
-									borderWidth: 2,
-								},
-							]}
-							onPress={() => handleLanguageChange("tr")}
-						>
-							<View style={styles.languageContent}>
-								<Text style={styles.flag}>🇹🇷</Text>
-								<ThemedText style={styles.languageLabel}>Türkçe</ThemedText>
+						{/* Dropdown Options */}
+						{showLanguageDropdown && (
+							<View
+								style={[
+									styles.dropdownContainer,
+									{ borderColor: theme.divider },
+								]}
+							>
+								{[
+									{ code: "en", flag: "🇬🇧", label: "English" },
+									{ code: "tr", flag: "🇹🇷", label: "Türkçe" },
+								].map((lang) => (
+									<Card
+										key={lang.code}
+										style={[
+											styles.dropdownItem,
+											language === lang.code && {
+												backgroundColor: theme.primary.main + "15",
+											},
+										]}
+										onPress={() => {
+											handleLanguageChange(lang.code);
+											setShowLanguageDropdown(false);
+										}}
+									>
+										<View style={styles.languageContent}>
+											<Text style={styles.flag}>{lang.flag}</Text>
+											<ThemedText style={styles.languageLabel}>
+												{lang.label}
+											</ThemedText>
+										</View>
+										{language === lang.code && (
+											<Ionicons
+												name="checkmark-circle"
+												size={20}
+												color={theme.primary.main}
+											/>
+										)}
+									</Card>
+								))}
 							</View>
-							{language === "tr" && (
-								<Ionicons
-									name="checkmark-circle"
-									size={24}
-									color={theme.primary.main}
-								/>
-							)}
-						</Card>
+						)}
 					</Animated.View>
 
 					{/* Sound Section */}
@@ -304,7 +361,11 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 							{t("sound")}
 						</ThemedText>
 
-						<SettingsItem icon="volume-high-outline" label={t("sound_effects")}>
+						<SettingsItem
+							theme={theme}
+							icon="volume-high-outline"
+							label={t("sound_effects")}
+						>
 							<Switch
 								value={soundEnabled}
 								onValueChange={handleSoundChange}
@@ -339,6 +400,7 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 						</ThemedText>
 
 						<SettingsItem
+							theme={theme}
 							icon="person-outline"
 							label={t("account_settings")}
 							onPress={() => navigation.navigate("Account")}
@@ -346,7 +408,8 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 						/>
 
 						<SettingsItem
-							icon="card-outline"
+							theme={theme}
+							icon="calendar-outline"
 							label={t("plans_title")}
 							onPress={() => navigation.navigate("Plans")}
 							showArrow
@@ -381,13 +444,13 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 								resizeMode="contain"
 							/>
 							<ThemedText variant="h3" style={styles.aboutAppName}>
-								MemoDeck
+								MemoDeck v1.0.0
 							</ThemedText>
-							<ThemedText color="secondary" style={styles.aboutVersion}>
+							{/* <ThemedText color="secondary" style={styles.aboutVersion}>
 								{t("version")} 1.0.0
-							</ThemedText>
+							</ThemedText> */}
 							<ThemedText color="secondary" style={styles.aboutTagline}>
-								{t("tagline")}
+								{"memodeck26@gmail.com"}
 							</ThemedText>
 						</Card>
 					</Animated.View>
@@ -412,20 +475,14 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 							style={[
 								styles.logoutButton,
 								{
-									borderColor: theme.border.main,
-									backgroundColor: isDark ? "transparent" : "#ffffff",
+									borderColor: "#dc2626",
+									backgroundColor: "#dc2626",
 								},
 							]}
 						>
 							<View style={styles.logoutContent}>
-								<Ionicons
-									name="log-out-outline"
-									size={20}
-									color={theme.text.primary}
-								/>
-								<Text
-									style={[styles.logoutText, { color: theme.text.primary }]}
-								>
+								<Ionicons name="log-out-outline" size={20} color="#fff" />
+								<Text style={[styles.logoutText, { color: "#fff" }]}>
 									{t("logout")}
 								</Text>
 							</View>
@@ -461,6 +518,15 @@ const styles = StyleSheet.create({
 	},
 	header: {
 		marginBottom: spacing.lg,
+	},
+	headerTitle: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: spacing.sm,
+		marginBottom: spacing.xs,
+	},
+	headerTitleText: {
+		marginLeft: spacing.sm,
 	},
 	section: {
 		marginBottom: spacing.lg,
@@ -505,7 +571,21 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		justifyContent: "space-between",
 		padding: spacing.md,
+		marginBottom: 0,
+	},
+	dropdownContainer: {
+		borderWidth: 1,
+		borderRadius: borderRadius.md,
+		marginTop: 4,
 		marginBottom: spacing.sm,
+		overflow: "hidden",
+	},
+	dropdownItem: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		padding: spacing.md,
+		borderRadius: 0,
 	},
 	languageContent: {
 		flexDirection: "row",
@@ -518,6 +598,11 @@ const styles = StyleSheet.create({
 	languageLabel: {
 		fontSize: 16,
 		fontWeight: "500",
+	},
+	themeToggle: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: spacing.sm,
 	},
 	logoutButton: {
 		marginTop: spacing.md,

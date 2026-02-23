@@ -28,6 +28,9 @@ import {
 import { spacing, borderRadius } from "../styles/theme";
 import { Ionicons } from "@expo/vector-icons";
 
+// Module-level flag to persist animation state across remounts
+let _accountAnimated = false;
+
 const AccountScreen = ({ navigation, onLogout }) => {
 	const { theme } = useTheme();
 	const { t } = useI18n();
@@ -53,13 +56,19 @@ const AccountScreen = ({ navigation, onLogout }) => {
 		onClose: null,
 	});
 
-	// Entrance animations
-	const headerAnim = useRef(new Animated.Value(0)).current;
-	const profileAnim = useRef(new Animated.Value(0)).current;
-	const avatarScale = useRef(new Animated.Value(0.5)).current;
+	// Entrance animations (preserve finished state across remounts)
+	const headerAnim = useRef(
+		new Animated.Value(_accountAnimated ? 1 : 0),
+	).current;
+	const profileAnim = useRef(
+		new Animated.Value(_accountAnimated ? 1 : 0),
+	).current;
+	const avatarScale = useRef(
+		new Animated.Value(_accountAnimated ? 1 : 0.5),
+	).current;
 	const sectionAnims = useRef([
-		new Animated.Value(0),
-		new Animated.Value(0),
+		new Animated.Value(_accountAnimated ? 1 : 0),
+		new Animated.Value(_accountAnimated ? 1 : 0),
 	]).current;
 
 	useEffect(() => {
@@ -67,6 +76,7 @@ const AccountScreen = ({ navigation, onLogout }) => {
 	}, []);
 
 	useEffect(() => {
+		if (_accountAnimated) return; // already animated this session
 		if (!loading) {
 			// Start entrance animations when data is loaded
 			Animated.timing(headerAnim, {
@@ -100,6 +110,8 @@ const AccountScreen = ({ navigation, onLogout }) => {
 					bounciness: 3,
 				}).start();
 			});
+
+			_accountAnimated = true;
 		}
 	}, [loading]);
 
@@ -115,12 +127,12 @@ const AccountScreen = ({ navigation, onLogout }) => {
 
 			const userPlan = planResponse.data?.plan;
 			setPlan(userPlan?.code || "free");
-
+			console.log("Fetched account profile:", firebaseUser.photoURL);
 			setAccount({
 				email: firebaseUser?.email,
 				displayName: firebaseUser?.displayName,
 				photoURL: firebaseUser?.photoURL,
-				created_at: profileResponse.data?.profile?.created_at,
+				created_at: firebaseUser?.metadata?.creationTime,
 				plan: userPlan?.code || "free",
 				planName: userPlan?.name || "Free",
 				...profileResponse.data?.profile,
@@ -129,6 +141,30 @@ const AccountScreen = ({ navigation, onLogout }) => {
 			console.error("Error fetching account:", error);
 		} finally {
 			setLoading(false);
+		}
+	};
+
+	const formatDate = (dateStr) => {
+		if (!dateStr) return "";
+		try {
+			return new Date(dateStr).toLocaleDateString(undefined, {
+				year: "numeric",
+				month: "long",
+				day: "numeric",
+			});
+		} catch (e) {
+			return new Date(dateStr).toLocaleDateString();
+		}
+	};
+
+	const getPlanColor = (code) => {
+		switch (code) {
+			case "pro":
+				return "#f59e0b";
+			case "premium":
+				return "#8b5cf6";
+			default:
+				return "#3b82f6";
 		}
 	};
 
@@ -228,7 +264,12 @@ const AccountScreen = ({ navigation, onLogout }) => {
 							},
 						]}
 					>
-						<ThemedText variant="h2">{t("account")}</ThemedText>
+						<View style={styles.headerTitle}>
+							<Ionicons name="person" size={26} color={theme.primary.main} />
+							<ThemedText variant="h2" style={styles.headerTitleText}>
+								{t("account")}
+							</ThemedText>
+						</View>
 						<ThemedText color="secondary">{t("account_subtitle")}</ThemedText>
 					</Animated.View>
 
@@ -271,8 +312,7 @@ const AccountScreen = ({ navigation, onLogout }) => {
 								</ThemedText>
 								{account?.created_at && (
 									<ThemedText color="secondary" style={styles.createdDate}>
-										{t("member_since")}{" "}
-										{new Date(account.created_at).toLocaleDateString()}
+										{t("member_since")} {formatDate(account.created_at)}
 									</ThemedText>
 								)}
 							</View>
@@ -298,18 +338,18 @@ const AccountScreen = ({ navigation, onLogout }) => {
 								const planCode = account?.plan || "free";
 								const planConfig = {
 									free: {
-										icon: "star-outline",
-										color: theme.text.secondary,
+										icon: "calendar-outline",
+										color: getPlanColor("free"),
 										label: t("free_plan"),
 									},
 									pro: {
-										icon: "star-half",
-										color: "#8b5cf6",
+										icon: "calendar-outline",
+										color: getPlanColor("pro"),
 										label: t("pro_plan"),
 									},
 									premium: {
-										icon: "star",
-										color: "#f59e0b",
+										icon: "calendar-outline",
+										color: getPlanColor("premium"),
 										label: t("premium_plan"),
 									},
 								};
@@ -321,7 +361,8 @@ const AccountScreen = ({ navigation, onLogout }) => {
 											{
 												borderWidth: 1,
 												borderColor: `${cfg.color}30`,
-												opacity: pressed ? 0.85 : 1,
+												opacity: pressed ? 0.92 : 1,
+												transform: [{ scale: pressed ? 0.995 : 1 }],
 											},
 										]}
 									>
@@ -395,7 +436,9 @@ const AccountScreen = ({ navigation, onLogout }) => {
 										styles.securityCard,
 										{
 											borderColor: "#f59e0b30",
-											backgroundColor: pressed ? "#f59e0b08" : undefined,
+											backgroundColor: "#f59e0b08",
+											opacity: pressed ? 0.96 : 1,
+											transform: [{ scale: pressed ? 0.997 : 1 }],
 										},
 									]}
 								>
@@ -439,9 +482,9 @@ const AccountScreen = ({ navigation, onLogout }) => {
 										styles.securityCard,
 										{
 											borderColor: `${theme.error.main}30`,
-											backgroundColor: pressed
-												? `${theme.error.main}08`
-												: undefined,
+											backgroundColor: `${theme.error.main}08`,
+											opacity: pressed ? 0.96 : 1,
+											transform: [{ scale: pressed ? 0.997 : 1 }],
 										},
 									]}
 								>
@@ -578,18 +621,27 @@ const styles = StyleSheet.create({
 		fontWeight: "700",
 	},
 	createdDate: {
-		marginTop: 2,
+		marginTop: 5,
 		fontSize: 12,
 	},
 	emailText: {
 		fontSize: 13,
-		marginTop: 2,
+		marginTop: 0,
 	},
 	section: {
 		marginBottom: spacing.lg,
 	},
 	sectionTitle: {
 		marginBottom: spacing.sm,
+	},
+	headerTitle: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: spacing.sm,
+		marginBottom: spacing.xs,
+	},
+	headerTitleText: {
+		marginLeft: spacing.sm,
 	},
 	dangerZone: {
 		marginTop: spacing.lg,

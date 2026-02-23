@@ -9,11 +9,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
-import {
-	MaterialCommunityIcons,
-	Ionicons,
-	FontAwesome5,
-} from "@expo/vector-icons";
+import { MaterialCommunityIcons, FontAwesome5 } from "@expo/vector-icons";
 import { useTheme } from "../context/ThemeContext";
 import { useI18n } from "../context/I18nContext";
 import { achievementsAPI } from "../services/api";
@@ -38,7 +34,6 @@ const AchievementsScreen = () => {
 	const headerAnim = useRef(new Animated.Value(0)).current;
 	const progressBarWidth = useRef(new Animated.Value(0)).current;
 	const progressCardAnim = useRef(new Animated.Value(0)).current;
-	const trophyBounce = useRef(new Animated.Value(0.5)).current;
 
 	// Fetch achievements every time screen is focused
 	useFocusEffect(
@@ -68,14 +63,7 @@ const AchievementsScreen = () => {
 				bounciness: 4,
 			}).start();
 
-			// Trophy bounce
-			Animated.spring(trophyBounce, {
-				toValue: 1,
-				delay: 300,
-				useNativeDriver: true,
-				speed: 6,
-				bounciness: 14,
-			}).start();
+			// (removed trophy bounce animation for compact progress layout)
 
 			// Animate progress bar fill
 			const earned = data.filter((a) => a.earned).length;
@@ -100,6 +88,10 @@ const AchievementsScreen = () => {
 	};
 
 	const earnedCount = achievements.filter((a) => a.earned).length;
+	const pct =
+		achievements.length > 0
+			? Math.round((earnedCount / achievements.length) * 100)
+			: 0;
 
 	// Helper function to get translated achievement name
 	const getAchievementName = (achievement) => {
@@ -146,7 +138,7 @@ const AchievementsScreen = () => {
 		return acc;
 	}, {});
 
-	const categoryOrder = ["streak", "accuracy", "volume"];
+	const categoryOrder = ["accuracy", "streak", "volume"];
 
 	// Modern icon components for categories
 	const CategoryIcon = ({ category, size = 24, color }) => {
@@ -225,6 +217,20 @@ const AchievementsScreen = () => {
 		);
 	};
 
+	// Return a color for the achievement (used for badge backgrounds)
+	const getAchievementColor = (achievement) => {
+		const { category, threshold } = achievement;
+		if (category === "streak") {
+			if (threshold >= 30) return "#FF4500";
+			if (threshold >= 14) return "#FF6B35";
+			if (threshold >= 7) return "#FF8C00";
+			return "#FFA500";
+		}
+		if (category === "accuracy") return "#4ECDC4";
+		if (category === "volume") return "#9B59B6";
+		return theme.primary.main;
+	};
+
 	if (loading) {
 		return (
 			<ThemedView variant="gradient" style={styles.container}>
@@ -247,55 +253,82 @@ const AchievementsScreen = () => {
 					}
 				>
 					{/* Header */}
-					<Animated.View style={[styles.header, { opacity: headerAnim, transform: [{ translateY: headerAnim.interpolate({ inputRange: [0, 1], outputRange: [-15, 0] }) }] }]}>
-						<ThemedText variant="h2">{t("achievements")}</ThemedText>
+					<Animated.View
+						style={[
+							styles.header,
+							{
+								opacity: headerAnim,
+								transform: [
+									{
+										translateY: headerAnim.interpolate({
+											inputRange: [0, 1],
+											outputRange: [-15, 0],
+										}),
+									},
+								],
+							},
+						]}
+					>
+						<View style={styles.headerTitle}>
+							<FontAwesome5
+								name="trophy"
+								size={26}
+								color={theme.primary.main}
+							/>
+							<ThemedText variant="h2" style={styles.headerTitleText}>
+								{t("achievements")}
+							</ThemedText>
+						</View>
 						<ThemedText color="secondary">
 							{t("achievements_subtitle")}
 						</ThemedText>
 					</Animated.View>
 
-					{/* Progress */}
-					<Animated.View style={{ opacity: progressCardAnim, transform: [{ translateY: progressCardAnim.interpolate({ inputRange: [0, 1], outputRange: [25, 0] }) }] }}>
-					<Card style={styles.progressCard}>
-						<View style={styles.progressHeader}>
-							<Animated.View
-								style={[
-									styles.trophyIconContainer,
-									{ backgroundColor: theme.primary.main + "20", transform: [{ scale: trophyBounce }] },
-								]}
-							>
-								<FontAwesome5 name="trophy" size={32} color="#FFD700" />
-							</Animated.View>
-							<View style={styles.progressInfo}>
-								<ThemedText variant="h3">
-									{earnedCount} / {achievements.length}
-								</ThemedText>
-								<ThemedText color="secondary">
-									{t("achievements_earned")}
-								</ThemedText>
+					{/* Progress (enhanced) */}
+					<Animated.View
+						style={{
+							opacity: progressCardAnim,
+							transform: [
+								{
+									translateY: progressCardAnim.interpolate({
+										inputRange: [0, 1],
+										outputRange: [20, 0],
+									}),
+								},
+							],
+						}}
+					>
+						<Card style={styles.progressCard}>
+							<View style={styles.progressRow}>
+								{/* Circle count */}
+								<View
+									style={[
+										styles.progressCircle,
+										{ backgroundColor: theme.primary.main + "15" },
+									]}
+								>
+									<Text
+										style={[
+											styles.progressCircleCount,
+											{ color: theme.primary.main },
+										]}
+									>
+										{`${earnedCount} / ${achievements.length}`}
+									</Text>
+								</View>
+								{/* Info + bar */}
+								<View style={styles.progressInfo}>
+									<Text
+										style={[
+											styles.progressTitle,
+											{ color: theme.text.primary },
+										]}
+									>
+										{t("achievements_earned") || t("achievements_earned")}
+									</Text>
+								</View>
 							</View>
-						</View>
-
-						<View
-							style={[
-								styles.progressBar,
-								{ backgroundColor: theme.border.main },
-							]}
-						>
-							<Animated.View
-								style={[
-									styles.progressFill,
-									{
-										backgroundColor: theme.primary.main,
-										width: progressBarWidth.interpolate({
-											inputRange: [0, 1],
-											outputRange: ['0%', '100%'],
-										}),
-									},
-								]}
-							/>
-						</View>
-					</Card>
+						</Card>
 					</Animated.View>
 
 					{/* Achievement Categories */}
@@ -349,32 +382,27 @@ const AchievementsScreen = () => {
 												{getAchievementName(achievement)}
 											</ThemedText>
 
+											{achievement.earned && achievement.earned_at && (
+												<ThemedText
+													style={styles.achievementDesc}
+													color="secondary"
+												>
+													{formatDate(achievement.earned_at)}
+												</ThemedText>
+											)}
+
 											{achievement.earned && achievement.done_count > 1 && (
 												<View
 													style={[
 														styles.earnedBadge,
-														{ backgroundColor: theme.primary.dark },
+														{
+															backgroundColor: getAchievementColor(achievement),
+														},
 													]}
 												>
 													<Text style={styles.earnedBadgeText}>
 														×{achievement.done_count}
 													</Text>
-												</View>
-											)}
-
-											{!achievement.earned && (
-												<View
-													style={[
-														styles.lockedOverlay,
-														{ borderColor: theme.border.main },
-													]}
-												>
-													<Ionicons
-														name="lock-closed"
-														size={14}
-														color={theme.text.secondary}
-														style={{ opacity: 0.6 }}
-													/>
 												</View>
 											)}
 										</Card>
@@ -397,6 +425,21 @@ const AchievementsScreen = () => {
 	);
 };
 
+// Small local date formatter for earned_at
+const formatDate = (iso) => {
+	if (!iso) return "";
+	try {
+		const d = new Date(iso);
+		if (isNaN(d.getTime())) return iso;
+		const day = String(d.getDate()).padStart(2, "0");
+		const month = String(d.getMonth() + 1).padStart(2, "0");
+		const year = d.getFullYear();
+		return `${day}.${month}.${year}`;
+	} catch (e) {
+		return iso;
+	}
+};
+
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
@@ -411,6 +454,15 @@ const styles = StyleSheet.create({
 	header: {
 		marginBottom: spacing.lg,
 	},
+	headerTitle: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: spacing.sm,
+		marginBottom: spacing.xs,
+	},
+	headerTitleText: {
+		marginLeft: spacing.sm,
+	},
 	progressCard: {
 		padding: spacing.lg,
 		marginBottom: spacing.lg,
@@ -419,6 +471,25 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "center",
 		marginBottom: spacing.md,
+	},
+	progressBadge: {
+		display: "flex",
+		flexDirection: "column",
+		alignItems: "center",
+		justifyContent: "center",
+		paddingHorizontal: spacing.lg,
+		paddingVertical: spacing.sm,
+		borderRadius: 8,
+		borderWidth: 1,
+		// backgroundColor/borderColor set inline to use theme
+	},
+	progressBadgeCount: {
+		fontSize: 20,
+		fontWeight: "700",
+	},
+	progressBadgeLabel: {
+		fontSize: 12,
+		marginTop: 4,
 	},
 	trophyIconContainer: {
 		width: 64,
@@ -430,6 +501,33 @@ const styles = StyleSheet.create({
 	},
 	progressInfo: {
 		flex: 1,
+	},
+	progressRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: spacing.md,
+	},
+	progressCircle: {
+		width: 100,
+		height: 72,
+		borderRadius: 36,
+		justifyContent: "center",
+		alignItems: "center",
+		marginRight: spacing.md,
+	},
+	progressCircleCount: {
+		fontSize: 18,
+		fontWeight: "800",
+	},
+	progressTitle: {
+		fontSize: 14,
+		fontWeight: "700",
+		marginBottom: spacing.xs,
+	},
+	progressPercent: {
+		fontSize: 12,
+		marginTop: spacing.xs,
+		textAlign: "right",
 	},
 	progressBar: {
 		height: 8,
@@ -497,11 +595,6 @@ const styles = StyleSheet.create({
 		color: "#fff",
 		fontSize: 11,
 		fontWeight: "700",
-	},
-	lockedOverlay: {
-		position: "absolute",
-		top: spacing.sm,
-		right: spacing.sm,
 	},
 });
 

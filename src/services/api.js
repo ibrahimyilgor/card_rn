@@ -5,7 +5,6 @@ import { getIdToken, signOut as firebaseSignOut } from "./firebase";
 
 // Fallback to Render.com if env not loaded
 const BASE_URL = API_URL || "https://card-p33o.onrender.com";
-
 // Debug: Log the API URL being used
 console.log("[API] Using BASE_URL:", BASE_URL);
 console.log("[API] API_URL from env:", API_URL);

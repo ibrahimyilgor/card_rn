@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, {
+	useState,
+	useEffect,
+	useCallback,
+	useMemo,
+	useRef,
+} from "react";
 import {
 	View,
 	Text,
@@ -11,6 +17,7 @@ import {
 	FlatList,
 	Platform,
 	Alert,
+	Animated,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
@@ -52,24 +59,58 @@ const getLogoBase64 = async () => {
 	}
 };
 
-// Stat Card Component
-const StatCard = ({ icon, iconColor, title, value, theme }) => (
-	<Card style={styles.statCard}>
-		<View
-			style={[styles.statIconContainer, { backgroundColor: iconColor + "20" }]}
+// Stat Card Component with entrance animation
+const StatCard = ({ icon, iconColor, title, value, theme, delay = 0 }) => {
+	const scaleAnim = useRef(new Animated.Value(0.8)).current;
+	const opacityAnim = useRef(new Animated.Value(0)).current;
+
+	useEffect(() => {
+		Animated.parallel([
+			Animated.spring(scaleAnim, {
+				toValue: 1,
+				delay,
+				useNativeDriver: true,
+				speed: 14,
+				bounciness: 4,
+			}),
+			Animated.timing(opacityAnim, {
+				toValue: 1,
+				duration: 300,
+				delay,
+				useNativeDriver: true,
+			}),
+		]).start();
+	}, []);
+
+	return (
+		<Animated.View
+			style={{ opacity: opacityAnim, transform: [{ scale: scaleAnim }] }}
 		>
-			{icon}
-		</View>
-		<View style={styles.statContent}>
-			<ThemedText color="secondary" style={styles.statTitle} numberOfLines={1}>
-				{title}
-			</ThemedText>
-			<ThemedText variant="h3" style={styles.statValue} numberOfLines={1}>
-				{value}
-			</ThemedText>
-		</View>
-	</Card>
-);
+			<Card style={styles.statCard}>
+				<View
+					style={[
+						styles.statIconContainer,
+						{ backgroundColor: iconColor + "20" },
+					]}
+				>
+					{icon}
+				</View>
+				<View style={styles.statContent}>
+					<ThemedText
+						color="secondary"
+						style={styles.statTitle}
+						numberOfLines={1}
+					>
+						{title}
+					</ThemedText>
+					<ThemedText variant="h3" style={styles.statValue} numberOfLines={1}>
+						{value}
+					</ThemedText>
+				</View>
+			</Card>
+		</Animated.View>
+	);
+};
 
 // Section Header Component
 const SectionHeader = ({ icon, title, theme }) => (
@@ -169,6 +210,11 @@ const StatsScreen = () => {
 	// Loading states
 	const [loading, setLoading] = useState(true);
 	const [refreshing, setRefreshing] = useState(false);
+
+	// Entrance animations
+	const headerAnim = useRef(new Animated.Value(0)).current;
+	const filtersAnim = useRef(new Animated.Value(0)).current;
+	const contentAnim = useRef(new Animated.Value(0)).current;
 
 	// Filter states
 	const [selectedDeck, setSelectedDeck] = useState("all");
@@ -330,6 +376,29 @@ const StatsScreen = () => {
 		} finally {
 			setLoading(false);
 			setRefreshing(false);
+
+			// Trigger entrance animations
+			Animated.timing(headerAnim, {
+				toValue: 1,
+				duration: 350,
+				useNativeDriver: true,
+			}).start();
+
+			Animated.spring(filtersAnim, {
+				toValue: 1,
+				delay: 100,
+				useNativeDriver: true,
+				speed: 14,
+				bounciness: 3,
+			}).start();
+
+			Animated.spring(contentAnim, {
+				toValue: 1,
+				delay: 200,
+				useNativeDriver: true,
+				speed: 12,
+				bounciness: 4,
+			}).start();
 		}
 	};
 
@@ -1101,7 +1170,22 @@ const StatsScreen = () => {
 					showsVerticalScrollIndicator={false}
 				>
 					{/* Header */}
-					<View style={styles.header}>
+					<Animated.View
+						style={[
+							styles.header,
+							{
+								opacity: headerAnim,
+								transform: [
+									{
+										translateY: headerAnim.interpolate({
+											inputRange: [0, 1],
+											outputRange: [-15, 0],
+										}),
+									},
+								],
+							},
+						]}
+					>
 						<View style={styles.headerRow}>
 							<View style={styles.headerTitle}>
 								<MaterialCommunityIcons
@@ -1141,109 +1225,143 @@ const StatsScreen = () => {
 							</View>
 						</View>
 						<ThemedText color="secondary">{t("stats_subtitle")}</ThemedText>
-					</View>
+					</Animated.View>
 
 					{/* Filters Section */}
-					<Card style={styles.filtersCard}>
-						{/* Deck Filter */}
-						<TouchableOpacity
-							style={[styles.deckSelector, { borderColor: theme.border.main }]}
-							onPress={() => setShowDeckModal(true)}
-						>
-							<MaterialCommunityIcons
-								name="cards"
-								size={20}
-								color={theme.primary.main}
-							/>
-							<ThemedText style={styles.deckSelectorText} numberOfLines={1}>
-								{selectedDeckName}
-							</ThemedText>
-							<MaterialCommunityIcons
-								name="chevron-down"
-								size={20}
-								color={theme.text.secondary}
-							/>
-						</TouchableOpacity>
+					<Animated.View
+						style={{
+							opacity: filtersAnim,
+							transform: [
+								{
+									translateY: filtersAnim.interpolate({
+										inputRange: [0, 1],
+										outputRange: [15, 0],
+									}),
+								},
+							],
+						}}
+					>
+						<Card style={styles.filtersCard}>
+							{/* Deck Filter */}
+							<TouchableOpacity
+								style={[
+									styles.deckSelector,
+									{ borderColor: theme.border.main },
+								]}
+								onPress={() => setShowDeckModal(true)}
+							>
+								<MaterialCommunityIcons
+									name="cards"
+									size={20}
+									color={theme.primary.main}
+								/>
+								<ThemedText style={styles.deckSelectorText} numberOfLines={1}>
+									{selectedDeckName}
+								</ThemedText>
+								<MaterialCommunityIcons
+									name="chevron-down"
+									size={20}
+									color={theme.text.secondary}
+								/>
+							</TouchableOpacity>
 
-						{/* Date Presets */}
-						<View style={styles.presetsContainer}>
-							{presets.map((p) => (
-								<TouchableOpacity
-									key={p.key}
-									style={[
-										styles.presetButton,
-										{
-											backgroundColor:
-												activePreset === p.key
-													? theme.primary.main
-													: theme.background.elevated,
-											borderColor:
-												activePreset === p.key
-													? theme.primary.main
-													: theme.border.main,
-										},
-									]}
-									onPress={() => handlePresetClick(p.key)}
-								>
-									<Text
+							{/* Date Presets */}
+							<View style={styles.presetsContainer}>
+								{presets.map((p) => (
+									<TouchableOpacity
+										key={p.key}
 										style={[
-											styles.presetText,
+											styles.presetButton,
 											{
-												color:
+												backgroundColor:
 													activePreset === p.key
-														? "#fff"
-														: theme.text.secondary,
+														? theme.primary.main
+														: theme.background.elevated,
+												borderColor:
+													activePreset === p.key
+														? theme.primary.main
+														: theme.border.main,
 											},
 										]}
+										onPress={() => handlePresetClick(p.key)}
 									>
-										{p.label}
-									</Text>
-								</TouchableOpacity>
-							))}
-						</View>
-
-						{/* Custom Date Range Display */}
-						{activePreset === "custom" && dateRange.start && dateRange.end && (
-							<View style={styles.customDateDisplay}>
-								<TouchableOpacity
-									style={[
-										styles.dateButton,
-										{ borderColor: theme.border.main },
-									]}
-									onPress={() => setShowStartPicker(true)}
-								>
-									<MaterialCommunityIcons
-										name="calendar"
-										size={16}
-										color={theme.primary.main}
-									/>
-									<ThemedText style={styles.dateButtonText}>
-										{dateRange.start.toLocaleDateString()}
-									</ThemedText>
-								</TouchableOpacity>
-								<ThemedText color="secondary">-</ThemedText>
-								<TouchableOpacity
-									style={[
-										styles.dateButton,
-										{ borderColor: theme.border.main },
-									]}
-									onPress={() => setShowEndPicker(true)}
-								>
-									<MaterialCommunityIcons
-										name="calendar"
-										size={16}
-										color={theme.primary.main}
-									/>
-									<ThemedText style={styles.dateButtonText}>
-										{dateRange.end.toLocaleDateString()}
-									</ThemedText>
-								</TouchableOpacity>
+										<Text
+											style={[
+												styles.presetText,
+												{
+													color:
+														activePreset === p.key
+															? "#fff"
+															: theme.text.secondary,
+												},
+											]}
+										>
+											{p.label}
+										</Text>
+									</TouchableOpacity>
+								))}
 							</View>
-						)}
-					</Card>
+
+							{/* Custom Date Range Display */}
+							{activePreset === "custom" &&
+								dateRange.start &&
+								dateRange.end && (
+									<View style={styles.customDateDisplay}>
+										<TouchableOpacity
+											style={[
+												styles.dateButton,
+												{ borderColor: theme.border.main },
+											]}
+											onPress={() => setShowStartPicker(true)}
+										>
+											<MaterialCommunityIcons
+												name="calendar"
+												size={16}
+												color={theme.primary.main}
+											/>
+											<ThemedText style={styles.dateButtonText}>
+												{dateRange.start.toLocaleDateString()}
+											</ThemedText>
+										</TouchableOpacity>
+										<ThemedText color="secondary">-</ThemedText>
+										<TouchableOpacity
+											style={[
+												styles.dateButton,
+												{ borderColor: theme.border.main },
+											]}
+											onPress={() => setShowEndPicker(true)}
+										>
+											<MaterialCommunityIcons
+												name="calendar"
+												size={16}
+												color={theme.primary.main}
+											/>
+											<ThemedText style={styles.dateButtonText}>
+												{dateRange.end.toLocaleDateString()}
+											</ThemedText>
+										</TouchableOpacity>
+									</View>
+								)}
+						</Card>
+					</Animated.View>
 
 					{/* Stats Grid */}
-					<View style={styles.statsGrid}>
+					<Animated.View
+						style={[
+							styles.statsGrid,
+							{
+								opacity: contentAnim,
+								transform: [
+									{
+										translateY: contentAnim.interpolate({
+											inputRange: [0, 1],
+											outputRange: [20, 0],
+										}),
+									},
+								],
+							},
+						]}
+					>
 						<StatCard
 							icon={
 								<MaterialCommunityIcons
@@ -1322,7 +1440,7 @@ const StatsScreen = () => {
 							value={filteredStats?.sessions || 0}
 							theme={theme}
 						/>
-					</View>
+					</Animated.View>
 
 					{/* Charts Section */}
 					{/* Study Activity Chart */}

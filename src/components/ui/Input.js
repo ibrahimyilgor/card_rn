@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { View, TextInput, Text, StyleSheet, Pressable } from "react-native";
+import React, { useState, useRef, useEffect } from "react";
+import { View, TextInput, Text, StyleSheet, Pressable, Animated } from "react-native";
 import { useTheme } from "../../context/ThemeContext";
 import { borderRadius, spacing, typography } from "../../styles/theme";
 
@@ -23,27 +23,43 @@ const Input = ({
 }) => {
 	const { theme } = useTheme();
 	const [isFocused, setIsFocused] = useState(false);
+	const focusAnim = useRef(new Animated.Value(0)).current;
+	const labelAnim = useRef(new Animated.Value(0)).current;
 
-	const getBorderColor = () => {
-		if (error) return theme.error.main;
-		if (isFocused) return theme.primary.main;
-		return theme.border.main;
-	};
+	useEffect(() => {
+		Animated.timing(focusAnim, {
+			toValue: isFocused ? 1 : 0,
+			duration: 200,
+			useNativeDriver: false,
+		}).start();
+
+		Animated.spring(labelAnim, {
+			toValue: isFocused ? 1 : 0,
+			useNativeDriver: true,
+			speed: 20,
+			bounciness: 4,
+		}).start();
+	}, [isFocused]);
+
+	const borderColor = focusAnim.interpolate({
+		inputRange: [0, 1],
+		outputRange: [error ? theme.error.main : theme.border.main, error ? theme.error.main : theme.primary.main],
+	});
 
 	return (
 		<View style={[styles.container, style]}>
 			{label && (
-				<Text style={[styles.label, { color: theme.text.primary }]}>
+				<Animated.Text style={[styles.label, { color: theme.text.primary, transform: [{ translateX: labelAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 2] }) }] }]}>
 					{label}
-				</Text>
+				</Animated.Text>
 			)}
 
-			<View
+			<Animated.View
 				style={[
 					styles.inputContainer,
 					{
 						backgroundColor: theme.background.paper,
-						borderColor: getBorderColor(),
+						borderColor: borderColor,
 						borderWidth: isFocused ? 2 : 1,
 					},
 					multiline && { minHeight: numberOfLines * 24 + spacing.md * 2 },
@@ -85,7 +101,7 @@ const Input = ({
 						</View>
 					</Pressable>
 				)}
-			</View>
+			</Animated.View>
 
 			{(error || helperText) && (
 				<Text

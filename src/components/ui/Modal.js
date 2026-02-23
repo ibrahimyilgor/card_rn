@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import {
 	Modal as RNModal,
 	View,
@@ -8,6 +8,7 @@ import {
 	ScrollView,
 	KeyboardAvoidingView,
 	Platform,
+	Animated,
 } from "react-native";
 import { useTheme } from "../../context/ThemeContext";
 import { borderRadius, spacing } from "../../styles/theme";
@@ -22,6 +23,47 @@ const Modal = ({
 	showCloseButton = true,
 }) => {
 	const { theme, shadows } = useTheme();
+	const backdropAnim = useRef(new Animated.Value(0)).current;
+	const scaleAnim = useRef(new Animated.Value(0.9)).current;
+	const translateYAnim = useRef(new Animated.Value(30)).current;
+	const contentOpacity = useRef(new Animated.Value(0)).current;
+
+	useEffect(() => {
+		if (visible) {
+			// Reset values
+			backdropAnim.setValue(0);
+			scaleAnim.setValue(0.9);
+			translateYAnim.setValue(30);
+			contentOpacity.setValue(0);
+
+			// Animate in
+			Animated.parallel([
+				Animated.timing(backdropAnim, {
+					toValue: 1,
+					duration: 250,
+					useNativeDriver: true,
+				}),
+				Animated.spring(scaleAnim, {
+					toValue: 1,
+					useNativeDriver: true,
+					speed: 18,
+					bounciness: 4,
+				}),
+				Animated.spring(translateYAnim, {
+					toValue: 0,
+					useNativeDriver: true,
+					speed: 18,
+					bounciness: 4,
+				}),
+				Animated.timing(contentOpacity, {
+					toValue: 1,
+					duration: 200,
+					delay: 100,
+					useNativeDriver: true,
+				}),
+			]).start();
+		}
+	}, [visible]);
 
 	const getWidth = () => {
 		switch (size) {
@@ -40,22 +82,29 @@ const Modal = ({
 		<RNModal
 			visible={visible}
 			transparent
-			animationType="slide"
+			animationType="none"
 			onRequestClose={onClose}
 		>
 			<KeyboardAvoidingView
 				behavior={Platform.OS === "ios" ? "padding" : "height"}
 				style={styles.overlay}
 			>
-				<Pressable style={styles.backdrop} onPress={onClose} />
+				<Animated.View style={[styles.backdrop, { opacity: backdropAnim }]}>
+					<Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+				</Animated.View>
 
-				<View
+				<Animated.View
 					style={[
 						styles.container,
 						{
 							width: getWidth(),
 							backgroundColor: theme.background.elevated,
 							borderColor: theme.border.main,
+							opacity: contentOpacity,
+							transform: [
+								{ scale: scaleAnim },
+								{ translateY: translateYAnim },
+							],
 						},
 						shadows.large,
 						size === "full" && styles.fullSize,
@@ -101,7 +150,7 @@ const Modal = ({
 							{footer}
 						</View>
 					)}
-				</View>
+				</Animated.View>
 			</KeyboardAvoidingView>
 		</RNModal>
 	);

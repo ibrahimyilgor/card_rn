@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
 	View,
 	StyleSheet,
@@ -6,6 +6,7 @@ import {
 	Switch,
 	Text,
 	Image,
+	Animated,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../context/ThemeContext";
@@ -28,6 +29,36 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 	const [soundEnabled, setSoundEnabled] = useState(true);
 	const [loading, setLoading] = useState(false);
 	const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+
+	// Section entrance animations
+	const headerAnim = useRef(new Animated.Value(0)).current;
+	const sectionAnims = useRef([
+		new Animated.Value(0),
+		new Animated.Value(0),
+		new Animated.Value(0),
+		new Animated.Value(0),
+		new Animated.Value(0),
+		new Animated.Value(0),
+	]).current;
+
+	useEffect(() => {
+		// Staggered entrance for sections
+		Animated.timing(headerAnim, {
+			toValue: 1,
+			duration: 350,
+			useNativeDriver: true,
+		}).start();
+
+		sectionAnims.forEach((anim, index) => {
+			Animated.spring(anim, {
+				toValue: 1,
+				delay: 100 + index * 80,
+				useNativeDriver: true,
+				speed: 14,
+				bounciness: 3,
+			}).start();
+		});
+	}, []);
 
 	// Load preferences on mount
 	useEffect(() => {
@@ -130,13 +161,43 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 			<SafeAreaView style={styles.safeArea} edges={["top"]}>
 				<ScrollView contentContainerStyle={styles.scrollContent}>
 					{/* Header */}
-					<View style={styles.header}>
+					<Animated.View
+						style={[
+							styles.header,
+							{
+								opacity: headerAnim,
+								transform: [
+									{
+										translateY: headerAnim.interpolate({
+											inputRange: [0, 1],
+											outputRange: [-15, 0],
+										}),
+									},
+								],
+							},
+						]}
+					>
 						<ThemedText variant="h2">{t("settings")}</ThemedText>
 						<ThemedText color="secondary">{t("settings_subtitle")}</ThemedText>
-					</View>
+					</Animated.View>
 
 					{/* Appearance Section */}
-					<View style={styles.section}>
+					<Animated.View
+						style={[
+							styles.section,
+							{
+								opacity: sectionAnims[0],
+								transform: [
+									{
+										translateY: sectionAnims[0].interpolate({
+											inputRange: [0, 1],
+											outputRange: [20, 0],
+										}),
+									},
+								],
+							},
+						]}
+					>
 						<ThemedText variant="h4" style={styles.sectionTitle}>
 							{t("appearance")}
 						</ThemedText>
@@ -152,10 +213,25 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 								thumbColor={mode === "dark" ? "#fff" : "#f4f3f4"}
 							/>
 						</SettingsItem>
-					</View>
+					</Animated.View>
 
 					{/* Language Section */}
-					<View style={styles.section}>
+					<Animated.View
+						style={[
+							styles.section,
+							{
+								opacity: sectionAnims[1],
+								transform: [
+									{
+										translateY: sectionAnims[1].interpolate({
+											inputRange: [0, 1],
+											outputRange: [20, 0],
+										}),
+									},
+								],
+							},
+						]}
+					>
 						<ThemedText variant="h4" style={styles.sectionTitle}>
 							{t("language")}
 						</ThemedText>
@@ -205,10 +281,25 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 								/>
 							)}
 						</Card>
-					</View>
+					</Animated.View>
 
 					{/* Sound Section */}
-					<View style={styles.section}>
+					<Animated.View
+						style={[
+							styles.section,
+							{
+								opacity: sectionAnims[2],
+								transform: [
+									{
+										translateY: sectionAnims[2].interpolate({
+											inputRange: [0, 1],
+											outputRange: [20, 0],
+										}),
+									},
+								],
+							},
+						]}
+					>
 						<ThemedText variant="h4" style={styles.sectionTitle}>
 							{t("sound")}
 						</ThemedText>
@@ -224,10 +315,25 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 								thumbColor={soundEnabled ? "#fff" : "#f4f3f4"}
 							/>
 						</SettingsItem>
-					</View>
+					</Animated.View>
 
 					{/* Account Section */}
-					<View style={styles.section}>
+					<Animated.View
+						style={[
+							styles.section,
+							{
+								opacity: sectionAnims[3],
+								transform: [
+									{
+										translateY: sectionAnims[3].interpolate({
+											inputRange: [0, 1],
+											outputRange: [20, 0],
+										}),
+									},
+								],
+							},
+						]}
+					>
 						<ThemedText variant="h4" style={styles.sectionTitle}>
 							{t("account")}
 						</ThemedText>
@@ -241,14 +347,29 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 
 						<SettingsItem
 							icon="card-outline"
-							label={t("subscription_plans")}
+							label={t("plans_title")}
 							onPress={() => navigation.navigate("Plans")}
 							showArrow
 						/>
-					</View>
+					</Animated.View>
 
 					{/* About Section */}
-					<View style={styles.section}>
+					<Animated.View
+						style={[
+							styles.section,
+							{
+								opacity: sectionAnims[4],
+								transform: [
+									{
+										translateY: sectionAnims[4].interpolate({
+											inputRange: [0, 1],
+											outputRange: [20, 0],
+										}),
+									},
+								],
+							},
+						]}
+					>
 						<ThemedText variant="h4" style={styles.sectionTitle}>
 							{t("about")}
 						</ThemedText>
@@ -269,31 +390,47 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 								{t("tagline")}
 							</ThemedText>
 						</Card>
-					</View>
+					</Animated.View>
 
 					{/* Logout Button */}
-					<Button
-						variant="outlined"
-						onPress={handleLogout}
-						style={[
-							styles.logoutButton,
-							{
-								borderColor: theme.border.main,
-								backgroundColor: isDark ? "transparent" : "#ffffff",
-							},
-						]}
+					<Animated.View
+						style={{
+							opacity: sectionAnims[5],
+							transform: [
+								{
+									translateY: sectionAnims[5].interpolate({
+										inputRange: [0, 1],
+										outputRange: [20, 0],
+									}),
+								},
+							],
+						}}
 					>
-						<View style={styles.logoutContent}>
-							<Ionicons
-								name="log-out-outline"
-								size={20}
-								color={theme.text.primary}
-							/>
-							<Text style={[styles.logoutText, { color: theme.text.primary }]}>
-								{t("logout")}
-							</Text>
-						</View>
-					</Button>
+						<Button
+							variant="outlined"
+							onPress={handleLogout}
+							style={[
+								styles.logoutButton,
+								{
+									borderColor: theme.border.main,
+									backgroundColor: isDark ? "transparent" : "#ffffff",
+								},
+							]}
+						>
+							<View style={styles.logoutContent}>
+								<Ionicons
+									name="log-out-outline"
+									size={20}
+									color={theme.text.primary}
+								/>
+								<Text
+									style={[styles.logoutText, { color: theme.text.primary }]}
+								>
+									{t("logout")}
+								</Text>
+							</View>
+						</Button>
+					</Animated.View>
 				</ScrollView>
 			</SafeAreaView>
 

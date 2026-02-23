@@ -18,12 +18,7 @@ import { useTheme } from "../context/ThemeContext";
 import { useI18n } from "../context/I18nContext";
 import { useAchievement } from "../context/AchievementContext";
 import { useAds } from "../context/AdContext";
-import {
-	gamesAPI,
-	statsAPI,
-	achievementsAPI,
-	decksAPI,
-} from "../services/api";
+import { gamesAPI, statsAPI, achievementsAPI, decksAPI } from "../services/api";
 import {
 	ThemedView,
 	ThemedText,
@@ -31,6 +26,7 @@ import {
 	Card,
 	LoadingState,
 	Modal,
+	ConfirmDialog,
 } from "../components/ui";
 import FlipCard from "../components/game/FlipCard";
 import { useTimer, useLives } from "../hooks";
@@ -119,6 +115,8 @@ const GameScreen = ({ route, navigation }) => {
 	const [wrongCount, setWrongCount] = useState(0);
 	const [loading, setLoading] = useState(false);
 	const [accountId, setAccountId] = useState(null);
+	const [showRestartDialog, setShowRestartDialog] = useState(false);
+	const [showExitDialog, setShowExitDialog] = useState(false);
 
 	// Settings state
 	const [cardDirection, setCardDirection] = useState("normal"); // 'normal' | 'reverse'
@@ -155,6 +153,17 @@ const GameScreen = ({ route, navigation }) => {
 	// Game start time for stats
 	const gameStartTime = useRef(null);
 
+	// UI animations
+	const progressAnim = useRef(new Animated.Value(0)).current;
+	const correctScaleAnim = useRef(new Animated.Value(1)).current;
+	const wrongScaleAnim = useRef(new Animated.Value(1)).current;
+	const heartShakeAnim = useRef(new Animated.Value(0)).current;
+	const timerScaleAnim = useRef(new Animated.Value(1)).current;
+	const headerFadeAnim = useRef(new Animated.Value(0)).current;
+	const prevCorrectRef = useRef(0);
+	const prevWrongRef = useRef(0);
+	const prevLivesRef = useRef(-1);
+
 	// Swipe animation for standard mode
 	const swipeAnim = useRef(new Animated.ValueXY()).current;
 	const swipeOpacity = useRef(new Animated.Value(1)).current;
@@ -167,6 +176,70 @@ const GameScreen = ({ route, navigation }) => {
 	const [finishing, setFinishing] = useState(false);
 	const lastAnswerRef = useRef(false);
 	const [answering, setAnswering] = useState(false);
+
+	// Animate progress bar smoothly
+	useEffect(() => {
+		if (gameState === "playing" && cards.length > 0) {
+			Animated.spring(progressAnim, {
+				toValue: (currentIndex + 1) / cards.length,
+				friction: 8,
+				tension: 40,
+				useNativeDriver: false,
+			}).start();
+		}
+	}, [currentIndex, cards.length, gameState]);
+
+	// Pulse correct badge
+	useEffect(() => {
+		if (correctCount > prevCorrectRef.current) {
+			Animated.sequence([
+				Animated.spring(correctScaleAnim, {
+					toValue: 1.35,
+					friction: 3,
+					tension: 200,
+					useNativeDriver: true,
+				}),
+				Animated.spring(correctScaleAnim, {
+					toValue: 1,
+					friction: 4,
+					useNativeDriver: true,
+				}),
+			]).start();
+		}
+		prevCorrectRef.current = correctCount;
+	}, [correctCount]);
+
+	// Pulse wrong badge
+	useEffect(() => {
+		if (wrongCount > prevWrongRef.current) {
+			Animated.sequence([
+				Animated.spring(wrongScaleAnim, {
+					toValue: 1.35,
+					friction: 3,
+					tension: 200,
+					useNativeDriver: true,
+				}),
+				Animated.spring(wrongScaleAnim, {
+					toValue: 1,
+					friction: 4,
+					useNativeDriver: true,
+				}),
+			]).start();
+		}
+		prevWrongRef.current = wrongCount;
+	}, [wrongCount]);
+
+	// Header fade in when game starts (re-trigger after loading finishes)
+	useEffect(() => {
+		if (gameState === "playing" && !loading && cards.length > 0) {
+			headerFadeAnim.setValue(0);
+			Animated.timing(headerFadeAnim, {
+				toValue: 1,
+				duration: 400,
+				useNativeDriver: false,
+			}).start();
+		}
+	}, [gameState, loading]);
 
 	const panResponder = useRef(
 		PanResponder.create({
@@ -184,20 +257,18 @@ const GameScreen = ({ route, navigation }) => {
 					// Swiped right - correct
 					Animated.parallel([
 						Animated.timing(swipeAnim, {
-							toValue: { x: SCREEN_WIDTH, y: 0 },
-							duration: 200,
+							toValue: { x: SCREEN_WIDTH * 1.2, y: -30 },
+							duration: 250,
 							useNativeDriver: true,
 						}),
 						Animated.timing(swipeOpacity, {
 							toValue: 0,
-							duration: 200,
+							duration: 250,
 							useNativeDriver: true,
 						}),
 					]).start(() => {
-						// reset animated values first so the next card isn't rendered off-screen
 						swipeAnim.setValue({ x: 0, y: 0 });
 						swipeOpacity.setValue(1);
-						// advance game after a tiny delay to ensure native driver has applied reset
 						setTimeout(() => {
 							if (handleAnswerRef.current) handleAnswerRef.current(true);
 						}, 10);
@@ -206,28 +277,28 @@ const GameScreen = ({ route, navigation }) => {
 					// Swiped left - incorrect
 					Animated.parallel([
 						Animated.timing(swipeAnim, {
-							toValue: { x: -SCREEN_WIDTH, y: 0 },
-							duration: 200,
+							toValue: { x: -SCREEN_WIDTH * 1.2, y: -30 },
+							duration: 250,
 							useNativeDriver: true,
 						}),
 						Animated.timing(swipeOpacity, {
 							toValue: 0,
-							duration: 200,
+							duration: 250,
 							useNativeDriver: true,
 						}),
 					]).start(() => {
-						// reset animated values first so the next card isn't rendered off-screen
 						swipeAnim.setValue({ x: 0, y: 0 });
 						swipeOpacity.setValue(1);
-						// advance game after a tiny delay to ensure native driver has applied reset
 						setTimeout(() => {
 							if (handleAnswerRef.current) handleAnswerRef.current(false);
 						}, 10);
 					});
 				} else {
-					// Reset position
+					// Reset position with bounce
 					Animated.spring(swipeAnim, {
 						toValue: { x: 0, y: 0 },
+						friction: 5,
+						tension: 80,
 						useNativeDriver: true,
 					}).start();
 				}
@@ -243,6 +314,68 @@ const GameScreen = ({ route, navigation }) => {
 	// Hooks
 	const timer = useTimer(30, () => handleTimeUp());
 	const lives = useLives(3, () => handleGameOver());
+
+	// Shake hearts when losing a life
+	useEffect(() => {
+		if (prevLivesRef.current > 0 && lives.lives < prevLivesRef.current) {
+			Animated.sequence([
+				Animated.timing(heartShakeAnim, {
+					toValue: 8,
+					duration: 50,
+					useNativeDriver: true,
+				}),
+				Animated.timing(heartShakeAnim, {
+					toValue: -8,
+					duration: 50,
+					useNativeDriver: true,
+				}),
+				Animated.timing(heartShakeAnim, {
+					toValue: 6,
+					duration: 50,
+					useNativeDriver: true,
+				}),
+				Animated.timing(heartShakeAnim, {
+					toValue: -6,
+					duration: 50,
+					useNativeDriver: true,
+				}),
+				Animated.timing(heartShakeAnim, {
+					toValue: 3,
+					duration: 50,
+					useNativeDriver: true,
+				}),
+				Animated.timing(heartShakeAnim, {
+					toValue: 0,
+					duration: 50,
+					useNativeDriver: true,
+				}),
+			]).start();
+		}
+		prevLivesRef.current = lives.lives;
+	}, [lives.lives]);
+
+	// Timer pulse when low time
+	useEffect(() => {
+		if (
+			challengeType === "timed" &&
+			timer.timeLeft <= 10 &&
+			timer.timeLeft > 0 &&
+			timer.isRunning
+		) {
+			Animated.sequence([
+				Animated.timing(timerScaleAnim, {
+					toValue: 1.15,
+					duration: 150,
+					useNativeDriver: true,
+				}),
+				Animated.timing(timerScaleAnim, {
+					toValue: 1,
+					duration: 150,
+					useNativeDriver: true,
+				}),
+			]).start();
+		}
+	}, [timer.timeLeft]);
 
 	// Load deck settings on mount
 	useEffect(() => {
@@ -486,11 +619,13 @@ const GameScreen = ({ route, navigation }) => {
 				setUserAnswer("");
 				setAnswerResult(null);
 				setSelectedOption(null);
+				setAnswering(false);
 				if (gameMode === "multiple_choice" && shuffled[0]) {
 					setMcOptions(shuffled[0].options || []);
 				}
 				// allow advancing again
 				advancingRef.current = false;
+				lastAnswerRef.current = false;
 			} else {
 				// Pass the updated counts to endGame
 				endGame(newCorrectCount, newWrongCount);
@@ -556,6 +691,9 @@ const GameScreen = ({ route, navigation }) => {
 			setIsFlipped(false);
 			setUserAnswer("");
 			setAnswerResult(null);
+			setAnswering(false);
+			advancingRef.current = false;
+			lastAnswerRef.current = false;
 		} else {
 			nextCard();
 		}
@@ -569,7 +707,8 @@ const GameScreen = ({ route, navigation }) => {
 		if (!userAnswer.trim()) return;
 
 		// Prevent double submission
-		if (advancingRef.current || endedRef.current || finishingRef.current) return;
+		if (advancingRef.current || endedRef.current || finishingRef.current)
+			return;
 		advancingRef.current = true;
 
 		try {
@@ -604,7 +743,20 @@ const GameScreen = ({ route, navigation }) => {
 			// Auto advance after delay
 			setTimeout(() => {
 				if (currentIndex + 1 >= cards.length) {
-					endGame();
+					if (challengeType === "timed" || challengeType === "survival") {
+						const shuffled = [...cards].sort(() => Math.random() - 0.5);
+						setCards(shuffled);
+						setCurrentIndex(0);
+						setIsFlipped(false);
+						setUserAnswer("");
+						setAnswerResult(null);
+						setSelectedOption(null);
+						setAnswering(false);
+						advancingRef.current = false;
+						lastAnswerRef.current = false;
+					} else {
+						endGame();
+					}
 				} else {
 					nextCard();
 				}
@@ -616,7 +768,8 @@ const GameScreen = ({ route, navigation }) => {
 
 	const handleMCSelect = async (optionIndex) => {
 		// Prevent double selection
-		if (advancingRef.current || endedRef.current || finishingRef.current) return;
+		if (advancingRef.current || endedRef.current || finishingRef.current)
+			return;
 		advancingRef.current = true;
 
 		setSelectedOption(optionIndex);
@@ -643,7 +796,23 @@ const GameScreen = ({ route, navigation }) => {
 
 		setTimeout(() => {
 			if (currentIndex + 1 >= cards.length) {
-				endGame();
+				if (challengeType === "timed" || challengeType === "survival") {
+					const shuffled = [...cards].sort(() => Math.random() - 0.5);
+					setCards(shuffled);
+					setCurrentIndex(0);
+					setIsFlipped(false);
+					setUserAnswer("");
+					setAnswerResult(null);
+					setSelectedOption(null);
+					setAnswering(false);
+					advancingRef.current = false;
+					lastAnswerRef.current = false;
+					if (gameMode === "multiple_choice" && shuffled[0]) {
+						setMcOptions(shuffled[0].options || []);
+					}
+				} else {
+					endGame();
+				}
 			} else {
 				nextCard();
 			}
@@ -750,6 +919,8 @@ const GameScreen = ({ route, navigation }) => {
 		// Record session (only once per game - sessionRecordedRef prevents duplicates)
 		if (accountId && !sessionRecordedRef.current) {
 			sessionRecordedRef.current = true;
+
+			// 1) Record the study session
 			try {
 				await statsAPI.recordSession({
 					deckId: deck.id,
@@ -761,8 +932,12 @@ const GameScreen = ({ route, navigation }) => {
 					wrongAnswers: isMatchMode ? 0 : wrong,
 					durationSeconds: durationSeconds,
 				});
+			} catch (error) {
+				console.error("Error recording session:", error);
+			}
 
-				// Check achievements (skip accuracy for match mode)
+			// 2) Check achievements (independent of session recording)
+			try {
 				console.log("Checking achievements with:", {
 					accuracy: isMatchMode ? 0 : accuracy,
 					cardsStudied,
@@ -778,8 +953,15 @@ const GameScreen = ({ route, navigation }) => {
 					showAchievements(achievementResponse.data.newlyEarned);
 				}
 			} catch (error) {
-				console.error("Error recording session:", error);
+				console.error("Error checking achievements:", error);
 			}
+		} else {
+			console.warn(
+				"Skipping session/achievements — accountId:",
+				accountId,
+				"sessionRecorded:",
+				sessionRecordedRef.current,
+			);
 		}
 
 		// Allow restarting — clear advancing/finishing flags.
@@ -1286,8 +1468,23 @@ const GameScreen = ({ route, navigation }) => {
 		return (
 			<View style={styles.gameContainer}>
 				{/* Header */}
-				<View style={styles.gameHeader}>
-					<Pressable onPress={() => setGameState("mode_select")}>
+				<Animated.View
+					style={[
+						styles.gameHeader,
+						{
+							opacity: headerFadeAnim,
+							transform: [
+								{
+									translateY: headerFadeAnim.interpolate({
+										inputRange: [0, 1],
+										outputRange: [-10, 0],
+									}),
+								},
+							],
+						},
+					]}
+				>
+					<Pressable onPress={() => setShowExitDialog(true)}>
 						<Ionicons
 							name="arrow-back"
 							size={24}
@@ -1303,7 +1500,7 @@ const GameScreen = ({ route, navigation }) => {
 							</ThemedText>
 						)}
 						{challengeType === "timed" && (
-							<Text
+							<Animated.Text
 								style={[
 									styles.timerText,
 									{
@@ -1311,14 +1508,20 @@ const GameScreen = ({ route, navigation }) => {
 											timer.timeLeft < 10
 												? theme.error.main
 												: theme.primary.main,
+										transform: [{ scale: timerScaleAnim }],
 									},
 								]}
 							>
 								{timer.formattedTime}
-							</Text>
+							</Animated.Text>
 						)}
 						{challengeType === "survival" && (
-							<View style={styles.livesContainer}>
+							<Animated.View
+								style={[
+									styles.livesContainer,
+									{ transform: [{ translateX: heartShakeAnim }] },
+								]}
+							>
 								{Array.from({ length: lives.lives }, (_, i) => (
 									<Ionicons
 										key={i}
@@ -1340,26 +1543,32 @@ const GameScreen = ({ route, navigation }) => {
 										/>
 									),
 								)}
-							</View>
+							</Animated.View>
 						)}
 					</View>
 
-					<Pressable onPress={restartGame} style={styles.restartButton}>
+					<Pressable
+						onPress={() => setShowRestartDialog(true)}
+						style={styles.restartButton}
+					>
 						<Ionicons name="refresh" size={22} color={theme.primary.main} />
 					</Pressable>
-				</View>
+				</Animated.View>
 
 				{/* Progress Bar - Only for non-timed and non-survival challenges */}
 				{challengeType !== "timed" && challengeType !== "survival" && (
 					<View
 						style={[styles.progressBar, { backgroundColor: theme.border.main }]}
 					>
-						<View
+						<Animated.View
 							style={[
 								styles.progressFill,
 								{
 									backgroundColor: theme.primary.main,
-									width: `${((currentIndex + 1) / cards.length) * 100}%`,
+									width: progressAnim.interpolate({
+										inputRange: [0, 1],
+										outputRange: ["0%", "100%"],
+									}),
 								},
 							]}
 						/>
@@ -1367,30 +1576,38 @@ const GameScreen = ({ route, navigation }) => {
 				)}
 
 				{/* Score Info - Under Progress Bar */}
-				<View style={styles.scoreInfoRow}>
-					<View
+				<Animated.View
+					style={[styles.scoreInfoRow, { opacity: headerFadeAnim }]}
+				>
+					<Animated.View
 						style={[
 							styles.scoreBadge,
-							{ backgroundColor: "rgba(34, 197, 94, 0.15)" },
+							{
+								backgroundColor: "rgba(34, 197, 94, 0.15)",
+								transform: [{ scale: correctScaleAnim }],
+							},
 						]}
 					>
 						<Ionicons name="checkmark-circle" size={16} color="#22c55e" />
 						<Text style={[styles.scoreBadgeText, { color: "#22c55e" }]}>
 							{correctCount}
 						</Text>
-					</View>
-					<View
+					</Animated.View>
+					<Animated.View
 						style={[
 							styles.scoreBadge,
-							{ backgroundColor: "rgba(239, 68, 68, 0.15)" },
+							{
+								backgroundColor: "rgba(239, 68, 68, 0.15)",
+								transform: [{ scale: wrongScaleAnim }],
+							},
 						]}
 					>
 						<Ionicons name="close-circle" size={16} color="#ef4444" />
 						<Text style={[styles.scoreBadgeText, { color: "#ef4444" }]}>
 							{wrongCount}
 						</Text>
-					</View>
-				</View>
+					</Animated.View>
+				</Animated.View>
 
 				{/* Game Content */}
 				<View style={styles.gameContent}>
@@ -1431,22 +1648,63 @@ const GameScreen = ({ route, navigation }) => {
 			extrapolate: "clamp",
 		});
 
+		const swipeRotate = swipeAnim.x.interpolate({
+			inputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH],
+			outputRange: ["-12deg", "0deg", "12deg"],
+			extrapolate: "clamp",
+		});
+
+		const swipeScale = swipeAnim.x.interpolate({
+			inputRange: [
+				-SCREEN_WIDTH,
+				-SCREEN_WIDTH / 4,
+				0,
+				SCREEN_WIDTH / 4,
+				SCREEN_WIDTH,
+			],
+			outputRange: [0.85, 0.95, 1, 0.95, 0.85],
+			extrapolate: "clamp",
+		});
+
 		return (
 			<View style={styles.standardMode}>
 				{/* Swipe Indicators */}
 				<View style={styles.swipeIndicators}>
 					<Animated.View
-						style={[styles.swipeIndicatorLeft, { opacity: swipeIndicatorLeft }]}
+						style={[
+							styles.swipeIndicatorLeft,
+							{
+								opacity: swipeIndicatorLeft,
+								transform: [
+									{
+										scale: Animated.add(
+											1,
+											Animated.multiply(swipeIndicatorLeft, 0.2),
+										),
+									},
+								],
+							},
+						]}
 					>
-						<Ionicons name="close-circle" size={32} color="#ef4444" />
+						<Ionicons name="close-circle" size={36} color="#ef4444" />
 					</Animated.View>
 					<Animated.View
 						style={[
 							styles.swipeIndicatorRight,
-							{ opacity: swipeIndicatorRight },
+							{
+								opacity: swipeIndicatorRight,
+								transform: [
+									{
+										scale: Animated.add(
+											1,
+											Animated.multiply(swipeIndicatorRight, 0.2),
+										),
+									},
+								],
+							},
 						]}
 					>
-						<Ionicons name="checkmark-circle" size={32} color="#22c55e" />
+						<Ionicons name="checkmark-circle" size={36} color="#22c55e" />
 					</Animated.View>
 				</View>
 
@@ -1456,7 +1714,12 @@ const GameScreen = ({ route, navigation }) => {
 					style={[
 						styles.swipeableCard,
 						{
-							transform: [{ translateX: swipeAnim.x }],
+							transform: [
+								{ translateX: swipeAnim.x },
+								{ translateY: swipeAnim.y },
+								{ rotate: swipeRotate },
+								{ scale: swipeScale },
+							],
 							opacity: swipeOpacity,
 						},
 					]}
@@ -2059,6 +2322,34 @@ const GameScreen = ({ route, navigation }) => {
 				{gameState === "playing" && renderPlaying()}
 				{gameState === "summary" && renderSummary()}
 			</SafeAreaView>
+
+			<ConfirmDialog
+				visible={showRestartDialog}
+				title={t("restart_game")}
+				message={t("restart_game_confirm")}
+				confirmLabel={t("restart")}
+				cancelLabel={t("cancel")}
+				confirmVariant="warning"
+				onConfirm={() => {
+					setShowRestartDialog(false);
+					restartGame();
+				}}
+				onClose={() => setShowRestartDialog(false)}
+			/>
+
+			<ConfirmDialog
+				visible={showExitDialog}
+				title={t("exit_game")}
+				message={t("exit_game_confirm")}
+				confirmLabel={t("exit")}
+				cancelLabel={t("cancel")}
+				confirmVariant="danger"
+				onConfirm={() => {
+					setShowExitDialog(false);
+					setGameState("mode_select");
+				}}
+				onClose={() => setShowExitDialog(false)}
+			/>
 		</ThemedView>
 	);
 };

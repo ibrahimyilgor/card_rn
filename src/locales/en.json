@@ -156,8 +156,11 @@
 	"account": "Account",
 	"loading_cards": "Loading flashcards...",
 	"exit": "Exit",
+	"exit_game": "Exit Game",
+	"exit_game_confirm": "Are you sure you want to exit? Your current progress will be lost.",
 	"restart": "Restart",
 	"restart_game": "Restart Game",
+	"restart_game_confirm": "Are you sure you want to restart? Your current progress will be lost.",
 	"flip_card": "Flip",
 	"swipe_hint": "Swipe left for incorrect, right for correct",
 	"type_your_answer": "Type your answer...",
@@ -376,6 +379,7 @@
 	"dark_mode": "Dark Mode",
 	"sound": "Sound",
 	"account_settings": "Account Settings",
+	"subscription": "Subscription",
 	"subscription_plans": "Subscription Plans",
 	"about": "About",
 	"app_version": "App Version",
@@ -419,5 +423,10 @@
 	"error": "Error",
 	"continue_with_google": "Continue with Google",
 	"signing_in": "Signing in...",
-	"statistics_report": "Statistics Report"
+	"statistics_report": "Statistics Report",
+	"plan_description_free": "Basic features for beginners",
+	"plan_description_pro": "Advanced features for regular learners",
+	"plan_description_premium": "Unlimited access to all features",
+	"all_features_included": "All features included",
+	"free": "Free"
 }

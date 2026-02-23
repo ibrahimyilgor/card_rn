@@ -1,5 +1,12 @@
 import React, { useRef, useEffect } from "react";
-import { View, Text, StyleSheet, Pressable, Animated } from "react-native";
+import {
+	View,
+	Text,
+	StyleSheet,
+	Pressable,
+	Animated,
+	Platform,
+} from "react-native";
 import { useTheme } from "../../context/ThemeContext";
 import { borderRadius, spacing } from "../../styles/theme";
 
@@ -66,6 +73,7 @@ const FlipCard = ({
 					{
 						transform: [{ perspective: 1000 }, { rotateY: frontRotate }],
 						opacity: frontOpacity,
+						backfaceVisibility: "hidden",
 					},
 				]}
 			>
@@ -91,6 +99,7 @@ const FlipCard = ({
 					{
 						transform: [{ perspective: 1000 }, { rotateY: backRotate }],
 						opacity: backOpacity,
+						backfaceVisibility: "hidden",
 					},
 				]}
 			>

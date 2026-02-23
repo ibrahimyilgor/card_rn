@@ -16,6 +16,7 @@ import {
 	Keyboard,
 	Share,
 	Platform,
+	Animated,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
@@ -72,6 +73,37 @@ const HomeScreen = ({ navigation, onLogout }) => {
 	// Sort modal
 	const [sortModalVisible, setSortModalVisible] = useState(false);
 
+	// Animations
+	const searchBarAnim = useRef(new Animated.Value(0)).current;
+	const headerAnim = useRef(new Animated.Value(0)).current;
+	const listAnim = useRef(new Animated.Value(0)).current;
+
+	const startAnimations = useCallback(() => {
+		searchBarAnim.setValue(0);
+		headerAnim.setValue(0);
+		listAnim.setValue(0);
+		Animated.stagger(120, [
+			Animated.spring(searchBarAnim, {
+				toValue: 1,
+				tension: 50,
+				friction: 8,
+				useNativeDriver: true,
+			}),
+			Animated.spring(headerAnim, {
+				toValue: 1,
+				tension: 50,
+				friction: 8,
+				useNativeDriver: true,
+			}),
+			Animated.spring(listAnim, {
+				toValue: 1,
+				tension: 50,
+				friction: 8,
+				useNativeDriver: true,
+			}),
+		]).start();
+	}, []);
+
 	useFocusEffect(
 		useCallback(() => {
 			loadAccountAndDecks();
@@ -105,6 +137,7 @@ const HomeScreen = ({ navigation, onLogout }) => {
 		} finally {
 			if (!silent) setLoading(false);
 			setRefreshing(false);
+			startAnimations();
 		}
 	};
 
@@ -628,7 +661,22 @@ const HomeScreen = ({ navigation, onLogout }) => {
 	);
 
 	const renderHeader = () => (
-		<View style={styles.header}>
+		<Animated.View
+			style={[
+				styles.header,
+				{
+					opacity: headerAnim,
+					transform: [
+						{
+							translateY: headerAnim.interpolate({
+								inputRange: [0, 1],
+								outputRange: [15, 0],
+							}),
+						},
+					],
+				},
+			]}
+		>
 			<View style={styles.titleRow}>
 				<ThemedText variant="h2">{t("my_decks")}</ThemedText>
 				<ThemedText color="secondary">
@@ -702,7 +750,7 @@ const HomeScreen = ({ navigation, onLogout }) => {
 					</Text>
 				</Pressable>
 			</View>
-		</View>
+		</Animated.View>
 	);
 
 	if (loading && !refreshing) {
@@ -717,37 +765,71 @@ const HomeScreen = ({ navigation, onLogout }) => {
 		<ThemedView variant="gradient" style={styles.container}>
 			<SafeAreaView style={styles.safeArea} edges={["top"]}>
 				{/* Search Bar - Outside FlatList to prevent keyboard dismiss */}
-				<View style={styles.searchWrapper}>{SearchBar}</View>
-				<FlatList
-					data={filteredDecks}
-					renderItem={renderDeckItem}
-					keyExtractor={(item) => item.id.toString()}
-					ListHeaderComponent={renderHeader}
-					ListEmptyComponent={
-						<EmptyState
-							iconName="cards-outline"
-							title={searchQuery ? t("no_results") : t("create_first_deck")}
-							description={
-								searchQuery ? t("no_results_desc") : t("create_first_deck_desc")
-							}
-							actionLabel={searchQuery ? t("clear_search") : t("create_deck")}
-							onAction={
-								searchQuery ? () => setSearchQuery("") : handleCreateDeck
-							}
-						/>
-					}
-					contentContainerStyle={styles.listContent}
-					keyboardShouldPersistTaps="always"
-					keyboardDismissMode="none"
-					removeClippedSubviews={false}
-					refreshControl={
-						<RefreshControl
-							refreshing={refreshing}
-							onRefresh={onRefresh}
-							tintColor={theme.primary.main}
-						/>
-					}
-				/>
+				<Animated.View
+					style={[
+						styles.searchWrapper,
+						{
+							opacity: searchBarAnim,
+							transform: [
+								{
+									translateY: searchBarAnim.interpolate({
+										inputRange: [0, 1],
+										outputRange: [-12, 0],
+									}),
+								},
+							],
+						},
+					]}
+				>
+					{SearchBar}
+				</Animated.View>
+				<Animated.View
+					style={{
+						flex: 1,
+						opacity: listAnim,
+						transform: [
+							{
+								translateY: listAnim.interpolate({
+									inputRange: [0, 1],
+									outputRange: [20, 0],
+								}),
+							},
+						],
+					}}
+				>
+					<FlatList
+						data={filteredDecks}
+						renderItem={renderDeckItem}
+						keyExtractor={(item) => item.id.toString()}
+						ListHeaderComponent={renderHeader}
+						ListEmptyComponent={
+							<EmptyState
+								iconName="cards-outline"
+								title={searchQuery ? t("no_results") : t("create_first_deck")}
+								description={
+									searchQuery
+										? t("no_results_desc")
+										: t("create_first_deck_desc")
+								}
+								actionLabel={searchQuery ? t("clear_search") : t("create_deck")}
+								onAction={
+									searchQuery ? () => setSearchQuery("") : handleCreateDeck
+								}
+							/>
+						}
+						contentContainerStyle={styles.listContent}
+						keyboardShouldPersistTaps="always"
+						keyboardDismissMode="none"
+						removeClippedSubviews={false}
+						refreshControl={
+							<RefreshControl
+								refreshing={refreshing}
+								onRefresh={onRefresh}
+								tintColor={theme.primary.main}
+							/>
+						}
+					/>
+				</Animated.View>
 
 				{/* Deck Modal */}
 				<Modal
@@ -782,7 +864,6 @@ const HomeScreen = ({ navigation, onLogout }) => {
 						multiline
 						numberOfLines={3}
 					/>
-
 				</Modal>
 
 				{/* Delete Confirmation */}

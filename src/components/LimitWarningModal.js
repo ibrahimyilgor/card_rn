@@ -1,5 +1,5 @@
-import React from "react";
-import { View, StyleSheet } from "react-native";
+import React, { useEffect, useRef } from "react";
+import { View, StyleSheet, Animated } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useI18n } from "../context/I18nContext";
@@ -84,6 +84,40 @@ const LimitWarningModal = ({ visible, onClose, limitType = "general" }) => {
 
 	const content = getContent();
 
+	// Animations
+	const iconScale = useRef(new Animated.Value(0.3)).current;
+	const contentOpacity = useRef(new Animated.Value(0)).current;
+	const contentTranslateY = useRef(new Animated.Value(15)).current;
+
+	useEffect(() => {
+		if (visible) {
+			iconScale.setValue(0.3);
+			contentOpacity.setValue(0);
+			contentTranslateY.setValue(15);
+			Animated.sequence([
+				Animated.spring(iconScale, {
+					toValue: 1,
+					tension: 50,
+					friction: 5,
+					useNativeDriver: true,
+				}),
+				Animated.parallel([
+					Animated.timing(contentOpacity, {
+						toValue: 1,
+						duration: 250,
+						useNativeDriver: true,
+					}),
+					Animated.spring(contentTranslateY, {
+						toValue: 0,
+						tension: 50,
+						friction: 8,
+						useNativeDriver: true,
+					}),
+				]),
+			]).start();
+		}
+	}, [visible]);
+
 	const getPlanBadgeColor = () => {
 		switch (planCode) {
 			case "pro":
@@ -99,10 +133,10 @@ const LimitWarningModal = ({ visible, onClose, limitType = "general" }) => {
 		<Modal visible={visible} onClose={onClose} title={content.title}>
 			<View style={styles.container}>
 				{/* Icon */}
-				<View
+				<Animated.View
 					style={[
 						styles.iconContainer,
-						{ backgroundColor: theme.warning.main + "20" },
+						{ backgroundColor: theme.warning.main + "20", transform: [{ scale: iconScale }] },
 					]}
 				>
 					<MaterialCommunityIcons
@@ -110,7 +144,7 @@ const LimitWarningModal = ({ visible, onClose, limitType = "general" }) => {
 						size={48}
 						color={theme.warning.main}
 					/>
-				</View>
+				</Animated.View>
 
 				{/* Current Plan Badge */}
 				<View
@@ -128,7 +162,9 @@ const LimitWarningModal = ({ visible, onClose, limitType = "general" }) => {
 				</View>
 
 				{/* Message */}
+				<Animated.View style={{ opacity: contentOpacity, transform: [{ translateY: contentTranslateY }] }}>
 				<ThemedText style={styles.message}>{content.message}</ThemedText>
+				</Animated.View>
 
 				{/* Usage Stats */}
 				{content.showUsage && (

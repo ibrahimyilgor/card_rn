@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
 	View,
 	Text,
@@ -6,6 +6,7 @@ import {
 	Pressable,
 	ScrollView,
 	Image,
+	Animated,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -43,6 +44,65 @@ const GoogleLoginScreen = ({ onLogin }) => {
 
 	const [googleLoading, setGoogleLoading] = useState(false);
 	const [error, setError] = useState("");
+
+	// Entrance animations
+	const logoScale = useRef(new Animated.Value(0.3)).current;
+	const logoOpacity = useRef(new Animated.Value(0)).current;
+	const cardTranslateY = useRef(new Animated.Value(40)).current;
+	const cardOpacity = useRef(new Animated.Value(0)).current;
+	const featuresOpacity = useRef(new Animated.Value(0)).current;
+	const featuresTranslateY = useRef(new Animated.Value(30)).current;
+
+	useEffect(() => {
+		// Logo bounce in
+		Animated.parallel([
+			Animated.spring(logoScale, {
+				toValue: 1,
+				useNativeDriver: true,
+				speed: 8,
+				bounciness: 10,
+			}),
+			Animated.timing(logoOpacity, {
+				toValue: 1,
+				duration: 400,
+				useNativeDriver: true,
+			}),
+		]).start();
+
+		// Card slide up
+		Animated.parallel([
+			Animated.spring(cardTranslateY, {
+				toValue: 0,
+				delay: 200,
+				useNativeDriver: true,
+				speed: 12,
+				bounciness: 4,
+			}),
+			Animated.timing(cardOpacity, {
+				toValue: 1,
+				duration: 400,
+				delay: 200,
+				useNativeDriver: true,
+			}),
+		]).start();
+
+		// Features fade in
+		Animated.parallel([
+			Animated.timing(featuresOpacity, {
+				toValue: 1,
+				duration: 500,
+				delay: 400,
+				useNativeDriver: true,
+			}),
+			Animated.spring(featuresTranslateY, {
+				toValue: 0,
+				delay: 400,
+				useNativeDriver: true,
+				speed: 12,
+				bounciness: 4,
+			}),
+		]).start();
+	}, []);
 
 	const handleGoogleLogin = async () => {
 		setGoogleLoading(true);
@@ -99,7 +159,7 @@ const GoogleLoginScreen = ({ onLogin }) => {
 					showsVerticalScrollIndicator={false}
 				>
 					{/* Logo & Title */}
-					<View style={styles.header}>
+					<Animated.View style={[styles.header, { opacity: logoOpacity, transform: [{ scale: logoScale }] }]}>
 						<Image
 							source={require("../../assets/memodeck.png")}
 							style={styles.logo}
@@ -111,9 +171,10 @@ const GoogleLoginScreen = ({ onLogin }) => {
 						<ThemedText color="secondary" style={styles.tagline}>
 							{t("tagline")}
 						</ThemedText>
-					</View>
+					</Animated.View>
 
 					{/* Login Card */}
+					<Animated.View style={{ opacity: cardOpacity, transform: [{ translateY: cardTranslateY }] }}>
 					<Card variant="elevated" style={styles.card}>
 						<ThemedText variant="h3" style={styles.cardTitle}>
 							{t("welcome_back")}
@@ -168,9 +229,10 @@ const GoogleLoginScreen = ({ onLogin }) => {
 							)}
 						</Pressable>
 					</Card>
+					</Animated.View>
 
 					{/* Features */}
-					<View style={styles.features}>
+					<Animated.View style={[styles.features, { opacity: featuresOpacity, transform: [{ translateY: featuresTranslateY }] }]}>
 						{features.map((feature, index) => (
 							<FeatureItem
 								key={index}
@@ -181,7 +243,7 @@ const GoogleLoginScreen = ({ onLogin }) => {
 								theme={theme}
 							/>
 						))}
-					</View>
+					</Animated.View>
 				</ScrollView>
 			</SafeAreaView>
 		</LinearGradient>

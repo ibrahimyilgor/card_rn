@@ -73,7 +73,9 @@ export const AdProvider = ({ children }) => {
 
 	const showVideoAd = useCallback(() => {
 		if (!hasAds) {
-			console.log("[AdContext] Premium/Pro kullanıcı - video reklam gösterilmeyecek");
+			console.log(
+				"[AdContext] Premium/Pro kullanıcı - video reklam gösterilmeyecek",
+			);
 			return Promise.resolve();
 		}
 		return new Promise((resolve) => {

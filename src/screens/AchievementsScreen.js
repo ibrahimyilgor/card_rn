@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
 	View,
 	Text,
 	StyleSheet,
 	ScrollView,
 	RefreshControl,
+	Animated,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
@@ -33,6 +34,12 @@ const AchievementsScreen = () => {
 	const [refreshing, setRefreshing] = useState(false);
 	const [achievements, setAchievements] = useState([]);
 
+	// Animations
+	const headerAnim = useRef(new Animated.Value(0)).current;
+	const progressBarWidth = useRef(new Animated.Value(0)).current;
+	const progressCardAnim = useRef(new Animated.Value(0)).current;
+	const trophyBounce = useRef(new Animated.Value(0.5)).current;
+
 	// Fetch achievements every time screen is focused
 	useFocusEffect(
 		useCallback(() => {
@@ -43,7 +50,42 @@ const AchievementsScreen = () => {
 	const fetchAchievements = async () => {
 		try {
 			const response = await achievementsAPI.getAll();
-			setAchievements(response.data?.achievements || []);
+			const data = response.data?.achievements || [];
+			setAchievements(data);
+
+			// Trigger animations after data loads
+			Animated.timing(headerAnim, {
+				toValue: 1,
+				duration: 350,
+				useNativeDriver: true,
+			}).start();
+
+			Animated.spring(progressCardAnim, {
+				toValue: 1,
+				delay: 150,
+				useNativeDriver: true,
+				speed: 12,
+				bounciness: 4,
+			}).start();
+
+			// Trophy bounce
+			Animated.spring(trophyBounce, {
+				toValue: 1,
+				delay: 300,
+				useNativeDriver: true,
+				speed: 6,
+				bounciness: 14,
+			}).start();
+
+			// Animate progress bar fill
+			const earned = data.filter((a) => a.earned).length;
+			const pct = data.length > 0 ? earned / data.length : 0;
+			Animated.timing(progressBarWidth, {
+				toValue: pct,
+				duration: 800,
+				delay: 400,
+				useNativeDriver: false,
+			}).start();
 		} catch (error) {
 			console.error("Error fetching achievements:", error);
 		} finally {
@@ -205,24 +247,25 @@ const AchievementsScreen = () => {
 					}
 				>
 					{/* Header */}
-					<View style={styles.header}>
+					<Animated.View style={[styles.header, { opacity: headerAnim, transform: [{ translateY: headerAnim.interpolate({ inputRange: [0, 1], outputRange: [-15, 0] }) }] }]}>
 						<ThemedText variant="h2">{t("achievements")}</ThemedText>
 						<ThemedText color="secondary">
 							{t("achievements_subtitle")}
 						</ThemedText>
-					</View>
+					</Animated.View>
 
 					{/* Progress */}
+					<Animated.View style={{ opacity: progressCardAnim, transform: [{ translateY: progressCardAnim.interpolate({ inputRange: [0, 1], outputRange: [25, 0] }) }] }}>
 					<Card style={styles.progressCard}>
 						<View style={styles.progressHeader}>
-							<View
+							<Animated.View
 								style={[
 									styles.trophyIconContainer,
-									{ backgroundColor: theme.primary.main + "20" },
+									{ backgroundColor: theme.primary.main + "20", transform: [{ scale: trophyBounce }] },
 								]}
 							>
 								<FontAwesome5 name="trophy" size={32} color="#FFD700" />
-							</View>
+							</Animated.View>
 							<View style={styles.progressInfo}>
 								<ThemedText variant="h3">
 									{earnedCount} / {achievements.length}
@@ -239,20 +282,21 @@ const AchievementsScreen = () => {
 								{ backgroundColor: theme.border.main },
 							]}
 						>
-							<View
+							<Animated.View
 								style={[
 									styles.progressFill,
 									{
 										backgroundColor: theme.primary.main,
-										width:
-											achievements.length > 0
-												? `${(earnedCount / achievements.length) * 100}%`
-												: "0%",
+										width: progressBarWidth.interpolate({
+											inputRange: [0, 1],
+											outputRange: ['0%', '100%'],
+										}),
 									},
 								]}
 							/>
 						</View>
 					</Card>
+					</Animated.View>
 
 					{/* Achievement Categories */}
 					{categoryOrder.map((category) => {

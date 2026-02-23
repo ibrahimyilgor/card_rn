@@ -1,7 +1,13 @@
-import React, { useState, useEffect } from "react";
-import { View, StyleSheet, ScrollView, Alert } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import {
+	View,
+	StyleSheet,
+	ScrollView,
+	Alert,
+	Animated,
+	Pressable,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import auth from "@react-native-firebase/auth";
 import { useTheme } from "../context/ThemeContext";
 import { useI18n } from "../context/I18nContext";
 import { accountAPI, authAPI, authHelpers } from "../services/api";
@@ -27,16 +33,8 @@ const AccountScreen = ({ navigation, onLogout }) => {
 	const { t } = useI18n();
 
 	const [loading, setLoading] = useState(true);
-	const [saving, setSaving] = useState(false);
 	const [account, setAccount] = useState(null);
 	const [plan, setPlan] = useState("free");
-
-	// Password change state
-	const [currentPassword, setCurrentPassword] = useState("");
-	const [newPassword, setNewPassword] = useState("");
-	const [confirmPassword, setConfirmPassword] = useState("");
-	const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-	const [showNewPassword, setShowNewPassword] = useState(false);
 
 	// Delete dialog
 	const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -55,9 +53,55 @@ const AccountScreen = ({ navigation, onLogout }) => {
 		onClose: null,
 	});
 
+	// Entrance animations
+	const headerAnim = useRef(new Animated.Value(0)).current;
+	const profileAnim = useRef(new Animated.Value(0)).current;
+	const avatarScale = useRef(new Animated.Value(0.5)).current;
+	const sectionAnims = useRef([
+		new Animated.Value(0),
+		new Animated.Value(0),
+	]).current;
+
 	useEffect(() => {
 		fetchAccount();
 	}, []);
+
+	useEffect(() => {
+		if (!loading) {
+			// Start entrance animations when data is loaded
+			Animated.timing(headerAnim, {
+				toValue: 1,
+				duration: 350,
+				useNativeDriver: true,
+			}).start();
+
+			Animated.spring(profileAnim, {
+				toValue: 1,
+				delay: 100,
+				useNativeDriver: true,
+				speed: 12,
+				bounciness: 4,
+			}).start();
+
+			Animated.spring(avatarScale, {
+				toValue: 1,
+				delay: 200,
+				useNativeDriver: true,
+				speed: 8,
+				bounciness: 10,
+			}).start();
+
+			sectionAnims.forEach((anim, index) => {
+				Animated.spring(anim, {
+					toValue: 1,
+					delay: 250 + index * 100,
+					useNativeDriver: true,
+					speed: 14,
+					bounciness: 3,
+				}).start();
+			});
+		}
+	}, [loading]);
 
 	const fetchAccount = async () => {
 		try {
@@ -108,60 +152,6 @@ const AccountScreen = ({ navigation, onLogout }) => {
 		setAlertConfig({ ...alertConfig, visible: false });
 		if (callback) {
 			callback();
-		}
-	};
-
-	const handleChangePassword = async () => {
-		if (!currentPassword || !newPassword || !confirmPassword) {
-			showAlert(t("error"), t("all_fields_required"), "danger");
-			return;
-		}
-
-		if (newPassword !== confirmPassword) {
-			showAlert(t("error"), t("passwords_do_not_match"), "danger");
-			return;
-		}
-
-		if (newPassword.length < 8) {
-			showAlert(t("error"), t("password_too_short"), "danger");
-			return;
-		}
-
-		setSaving(true);
-		try {
-			const user = getCurrentUser();
-			if (!user || !user.email) {
-				showAlert(t("error"), t("error_changing_password"), "danger");
-				return;
-			}
-
-			// Re-authenticate with current password
-			const credential = auth.EmailAuthProvider.credential(
-				user.email,
-				currentPassword,
-			);
-			await user.reauthenticateWithCredential(credential);
-
-			// Update password
-			await user.updatePassword(newPassword);
-
-			setCurrentPassword("");
-			setNewPassword("");
-			setConfirmPassword("");
-
-			// Show success
-			showAlert(t("success"), t("password_changed_successfully"), "success");
-		} catch (error) {
-			console.error("Password change error:", error);
-			let message = t("error_changing_password");
-			if (error.code === "auth/wrong-password") {
-				message = t("invalid_credentials") || "Current password is incorrect";
-			} else if (error.code === "auth/weak-password") {
-				message = t("password_too_short") || "Password is too weak";
-			}
-			showAlert(t("error"), message, "danger");
-		} finally {
-			setSaving(false);
 		}
 	};
 
@@ -222,188 +212,270 @@ const AccountScreen = ({ navigation, onLogout }) => {
 			<SafeAreaView style={styles.safeArea} edges={["top"]}>
 				<ScrollView contentContainerStyle={styles.scrollContent}>
 					{/* Header */}
-					<View style={styles.header}>
+					<Animated.View
+						style={[
+							styles.header,
+							{
+								opacity: headerAnim,
+								transform: [
+									{
+										translateY: headerAnim.interpolate({
+											inputRange: [0, 1],
+											outputRange: [-15, 0],
+										}),
+									},
+								],
+							},
+						]}
+					>
 						<ThemedText variant="h2">{t("account")}</ThemedText>
 						<ThemedText color="secondary">{t("account_subtitle")}</ThemedText>
-					</View>
+					</Animated.View>
 
 					{/* Profile Info */}
-					<Card style={styles.profileCard}>
-						<View
-							style={[styles.avatar, { backgroundColor: theme.primary.main }]}
-						>
-							<ThemedText style={styles.avatarText}>
-								{(account?.displayName || account?.email)
-									?.charAt(0)
-									.toUpperCase() || "U"}
-							</ThemedText>
-						</View>
-						<View style={styles.profileInfo}>
-							<ThemedText variant="h3">
-								{account?.displayName || account?.email?.split("@")[0]}
-							</ThemedText>
-							<ThemedText color="secondary" style={styles.emailText}>
-								{account?.email}
-							</ThemedText>
-							{account?.created_at && (
-								<ThemedText color="secondary" style={styles.createdDate}>
-									{t("member_since")}{" "}
-									{new Date(account.created_at).toLocaleDateString()}
+					<Animated.View
+						style={{
+							opacity: profileAnim,
+							transform: [
+								{
+									translateY: profileAnim.interpolate({
+										inputRange: [0, 1],
+										outputRange: [20, 0],
+									}),
+								},
+							],
+						}}
+					>
+						<Card style={styles.profileCard}>
+							<Animated.View
+								style={[
+									styles.avatar,
+									{
+										backgroundColor: theme.primary.main,
+										transform: [{ scale: avatarScale }],
+									},
+								]}
+							>
+								<ThemedText style={styles.avatarText}>
+									{(account?.displayName || account?.email)
+										?.charAt(0)
+										.toUpperCase() || "U"}
 								</ThemedText>
-							)}
-						</View>
-					</Card>
+							</Animated.View>
+							<View style={styles.profileInfo}>
+								<ThemedText variant="h3">
+									{account?.displayName || account?.email?.split("@")[0]}
+								</ThemedText>
+								<ThemedText color="secondary" style={styles.emailText}>
+									{account?.email}
+								</ThemedText>
+								{account?.created_at && (
+									<ThemedText color="secondary" style={styles.createdDate}>
+										{t("member_since")}{" "}
+										{new Date(account.created_at).toLocaleDateString()}
+									</ThemedText>
+								)}
+							</View>
+						</Card>
+					</Animated.View>
 
 					{/* Subscription Status */}
-					<Card style={styles.subscriptionCard}>
-						<View style={styles.subscriptionRow}>
-							<View style={styles.subscriptionHeader}>
-								<Ionicons
-									name={account?.plan === "free" ? "star-outline" : "star"}
-									size={24}
-									color={
-										account?.plan === "free"
-											? theme.text.secondary
-											: theme.warning.main
-									}
-								/>
-								<ThemedText variant="h4" style={styles.planName}>
-									{account?.plan === "free"
-										? t("free_plan")
-										: t("premium_plan")}
-								</ThemedText>
-							</View>
-							{account?.plan === "free" && (
-								<Button
-									variant="outlined"
-									size="small"
-									onPress={() => navigation.navigate("Plans")}
-								>
-									{t("upgrade")}
-								</Button>
-							)}
-						</View>
-					</Card>
+					<Animated.View
+						style={{
+							opacity: profileAnim,
+							transform: [
+								{
+									translateY: profileAnim.interpolate({
+										inputRange: [0, 1],
+										outputRange: [20, 0],
+									}),
+								},
+							],
+						}}
+					>
+						<Pressable onPress={() => navigation.navigate("Plans")}>
+							{({ pressed }) => {
+								const planCode = account?.plan || "free";
+								const planConfig = {
+									free: {
+										icon: "star-outline",
+										color: theme.text.secondary,
+										label: t("free_plan"),
+									},
+									pro: {
+										icon: "star-half",
+										color: "#8b5cf6",
+										label: t("pro_plan"),
+									},
+									premium: {
+										icon: "star",
+										color: "#f59e0b",
+										label: t("premium_plan"),
+									},
+								};
+								const cfg = planConfig[planCode] || planConfig.free;
+								return (
+									<Card
+										style={[
+											styles.subscriptionCard,
+											{
+												borderWidth: 1,
+												borderColor: `${cfg.color}30`,
+												opacity: pressed ? 0.85 : 1,
+											},
+										]}
+									>
+										<View style={styles.subscriptionRow}>
+											<View style={styles.subscriptionHeader}>
+												<View
+													style={[
+														styles.planIconContainer,
+														{ backgroundColor: `${cfg.color}18` },
+													]}
+												>
+													<Ionicons
+														name={cfg.icon}
+														size={22}
+														color={cfg.color}
+													/>
+												</View>
+												<View>
+													<ThemedText
+														color="secondary"
+														style={{ fontSize: 12 }}
+													>
+														{t("subscription") || "Subscription"}
+													</ThemedText>
+													<ThemedText
+														variant="h4"
+														style={[styles.planName, { color: cfg.color }]}
+													>
+														{cfg.label}
+													</ThemedText>
+												</View>
+											</View>
+											<Ionicons
+												name="chevron-forward"
+												size={20}
+												color={theme.text.secondary}
+											/>
+										</View>
+									</Card>
+								);
+							}}
+						</Pressable>
+					</Animated.View>
 
-					{/* Change Password */}
-					<View style={styles.section}>
+					{/* Security Section */}
+					<Animated.View
+						style={[
+							styles.dangerZone,
+							{
+								opacity: sectionAnims[0],
+								transform: [
+									{
+										translateY: sectionAnims[0].interpolate({
+											inputRange: [0, 1],
+											outputRange: [20, 0],
+										}),
+									},
+								],
+							},
+						]}
+					>
 						<ThemedText variant="h4" style={styles.sectionTitle}>
-							{t("change_password")}
-						</ThemedText>
-
-						<Card style={styles.passwordCard}>
-							<Input
-								label={t("current_password")}
-								value={currentPassword}
-								onChangeText={setCurrentPassword}
-								secureTextEntry={!showCurrentPassword}
-								placeholder={t("enter_current_password")}
-								rightIcon={
-									<Ionicons
-										name={
-											showCurrentPassword ? "eye-off-outline" : "eye-outline"
-										}
-										size={20}
-										color={theme.text.secondary}
-									/>
-								}
-								onRightIconPress={() =>
-									setShowCurrentPassword(!showCurrentPassword)
-								}
-							/>
-
-							<Input
-								label={t("new_password")}
-								value={newPassword}
-								onChangeText={setNewPassword}
-								secureTextEntry={!showNewPassword}
-								placeholder={t("enter_new_password")}
-								rightIcon={
-									<Ionicons
-										name={showNewPassword ? "eye-off-outline" : "eye-outline"}
-										size={20}
-										color={theme.text.secondary}
-									/>
-								}
-								onRightIconPress={() => setShowNewPassword(!showNewPassword)}
-							/>
-
-							<Input
-								label={t("confirm_password")}
-								value={confirmPassword}
-								onChangeText={setConfirmPassword}
-								secureTextEntry
-								placeholder={t("confirm_new_password")}
-							/>
-
-							<Button
-								onPress={handleChangePassword}
-								loading={saving}
-								disabled={!currentPassword || !newPassword || !confirmPassword}
-								style={styles.changePasswordButton}
-							>
-								{t("change_password")}
-							</Button>
-						</Card>
-					</View>
-
-					{/* Danger Zone */}
-					<View style={styles.dangerZone}>
-						<ThemedText
-							variant="h4"
-							style={[styles.sectionTitle, { color: theme.warning.main }]}
-						>
 							{t("security_section_title")}
 						</ThemedText>
 
 						{/* Reset Statistics */}
-						<Card
-							style={[
-								styles.dangerCard,
-								{ borderColor: "#f59e0b", marginBottom: 12 },
-							]}
-						>
-							<ThemedText variant="body1" style={{ fontWeight: "600" }}>
-								{t("reset_statistics") || "Reset Statistics"}
-							</ThemedText>
-							<ThemedText color="secondary" style={styles.dangerDesc}>
-								{t("reset_statistics_warning") ||
-									"Reset all card statistics and delete study sessions."}
-							</ThemedText>
-							<View style={styles.dangerButtonRow}>
-								<Button
-									variant="warning"
-									size="small"
-									onPress={() => setShowResetDialog(true)}
+						<Pressable onPress={() => setShowResetDialog(true)}>
+							{({ pressed }) => (
+								<Card
+									style={[
+										styles.securityCard,
+										{
+											borderColor: "#f59e0b30",
+											backgroundColor: pressed ? "#f59e0b08" : undefined,
+										},
+									]}
 								>
-									{t("reset") || "Reset"}
-								</Button>
-							</View>
-						</Card>
+									<View style={styles.securityCardContent}>
+										<View
+											style={[
+												styles.securityIconContainer,
+												{ backgroundColor: "#f59e0b18" },
+											]}
+										>
+											<Ionicons
+												name="refresh-outline"
+												size={22}
+												color="#f59e0b"
+											/>
+										</View>
+										<View style={styles.securityTextContainer}>
+											<ThemedText style={styles.securityTitle}>
+												{t("reset_statistics") || "Reset Statistics"}
+											</ThemedText>
+											<ThemedText color="secondary" style={styles.securityDesc}>
+												{t("reset_statistics_warning") ||
+													"Reset all card statistics and delete study sessions."}
+											</ThemedText>
+										</View>
+										<Ionicons
+											name="chevron-forward"
+											size={18}
+											color="#f59e0b"
+										/>
+									</View>
+								</Card>
+							)}
+						</Pressable>
 
 						{/* Delete Account */}
-						<Card
-							style={[styles.dangerCard, { borderColor: theme.error.main }]}
-						>
-							<ThemedText variant="body1" style={{ fontWeight: "600" }}>
-								{t("delete_account")}
-							</ThemedText>
-							<ThemedText color="secondary" style={styles.dangerDesc}>
-								{t("delete_account_warning")}
-							</ThemedText>
-							<View style={styles.dangerButtonRow}>
-								<Button
-									variant="contained"
-									size="small"
-									onPress={() => setShowDeleteDialog(true)}
-									style={{ backgroundColor: theme.error.main }}
-									textStyle={{ color: "#fff" }}
+						<Pressable onPress={() => setShowDeleteDialog(true)}>
+							{({ pressed }) => (
+								<Card
+									style={[
+										styles.securityCard,
+										{
+											borderColor: `${theme.error.main}30`,
+											backgroundColor: pressed
+												? `${theme.error.main}08`
+												: undefined,
+										},
+									]}
 								>
-									{t("delete")}
-								</Button>
-							</View>
-						</Card>
-					</View>
+									<View style={styles.securityCardContent}>
+										<View
+											style={[
+												styles.securityIconContainer,
+												{ backgroundColor: `${theme.error.main}18` },
+											]}
+										>
+											<Ionicons
+												name="trash-outline"
+												size={22}
+												color={theme.error.main}
+											/>
+										</View>
+										<View style={styles.securityTextContainer}>
+											<ThemedText style={styles.securityTitle}>
+												{t("delete_account")}
+											</ThemedText>
+											<ThemedText color="secondary" style={styles.securityDesc}>
+												{t("delete_account_warning")}
+											</ThemedText>
+										</View>
+										<Ionicons
+											name="chevron-forward"
+											size={18}
+											color={theme.error.main}
+										/>
+									</View>
+								</Card>
+							)}
+						</Pressable>
+					</Animated.View>
 				</ScrollView>
 			</SafeAreaView>
 
@@ -493,9 +565,17 @@ const styles = StyleSheet.create({
 	subscriptionHeader: {
 		flexDirection: "row",
 		alignItems: "center",
+		gap: spacing.md,
+	},
+	planIconContainer: {
+		width: 44,
+		height: 44,
+		borderRadius: 12,
+		justifyContent: "center",
+		alignItems: "center",
 	},
 	planName: {
-		marginLeft: spacing.sm,
+		fontWeight: "700",
 	},
 	createdDate: {
 		marginTop: 2,
@@ -511,27 +591,36 @@ const styles = StyleSheet.create({
 	sectionTitle: {
 		marginBottom: spacing.sm,
 	},
-	passwordCard: {
-		padding: spacing.lg,
-	},
-	changePasswordButton: {
-		marginTop: spacing.sm,
-	},
 	dangerZone: {
 		marginTop: spacing.lg,
 	},
-	dangerCard: {
-		padding: spacing.lg,
+	securityCard: {
+		padding: spacing.md,
 		borderWidth: 1,
+		marginBottom: spacing.sm,
 	},
-	dangerDesc: {
-		marginTop: 4,
-		fontSize: 13,
-	},
-	dangerButtonRow: {
+	securityCardContent: {
 		flexDirection: "row",
-		justifyContent: "flex-end",
-		marginTop: spacing.md,
+		alignItems: "center",
+		gap: spacing.md,
+	},
+	securityIconContainer: {
+		width: 44,
+		height: 44,
+		borderRadius: 12,
+		justifyContent: "center",
+		alignItems: "center",
+	},
+	securityTextContainer: {
+		flex: 1,
+	},
+	securityTitle: {
+		fontSize: 15,
+		fontWeight: "600",
+	},
+	securityDesc: {
+		fontSize: 12,
+		marginTop: 2,
 	},
 });
 

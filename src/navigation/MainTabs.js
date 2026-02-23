@@ -1,7 +1,11 @@
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
-import { View, StyleSheet } from "react-native";
+import {
+	getFocusedRouteNameFromRoute,
+	StackActions,
+} from "@react-navigation/native";
+import { View, StyleSheet, Animated } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../context/ThemeContext";
 import { useI18n } from "../context/I18nContext";
@@ -18,7 +22,7 @@ import PlansScreen from "../screens/PlansScreen";
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
-// Icon component using Ionicons
+// Icon component using Ionicons with subtle animation
 const TabIcon = ({ name, focused, color }) => {
 	const icons = {
 		home: focused ? "home" : "home-outline",
@@ -27,7 +31,22 @@ const TabIcon = ({ name, focused, color }) => {
 		settings: focused ? "settings" : "settings-outline",
 	};
 
-	return <Ionicons name={icons[name]} size={focused ? 26 : 24} color={color} />;
+	const scaleRef = React.useRef(new Animated.Value(focused ? 1 : 0.95)).current;
+
+	React.useEffect(() => {
+		Animated.spring(scaleRef, {
+			toValue: focused ? 1.15 : 1,
+			useNativeDriver: true,
+			speed: 20,
+			bounciness: focused ? 12 : 4,
+		}).start();
+	}, [focused]);
+
+	return (
+		<Animated.View style={{ transform: [{ scale: scaleRef }] }}>
+			<Ionicons name={icons[name]} size={focused ? 24 : 22} color={color} />
+		</Animated.View>
+	);
 };
 
 // Home Stack (includes Game screen)
@@ -101,12 +120,33 @@ const MainTabs = ({ onLogout }) => {
 		>
 			<Tab.Screen
 				name="Home"
-				options={{
-					tabBarLabel: t("home"),
-					tabBarIcon: ({ focused, color }) => (
-						<TabIcon name="home" focused={focused} color={color} />
-					),
+				options={({ route }) => {
+					const routeName = getFocusedRouteNameFromRoute(route) ?? "HomeMain";
+					return {
+						tabBarLabel: t("home"),
+						tabBarIcon: ({ focused, color }) => (
+							<TabIcon name="home" focused={focused} color={color} />
+						),
+						tabBarStyle:
+							routeName === "Game"
+								? { display: "none" }
+								: {
+										backgroundColor: theme.background.paper,
+										borderTopColor: theme.border.main,
+										borderTopWidth: 1,
+										height: 65,
+										paddingBottom: 10,
+										paddingTop: 6,
+									},
+					};
 				}}
+				listeners={({ navigation }) => ({
+					tabPress: (e) => {
+						if (navigation.isFocused()) {
+							navigation.dispatch(StackActions.popToTop());
+						}
+					},
+				})}
 			>
 				{(props) => <HomeStack {...props} onLogout={onLogout} />}
 			</Tab.Screen>
@@ -141,6 +181,13 @@ const MainTabs = ({ onLogout }) => {
 						<TabIcon name="settings" focused={focused} color={color} />
 					),
 				}}
+				listeners={({ navigation }) => ({
+					tabPress: (e) => {
+						if (navigation.isFocused()) {
+							navigation.dispatch(StackActions.popToTop());
+						}
+					},
+				})}
 			>
 				{(props) => <SettingsStack {...props} onLogout={onLogout} />}
 			</Tab.Screen>

@@ -677,78 +677,57 @@ const HomeScreen = ({ navigation, onLogout }) => {
 				},
 			]}
 		>
-			<View style={styles.titleRow}>
-				<ThemedText variant="h2">{t("my_decks")}</ThemedText>
-				<ThemedText color="secondary">
-					{searchQuery.trim()
-						? `${filteredDecks.length}/${decks.length} ${t("decks_total")}`
-						: `${decks.length} ${t("decks_total")}`}
-				</ThemedText>
-			</View>
-
-			{/* Create and Import Buttons */}
-			<View style={{ flexDirection: "row", gap: spacing.sm }}>
-				<Pressable
-					onPress={handleCreateDeck}
-					style={[
-						styles.createButton,
-						{
-							flex: 1,
-							backgroundColor: theme.primary.main,
-							borderRadius: borderRadius.lg,
-							flexDirection: "row",
-							alignItems: "center",
-							justifyContent: "center",
-							paddingVertical: spacing.md,
-							gap: spacing.sm,
-						},
-					]}
-				>
-					<Ionicons name="add" size={22} color="#ffffff" />
-					<Text
-						style={{
-							color: theme.primary.contrastText,
-							fontWeight: "700",
-							fontSize: 16,
-						}}
-					>
-						{t("new_deck")}
-					</Text>
-				</Pressable>
-
-				<Pressable
-					onPress={handleOpenImportModal}
-					style={[
-						styles.createButton,
-						{
-							backgroundColor: theme.background.paper,
-							borderRadius: borderRadius.lg,
-							flexDirection: "row",
-							alignItems: "center",
-							justifyContent: "center",
-							paddingVertical: spacing.md,
-							paddingHorizontal: spacing.lg,
-							borderWidth: 1,
-							borderColor: theme.border.main,
-							gap: spacing.sm,
-						},
-					]}
-				>
+			<View
+				style={[
+					styles.titleRow,
+					{ justifyContent: "space-between", alignItems: "center" },
+				]}
+			>
+				<View style={{ flexDirection: "row", alignItems: "top" }}>
 					<Ionicons
-						name="cloud-upload-outline"
-						size={22}
+						name="layers-outline"
+						size={24}
 						color={theme.primary.main}
+						style={{ marginRight: spacing.sm, marginTop: 2 }}
 					/>
-					<Text
-						style={{
-							color: theme.primary.main,
-							fontWeight: "700",
-							fontSize: 16,
-						}}
+					<View>
+						<ThemedText variant="h2">{t("my_decks")}</ThemedText>
+						<ThemedText color="secondary">
+							{searchQuery.trim()
+								? `${filteredDecks.length}/${decks.length} ${t("decks_total")}`
+								: `${decks.length} ${t("decks_total")}`}
+						</ThemedText>
+					</View>
+				</View>
+
+				<View style={{ flexDirection: "row", gap: spacing.sm }}>
+					<Pressable
+						onPress={handleCreateDeck}
+						style={[
+							styles.iconOnlyButton,
+							{ backgroundColor: theme.primary.main },
+						]}
 					>
-						{t("import") || "Import"}
-					</Text>
-				</Pressable>
+						<Ionicons name="add" size={20} color="#ffffff" />
+					</Pressable>
+					<Pressable
+						onPress={handleOpenImportModal}
+						style={[
+							styles.iconOnlyButton,
+							{
+								backgroundColor: theme.background.paper,
+								borderWidth: 1,
+								borderColor: theme.border.main,
+							},
+						]}
+					>
+						<Ionicons
+							name="cloud-upload-outline"
+							size={20}
+							color={theme.primary.main}
+						/>
+					</Pressable>
+				</View>
 			</View>
 		</Animated.View>
 	);
@@ -1640,6 +1619,13 @@ const styles = StyleSheet.create({
 	},
 	iconButton: {
 		padding: spacing.xs,
+	},
+	iconOnlyButton: {
+		width: 40,
+		height: 40,
+		borderRadius: borderRadius.lg,
+		alignItems: "center",
+		justifyContent: "center",
 	},
 	modalFooter: {
 		flexDirection: "row",

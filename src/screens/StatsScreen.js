@@ -11,7 +11,6 @@ import {
 	StyleSheet,
 	ScrollView,
 	Dimensions,
-	RefreshControl,
 	TouchableOpacity,
 	Modal,
 	FlatList,
@@ -23,7 +22,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { BarChart, LineChart } from "react-native-chart-kit";
-import DateTimePicker from "@react-native-community/datetimepicker";
+// DateTimePicker removed (custom date selector disabled)
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system/legacy";
@@ -209,7 +208,6 @@ const StatsScreen = () => {
 
 	// Loading states
 	const [loading, setLoading] = useState(true);
-	const [refreshing, setRefreshing] = useState(false);
 
 	// Entrance animations
 	const headerAnim = useRef(new Animated.Value(0)).current;
@@ -221,8 +219,7 @@ const StatsScreen = () => {
 	const [dateRange, setDateRange] = useState({ start: null, end: null });
 	const [activePreset, setActivePreset] = useState("30d");
 	const [showDeckModal, setShowDeckModal] = useState(false);
-	const [showStartPicker, setShowStartPicker] = useState(false);
-	const [showEndPicker, setShowEndPicker] = useState(false);
+	// custom date pickers removed
 
 	// Data states
 	const [decksData, setDecksData] = useState([]);
@@ -232,13 +229,14 @@ const StatsScreen = () => {
 	const [sortBy, setSortBy] = useState("times_played");
 	const [sortOrder, setSortOrder] = useState("desc");
 
-	// Date presets
+	// Date presets (added 1y, removed custom selector)
 	const presets = [
-		{ key: "today", label: t("today") || "Today", days: 0 },
+		// { key: "today", label: t("today") || "Today", days: 0 },
 		{ key: "7d", label: t("7_days") || "7D", days: 7 },
 		{ key: "30d", label: t("30_days") || "30D", days: 30 },
 		{ key: "90d", label: t("90_days") || "90D", days: 90 },
-		{ key: "custom", label: t("custom") || "Custom", days: -1 },
+		{ key: "180d", label: t("180_days") || "180D", days: 180 },
+		{ key: "1y", label: t("1_year") || "1Y", days: 365 },
 	];
 
 	// Calculate date range from preset
@@ -272,11 +270,6 @@ const StatsScreen = () => {
 	// Handle preset click
 	const handlePresetClick = useCallback(
 		(preset) => {
-			if (preset === "custom") {
-				setActivePreset("custom");
-				setShowStartPicker(true);
-				return;
-			}
 			setActivePreset(preset);
 			const range = getDateRangeFromPreset(preset);
 			setDateRange(range);
@@ -375,7 +368,6 @@ const StatsScreen = () => {
 			console.error("Error fetching stats:", error);
 		} finally {
 			setLoading(false);
-			setRefreshing(false);
 
 			// Trigger entrance animations
 			Animated.timing(headerAnim, {
@@ -402,10 +394,7 @@ const StatsScreen = () => {
 		}
 	};
 
-	const onRefresh = () => {
-		setRefreshing(true);
-		fetchData();
-	};
+	// Pull-to-refresh removed — use filters or download instead
 
 	// Handle sort change
 	const handleSort = (column) => {
@@ -1160,13 +1149,6 @@ const StatsScreen = () => {
 			<SafeAreaView style={styles.safeArea} edges={["top"]}>
 				<ScrollView
 					contentContainerStyle={styles.scrollContent}
-					refreshControl={
-						<RefreshControl
-							refreshing={refreshing}
-							onRefresh={onRefresh}
-							tintColor={theme.primary.main}
-						/>
-					}
 					showsVerticalScrollIndicator={false}
 				>
 					{/* Header */}
@@ -1196,23 +1178,11 @@ const StatsScreen = () => {
 								<ThemedText variant="h2">{t("statistics")}</ThemedText>
 							</View>
 							<View style={styles.headerButtons}>
-								<TouchableOpacity
-									style={[
-										styles.headerButton,
-										{ backgroundColor: theme.background.elevated },
-									]}
-									onPress={onRefresh}
-								>
-									<MaterialCommunityIcons
-										name="refresh"
-										size={20}
-										color={theme.text.secondary}
-									/>
-								</TouchableOpacity>
+								{/* Refresh button removed */}
 								<TouchableOpacity
 									style={[
 										styles.downloadButton,
-										{ backgroundColor: theme.primary.main },
+										{ backgroundColor: theme.primary.secondary },
 									]}
 									onPress={handleDownloadPDF}
 								>
@@ -1302,46 +1272,7 @@ const StatsScreen = () => {
 								))}
 							</View>
 
-							{/* Custom Date Range Display */}
-							{activePreset === "custom" &&
-								dateRange.start &&
-								dateRange.end && (
-									<View style={styles.customDateDisplay}>
-										<TouchableOpacity
-											style={[
-												styles.dateButton,
-												{ borderColor: theme.border.main },
-											]}
-											onPress={() => setShowStartPicker(true)}
-										>
-											<MaterialCommunityIcons
-												name="calendar"
-												size={16}
-												color={theme.primary.main}
-											/>
-											<ThemedText style={styles.dateButtonText}>
-												{dateRange.start.toLocaleDateString()}
-											</ThemedText>
-										</TouchableOpacity>
-										<ThemedText color="secondary">-</ThemedText>
-										<TouchableOpacity
-											style={[
-												styles.dateButton,
-												{ borderColor: theme.border.main },
-											]}
-											onPress={() => setShowEndPicker(true)}
-										>
-											<MaterialCommunityIcons
-												name="calendar"
-												size={16}
-												color={theme.primary.main}
-											/>
-											<ThemedText style={styles.dateButtonText}>
-												{dateRange.end.toLocaleDateString()}
-											</ThemedText>
-										</TouchableOpacity>
-									</View>
-								)}
+							{/* Custom date selector removed */}
 						</Card>
 					</Animated.View>
 
@@ -1391,7 +1322,7 @@ const StatsScreen = () => {
 						<StatCard
 							icon={
 								<MaterialCommunityIcons
-									name="close-circle"
+									name="alert-circle-outline"
 									size={24}
 									color="#ef4444"
 								/>
@@ -1404,7 +1335,7 @@ const StatsScreen = () => {
 						<StatCard
 							icon={
 								<MaterialCommunityIcons
-									name="crosshairs"
+									name="trophy"
 									size={24}
 									color="#8b5cf6"
 								/>
@@ -1430,7 +1361,7 @@ const StatsScreen = () => {
 						<StatCard
 							icon={
 								<MaterialCommunityIcons
-									name="calendar-check"
+									name="calendar"
 									size={24}
 									color="#f59e0b"
 								/>
@@ -1681,41 +1612,6 @@ const StatsScreen = () => {
 					</View>
 				</TouchableOpacity>
 			</Modal>
-
-			{/* Date Pickers */}
-			{showStartPicker && (
-				<DateTimePicker
-					value={dateRange.start || new Date()}
-					mode="date"
-					display={Platform.OS === "ios" ? "spinner" : "default"}
-					onChange={(event, date) => {
-						setShowStartPicker(false);
-						if (date) {
-							setDateRange((prev) => ({ ...prev, start: date }));
-							if (!dateRange.end) {
-								setShowEndPicker(true);
-							}
-						}
-					}}
-					maximumDate={dateRange.end || new Date()}
-				/>
-			)}
-
-			{showEndPicker && (
-				<DateTimePicker
-					value={dateRange.end || new Date()}
-					mode="date"
-					display={Platform.OS === "ios" ? "spinner" : "default"}
-					onChange={(event, date) => {
-						setShowEndPicker(false);
-						if (date) {
-							setDateRange((prev) => ({ ...prev, end: date }));
-						}
-					}}
-					minimumDate={dateRange.start}
-					maximumDate={new Date()}
-				/>
-			)}
 		</ThemedView>
 	);
 };

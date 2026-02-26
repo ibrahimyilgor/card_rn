@@ -479,7 +479,7 @@ const HomeScreen = ({ navigation, onLogout }) => {
 					style={styles.deckDescription}
 					numberOfLines={1}
 				>
-					{item.description || t("no_description")}
+					{item.description || ""}
 				</ThemedText>
 
 				{/* Card count and badges */}

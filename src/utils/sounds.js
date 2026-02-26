@@ -3,13 +3,13 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Sound files mapping
 const SOUND_FILES = {
-	correct: require("../../assets/sounds/correct.wav"),
-	incorrect: require("../../assets/sounds/wrong.wav"),
-	wrong: require("../../assets/sounds/wrong.wav"),
-	complete: require("../../assets/sounds/success.wav"),
-	success: require("../../assets/sounds/success.wav"),
-	flip: require("../../assets/sounds/correct.wav"), // Using correct sound for flip
-	achievement: require("../../assets/sounds/success.wav"),
+	correct: require("../../assets/sounds/correct.mp3"),
+	incorrect: require("../../assets/sounds/wrong.mp3"),
+	wrong: require("../../assets/sounds/wrong.mp3"),
+	complete: require("../../assets/sounds/success.mp3"),
+	success: require("../../assets/sounds/success.mp3"),
+	flip: require("../../assets/sounds/flip.mp3"), // Using correct sound for flip
+	achievement: require("../../assets/sounds/success.mp3"),
 };
 
 // Sound cache

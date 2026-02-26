@@ -7,4 +7,5 @@ export { default as Modal } from "./Modal";
 export { default as ConfirmDialog } from "./ConfirmDialog";
 export { default as AlertDialog } from "./AlertDialog";
 export { default as LoadingState } from "./LoadingState";
+export { default as LoadingOverlay } from "./LoadingOverlay";
 export { default as EmptyState } from "./EmptyState";

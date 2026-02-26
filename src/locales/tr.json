@@ -429,5 +429,11 @@
 	"plan_description_pro": "Düzenli öğrenenler için gelişmiş özellikler",
 	"plan_description_premium": "Tüm özelliklere sınırsız erişim",
 	"all_features_included": "Tüm özellikler dahil",
-	"free": "Ücretsiz"
+	"free": "Ücretsiz",
+	"stats_locked_title": "İstatistikler Kilitli",
+	"stats_preview_description": "Bu, örnek verilerle bir önizlemedir. Gerçek istatistiklerinizi görmek için planınızı yükseltin.",
+	"upgrade_plan": "Planı Yükselt",
+	"pdf_downloaded": "PDF olarak indirildi",
+	"minutes_short": "dk",
+	"pdf_error": "PDF oluşturulurken hata oluştu"
 }

@@ -362,7 +362,7 @@
 	"json_format_desc": "[{\"front\": \"...\", \"back\": \"...\"}]",
 	"import_success_simple": "İçe aktarma başarılı!",
 	"drag_drop_file": "Dosyayı buraya sürükleyin",
-	"or_click_to_select": "veya seçmek için tıklayın",
+	"or_click_to_select": "Desteklenen formatlar: CSV veya JSON",
 	"supported_formats": "Desteklenen formatlar: CSV, JSON",
 	"invalid_file_format": "Geçersiz dosya formatı. Lütfen CSV veya JSON kullanın.",
 	"no_valid_cards": "Dosyada geçerli kart bulunamadı.",
@@ -435,5 +435,12 @@
 	"upgrade_plan": "Planı Yükselt",
 	"pdf_downloaded": "PDF olarak indirildi",
 	"minutes_short": "dk",
-	"pdf_error": "PDF oluşturulurken hata oluştu"
+	"pdf_error": "PDF oluşturulurken hata oluştu",
+	"info": "Bilgi",
+	"file_saved": "Dosya kaydedildi",
+	"file_save_error": "Dosya kaydedilirken hata oluştu",
+	"file_copied": "Dosya içeriği panoya kopyalandı",
+	"import_format_title": "Dosya Formatı",
+	"import_csv_format": "İlk satır başlık (FRONT, BACK), sonra veri satırları",
+	"import_json_format": "[{\"front\": \"...\", \"back\": \"...\"}]"
 }

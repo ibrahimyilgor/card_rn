@@ -6,7 +6,6 @@ import {
 	Pressable,
 	StyleSheet,
 	ScrollView,
-	KeyboardAvoidingView,
 	Platform,
 	Animated,
 } from "react-native";
@@ -83,12 +82,10 @@ const Modal = ({
 			visible={visible}
 			transparent
 			animationType="none"
+			statusBarTranslucent
 			onRequestClose={onClose}
 		>
-			<KeyboardAvoidingView
-				behavior={Platform.OS === "ios" ? "padding" : "height"}
-				style={styles.overlay}
-			>
+			<View style={styles.overlay}>
 				<Animated.View style={[styles.backdrop, { opacity: backdropAnim }]}>
 					<Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 				</Animated.View>
@@ -101,10 +98,7 @@ const Modal = ({
 							backgroundColor: theme.background.elevated,
 							borderColor: theme.border.main,
 							opacity: contentOpacity,
-							transform: [
-								{ scale: scaleAnim },
-								{ translateY: translateYAnim },
-							],
+							transform: [{ scale: scaleAnim }, { translateY: translateYAnim }],
 						},
 						shadows.large,
 						size === "full" && styles.fullSize,
@@ -138,6 +132,8 @@ const Modal = ({
 						style={styles.content}
 						contentContainerStyle={styles.contentContainer}
 						showsVerticalScrollIndicator={false}
+						keyboardShouldPersistTaps="handled"
+						automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
 					>
 						{children}
 					</ScrollView>
@@ -151,7 +147,7 @@ const Modal = ({
 						</View>
 					)}
 				</Animated.View>
-			</KeyboardAvoidingView>
+			</View>
 		</RNModal>
 	);
 };

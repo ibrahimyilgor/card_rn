@@ -362,7 +362,7 @@
 	"json_format_desc": "[{\"front\": \"...\", \"back\": \"...\"}]",
 	"import_success_simple": "Import successful!",
 	"drag_drop_file": "Drag & drop file here",
-	"or_click_to_select": "or click to select",
+	"or_click_to_select": "Supported formats: CSV or JSON",
 	"supported_formats": "Supported formats: CSV, JSON",
 	"invalid_file_format": "Invalid file format. Please use CSV or JSON.",
 	"no_valid_cards": "No valid flashcards found in file.",
@@ -435,5 +435,12 @@
 	"upgrade_plan": "Upgrade Plan",
 	"pdf_downloaded": "PDF downloaded as",
 	"minutes_short": "min",
-	"pdf_error": "Error generating PDF"
+	"pdf_error": "Error generating PDF",
+	"info": "Info",
+	"file_saved": "File saved",
+	"file_save_error": "Error saving file",
+	"file_copied": "File content copied to clipboard",
+	"import_format_title": "File Format",
+	"import_csv_format": "First row as header (FRONT, BACK), then data rows",
+	"import_json_format": "[{\"front\": \"...\", \"back\": \"...\"}]"
 }

@@ -17,15 +17,17 @@ import {
 	Share,
 	Platform,
 	Animated,
+	ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import * as DocumentPicker from "expo-document-picker";
+import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "../context/ThemeContext";
 import { useI18n } from "../context/I18nContext";
 import { decksAPI, flashcardsAPI } from "../services/api";
@@ -72,6 +74,14 @@ const HomeScreen = ({ navigation, onLogout }) => {
 	const [importLoading, setImportLoading] = useState(false);
 	// Sort modal
 	const [sortModalVisible, setSortModalVisible] = useState(false);
+
+	// Alert modal
+	const [alertMessage, setAlertMessage] = useState("");
+	const [alertVisible, setAlertVisible] = useState(false);
+	const showAlert = (message) => {
+		setAlertMessage(message);
+		setAlertVisible(true);
+	};
 
 	// Animations
 	const searchBarAnim = useRef(new Animated.Value(0)).current;
@@ -249,7 +259,7 @@ const HomeScreen = ({ navigation, onLogout }) => {
 			const flashcards = response.data?.decks || response.data || [];
 
 			if (!flashcards || flashcards.length === 0) {
-				alert(t("no_flashcards") || "No flashcards to download");
+				showAlert(t("no_flashcards") || "No flashcards to download");
 				return;
 			}
 
@@ -275,27 +285,45 @@ const HomeScreen = ({ navigation, onLogout }) => {
 			// Use cacheDirectory with file:// prefix
 			const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
 
-			// Write CSV file (using legacy API - still works)
+			// Write CSV to cache first
 			await FileSystem.writeAsStringAsync(fileUri, csvContent);
 
-			// Share the file
-			if (await Sharing.isAvailableAsync()) {
-				await Sharing.shareAsync(fileUri, {
-					mimeType: "text/csv",
-					filename: fileName,
-					UTI: "public.comma-separated-values-text",
-				});
+			if (Platform.OS === "android") {
+				// Android: Save directly to a folder the user picks (includes Downloads)
+				const permissions =
+					await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+				if (permissions.granted) {
+					const destUri =
+						await FileSystem.StorageAccessFramework.createFileAsync(
+							permissions.directoryUri,
+							fileName,
+							"text/csv",
+						);
+					await FileSystem.writeAsStringAsync(destUri, csvContent, {
+						encoding: FileSystem.EncodingType.UTF8,
+					});
+					showAlert(t("file_saved") || `"${fileName}" cihaza kaydedildi`);
+				}
+				// user cancelled the picker — do nothing
 			} else {
-				// Fallback to clipboard if sharing not available
-				await Clipboard.setStringAsync(csvContent);
-				alert(
-					t("csv_copied") ||
-						`CSV content for "${deck.title}" copied to clipboard!`,
-				);
+				// iOS: Share sheet → user can tap "Save to Files"
+				if (await Sharing.isAvailableAsync()) {
+					await Sharing.shareAsync(fileUri, {
+						mimeType: "text/csv",
+						filename: fileName,
+						UTI: "public.comma-separated-values-text",
+					});
+				} else {
+					await Clipboard.setStringAsync(csvContent);
+					showAlert(
+						t("file_copied") ||
+							`File content for "${deck.title}" copied to clipboard!`,
+					);
+				}
 			}
 		} catch (error) {
 			console.error("Error downloading CSV:", error);
-			alert(t("download_error") || "Error downloading file");
+			showAlert(t("file_save_error") || "Error saving file");
 		}
 	};
 
@@ -360,7 +388,7 @@ const HomeScreen = ({ navigation, onLogout }) => {
 	const handlePickFile = async () => {
 		try {
 			const result = await DocumentPicker.getDocumentAsync({
-				type: ["text/csv", "application/json", "text/plain"],
+				type: "*/*",
 				copyToCacheDirectory: true,
 			});
 
@@ -432,7 +460,7 @@ const HomeScreen = ({ navigation, onLogout }) => {
 			setImportError("");
 		} catch (error) {
 			console.error("Error importing deck:", error);
-			alert(t("import_error") || "Error importing deck");
+			showAlert(t("import_error") || "Error importing deck");
 		} finally {
 			setImportLoading(false);
 		}
@@ -450,6 +478,12 @@ const HomeScreen = ({ navigation, onLogout }) => {
 
 	const renderDeckItem = ({ item }) => (
 		<Card style={styles.deckCard}>
+			<LinearGradient
+				colors={["#3b82f6", "#8b5cf6"]}
+				start={{ x: 0, y: 0 }}
+				end={{ x: 0, y: 0 }}
+				style={styles.deckAccentBar}
+			/>
 			<View style={styles.deckContent}>
 				{/* Title and Play Button Row */}
 				<View style={styles.deckTitleRow}>
@@ -492,9 +526,9 @@ const HomeScreen = ({ navigation, onLogout }) => {
 							},
 						]}
 					>
-						<Ionicons
-							name="layers-outline"
-							size={14}
+						<MaterialCommunityIcons
+							name="layers"
+							size={18}
 							color={theme.primary.main}
 						/>
 						<Text style={[styles.cardCountText, { color: theme.primary.main }]}>
@@ -539,7 +573,7 @@ const HomeScreen = ({ navigation, onLogout }) => {
 							{ backgroundColor: "rgba(251, 191, 36, 0.1)" },
 						]}
 					>
-						<Ionicons name="create-outline" size={18} color="#fbbf24" />
+						<MaterialCommunityIcons name="pencil" size={18} color={"#fbbf24"} />
 					</Pressable>
 
 					{/* Flashcards Button */}
@@ -550,8 +584,8 @@ const HomeScreen = ({ navigation, onLogout }) => {
 							{ backgroundColor: theme.primary.main + "15" },
 						]}
 					>
-						<Ionicons
-							name="layers-outline"
+						<MaterialCommunityIcons
+							name="cards"
 							size={18}
 							color={theme.primary.main}
 						/>
@@ -565,7 +599,12 @@ const HomeScreen = ({ navigation, onLogout }) => {
 							{ backgroundColor: "rgba(34, 197, 94, 0.1)" },
 						]}
 					>
-						<Ionicons name="download-outline" size={18} color="#22c55e" />
+						{/* <Ionicons name="download-outline" size={18} color="#22c55e" /> */}
+						<MaterialCommunityIcons
+							name="download"
+							size={18}
+							color={"#22c55e"}
+						/>
 					</Pressable>
 
 					{/* Spacer */}
@@ -582,7 +621,7 @@ const HomeScreen = ({ navigation, onLogout }) => {
 							{ backgroundColor: "rgba(239, 68, 68, 0.1)" },
 						]}
 					>
-						<Ionicons name="trash-outline" size={18} color="#ef4444" />
+						<Ionicons name="trash" size={18} color="#ef4444" />
 					</Pressable>
 				</View>
 			</View>
@@ -684,8 +723,8 @@ const HomeScreen = ({ navigation, onLogout }) => {
 				]}
 			>
 				<View style={{ flexDirection: "row", alignItems: "top" }}>
-					<Ionicons
-						name="layers-outline"
+					<MaterialCommunityIcons
+						name="layers"
 						size={24}
 						color={theme.primary.main}
 						style={{ marginRight: spacing.sm, marginTop: 2 }}
@@ -708,7 +747,7 @@ const HomeScreen = ({ navigation, onLogout }) => {
 							{ backgroundColor: theme.primary.main },
 						]}
 					>
-						<Ionicons name="add" size={20} color="#ffffff" />
+						<MaterialCommunityIcons name="plus" size={20} color={"#ffffff"} />
 					</Pressable>
 					<Pressable
 						onPress={handleOpenImportModal}
@@ -721,8 +760,8 @@ const HomeScreen = ({ navigation, onLogout }) => {
 							},
 						]}
 					>
-						<Ionicons
-							name="cloud-upload-outline"
+						<MaterialCommunityIcons
+							name="upload"
 							size={20}
 							color={theme.primary.main}
 						/>
@@ -782,19 +821,64 @@ const HomeScreen = ({ navigation, onLogout }) => {
 						keyExtractor={(item) => item.id.toString()}
 						ListHeaderComponent={renderHeader}
 						ListEmptyComponent={
-							<EmptyState
-								iconName="cards-outline"
-								title={searchQuery ? t("no_results") : t("create_first_deck")}
-								description={
-									searchQuery
+							<View style={styles.emptyContainer}>
+								<View
+									style={[
+										styles.emptyIconWrap,
+										{
+											backgroundColor: searchQuery
+												? theme.text.disabled + "18"
+												: theme.primary.main + "18",
+											borderWidth: 1,
+											borderColor: searchQuery
+												? theme.text.disabled + "30"
+												: theme.primary.main + "35",
+										},
+									]}
+								>
+									<MaterialCommunityIcons
+										name={searchQuery ? "magnify-close" : "layers"}
+										size={48}
+										color={
+											searchQuery ? theme.text.disabled : theme.primary.main
+										}
+									/>
+								</View>
+								<ThemedText variant="h3" style={styles.emptyTitle}>
+									{searchQuery ? t("no_results") : t("create_first_deck")}
+								</ThemedText>
+								<ThemedText color="secondary" style={styles.emptyDescription}>
+									{searchQuery
 										? t("no_results_desc")
-										: t("create_first_deck_desc")
-								}
-								actionLabel={searchQuery ? t("clear_search") : t("create_deck")}
-								onAction={
-									searchQuery ? () => setSearchQuery("") : handleCreateDeck
-								}
-							/>
+										: t("create_first_deck_desc")}
+								</ThemedText>
+								<Pressable
+									onPress={
+										searchQuery ? () => setSearchQuery("") : handleCreateDeck
+									}
+									style={[
+										styles.emptyAction,
+										{
+											backgroundColor: searchQuery
+												? theme.background.paper
+												: theme.primary.main,
+											borderWidth: searchQuery ? 1 : 0,
+											borderColor: theme.border.main,
+										},
+									]}
+								>
+									<Text
+										style={[
+											styles.emptyActionText,
+											{
+												color: searchQuery ? theme.text.primary : "#ffffff",
+											},
+										]}
+									>
+										{searchQuery ? t("clear_search") : t("create_deck")}
+									</Text>
+								</Pressable>
+							</View>
 						}
 						contentContainerStyle={styles.listContent}
 						keyboardShouldPersistTaps="always"
@@ -820,8 +904,9 @@ const HomeScreen = ({ navigation, onLogout }) => {
 							<Button
 								variant="ghost"
 								onPress={() => setDeckModalVisible(false)}
+								textStyle={{ color: theme.text.secondary }}
 							>
-								{t("cancel")}
+								{t("close")}
 							</Button>
 							<Button onPress={handleSaveDeck} loading={saving}>
 								{t("save")}
@@ -865,6 +950,22 @@ const HomeScreen = ({ navigation, onLogout }) => {
 					t={t}
 					onUpdate={() => fetchDecks(accountId, true)}
 				/>
+
+				{/* Alert Modal */}
+				<Modal
+					visible={alertVisible}
+					onClose={() => setAlertVisible(false)}
+					title={t("info") || "Info"}
+					footer={
+						<View style={styles.modalFooter}>
+							<Button onPress={() => setAlertVisible(false)}>
+								{t("ok") || "OK"}
+							</Button>
+						</View>
+					}
+				>
+					<ThemedText style={{ lineHeight: 22 }}>{alertMessage}</ThemedText>
+				</Modal>
 
 				{/* Import Deck Modal */}
 
@@ -922,8 +1023,48 @@ const HomeScreen = ({ navigation, onLogout }) => {
 
 				<Modal
 					visible={importModalVisible}
-					onClose={() => setImportModalVisible(false)}
+					onClose={() => {
+						setImportModalVisible(false);
+						setImportFlashcards([]);
+						setImportFileName("");
+						setImportError("");
+						setImportTitle("");
+						setImportDescription("");
+					}}
 					title={t("import_deck") || "Import Deck"}
+					footer={
+						<View style={styles.modalFooter}>
+							<Button
+								variant="ghost"
+								onPress={() => {
+									setImportModalVisible(false);
+									setImportFlashcards([]);
+									setImportFileName("");
+									setImportError("");
+									setImportTitle("");
+									setImportDescription("");
+								}}
+							>
+								{t("cancel") || "Cancel"}
+							</Button>
+							<Button
+								variant="success"
+								onPress={handleImportDeck}
+								disabled={
+									!importTitle.trim() ||
+									importFlashcards.length === 0 ||
+									importLoading
+								}
+								loading={importLoading}
+							>
+								{importLoading
+									? t("importing") || "Importing..."
+									: importFlashcards.length > 0
+										? `${t("import") || "Import"} (${importFlashcards.length} ${t("cards") || "cards"})`
+										: t("import") || "Import"}
+							</Button>
+						</View>
+					}
 				>
 					<View style={{ gap: spacing.md }}>
 						{/* File Upload Area */}
@@ -932,8 +1073,9 @@ const HomeScreen = ({ navigation, onLogout }) => {
 							style={{
 								borderWidth: 2,
 								borderStyle: "dashed",
-								borderColor:
-									importFlashcards.length > 0
+								borderColor: importError
+									? theme.error.main
+									: importFlashcards.length > 0
 										? theme.success.main
 										: theme.border.main,
 								borderRadius: borderRadius.lg,
@@ -942,47 +1084,94 @@ const HomeScreen = ({ navigation, onLogout }) => {
 								backgroundColor:
 									importFlashcards.length > 0
 										? theme.success.main + "10"
-										: theme.background.paper,
+										: "transparent",
 							}}
 						>
-							<Ionicons
-								name={
-									importFlashcards.length > 0
-										? "checkmark-circle"
-										: "cloud-upload-outline"
-								}
-								size={40}
-								color={
-									importFlashcards.length > 0
-										? theme.success.main
-										: theme.primary.main
-								}
-							/>
-							<ThemedText
-								style={{ marginTop: spacing.sm, textAlign: "center" }}
-							>
-								{importFileName
-									? importFileName
-									: t("tap_to_select_file") || "Tap to select a file"}
-							</ThemedText>
-							<ThemedText
-								color="secondary"
-								style={{ fontSize: 12, marginTop: spacing.xs }}
-							>
-								{t("supported_formats") || "Supports CSV and JSON"}
-							</ThemedText>
+							{importFlashcards.length > 0 ? (
+								<>
+									<Ionicons
+										name="checkmark-circle"
+										size={48}
+										color={theme.success.main}
+									/>
+									<ThemedText
+										style={{
+											marginTop: spacing.sm,
+											textAlign: "center",
+											fontWeight: "600",
+										}}
+									>
+										{importFileName}
+									</ThemedText>
+									{/* Card count badge */}
+									<View
+										style={{
+											marginTop: spacing.xs,
+											paddingHorizontal: spacing.md,
+											paddingVertical: spacing.xs,
+											backgroundColor: theme.success.main + "20",
+											borderRadius: borderRadius.md,
+										}}
+									>
+										<Text
+											style={{
+												color: theme.success.main,
+												fontSize: 12,
+												fontWeight: "600",
+											}}
+										>
+											{importFlashcards.length} {t("cards") || "cards"}
+										</Text>
+									</View>
+								</>
+							) : (
+								<>
+									<Ionicons
+										name="cloud-upload-outline"
+										size={48}
+										color={theme.text.disabled}
+									/>
+									<ThemedText
+										style={{
+											marginTop: spacing.sm,
+											textAlign: "center",
+											fontWeight: "600",
+										}}
+									>
+										{t("tap_to_select_file") || "Tap to select a file"}
+									</ThemedText>
+									<ThemedText
+										color="secondary"
+										style={{
+											fontSize: 13,
+											marginTop: spacing.xs,
+											textAlign: "center",
+										}}
+									>
+										{t("or_click_to_select") || "CSV or JSON"}
+									</ThemedText>
+								</>
+							)}
 						</Pressable>
 
 						{/* Error Message */}
 						{importError ? (
 							<View
 								style={{
-									backgroundColor: theme.error.main + "20",
+									flexDirection: "row",
+									alignItems: "center",
+									gap: spacing.sm,
+									backgroundColor: theme.error.main + "15",
 									padding: spacing.md,
 									borderRadius: borderRadius.md,
 								}}
 							>
-								<ThemedText style={{ color: theme.error.main }}>
+								<Ionicons
+									name="alert-circle"
+									size={18}
+									color={theme.error.main}
+								/>
+								<ThemedText style={{ color: theme.error.main, flex: 1 }}>
 									{importError}
 								</ThemedText>
 							</View>
@@ -992,31 +1181,58 @@ const HomeScreen = ({ navigation, onLogout }) => {
 						{importFlashcards.length === 0 && (
 							<View
 								style={{
-									backgroundColor: theme.background.paper,
+									backgroundColor: theme.primary.main + "08",
 									padding: spacing.md,
 									borderRadius: borderRadius.md,
 									borderWidth: 1,
-									borderColor: theme.border.main,
+									borderColor: theme.primary.main + "25",
 								}}
 							>
 								<ThemedText
-									variant="subtitle"
-									style={{ marginBottom: spacing.xs }}
+									style={{
+										fontWeight: "600",
+										color: theme.primary.light || theme.primary.main,
+										marginBottom: spacing.xs,
+									}}
 								>
-									{t("file_format_help") || "File Format"}
-								</ThemedText>
-								<ThemedText color="secondary" style={{ fontSize: 12 }}>
-									CSV:{" "}
-									{t("csv_format_desc") ||
-										"First row as header (FRONT, BACK), then data rows"}
+									{t("import_format_title") || "File Format"}
 								</ThemedText>
 								<ThemedText
 									color="secondary"
-									style={{ fontSize: 12, marginTop: 4 }}
+									style={{ fontSize: 13, marginBottom: 2 }}
 								>
-									JSON:{" "}
-									{t("json_format_desc") || '[{"front": "...", "back": "..."}]'}
+									<Text style={{ fontWeight: "700" }}>CSV: </Text>
+									{t("import_csv_format") ||
+										"First row should be headers (front, back). Each following row is a flashcard."}
 								</ThemedText>
+								<ThemedText
+									color="secondary"
+									style={{ fontSize: 13, marginBottom: spacing.sm }}
+								>
+									<Text style={{ fontWeight: "700" }}>JSON: </Text>
+									{t("import_json_format") ||
+										'Array of objects with "front" and "back" properties.'}
+								</ThemedText>
+								{/* Code example block */}
+								<View
+									style={{
+										backgroundColor: theme.background.default,
+										borderRadius: borderRadius.sm,
+										padding: spacing.sm,
+									}}
+								>
+									<Text
+										style={{
+											color: theme.text.secondary,
+											fontSize: 11,
+											fontFamily: "monospace",
+										}}
+									>
+										{
+											'CSV:\nfront,back\nHello,Merhaba\nGoodbye,Güle güle\n\nJSON:\n[{"front":"Hello","back":"Merhaba"}]'
+										}
+									</Text>
+								</View>
 							</View>
 						)}
 
@@ -1026,7 +1242,9 @@ const HomeScreen = ({ navigation, onLogout }) => {
 								label={t("deck_title") || "Deck Title"}
 								value={importTitle}
 								onChangeText={setImportTitle}
-								placeholder={t("enter_deck_title") || "Enter deck title"}
+								placeholder={
+									t("deck_title_placeholder") || "e.g., Spanish Vocabulary"
+								}
 							/>
 						)}
 
@@ -1124,24 +1342,6 @@ const HomeScreen = ({ navigation, onLogout }) => {
 								)}
 							</View>
 						)}
-
-						{/* Import Button */}
-						<Button
-							onPress={handleImportDeck}
-							disabled={
-								!importTitle.trim() ||
-								importFlashcards.length === 0 ||
-								importLoading
-							}
-							loading={importLoading}
-							variant="success"
-						>
-							{importLoading
-								? t("importing") || "Importing..."
-								: importFlashcards.length > 0
-									? `${t("import") || "Import"} (${importFlashcards.length} ${t("cards") || "cards"})`
-									: t("import") || "Import"}
-						</Button>
 					</View>
 				</Modal>
 			</SafeAreaView>
@@ -1149,15 +1349,121 @@ const HomeScreen = ({ navigation, onLogout }) => {
 	);
 };
 
+// ── Inline card form (add / edit) ────────────────────────────────────────────
+const InlineCardForm = ({
+	editingCard,
+	onSubmit,
+	onCancel,
+	saving,
+	t,
+	theme,
+}) => {
+	const [frontText, setFrontText] = useState(
+		editingCard ? editingCard.front_text : "",
+	);
+	const [backText, setBackText] = useState(
+		editingCard ? editingCard.back_text : "",
+	);
+
+	const isEditing = !!editingCard;
+	const hasChanges = isEditing
+		? frontText.trim() !== editingCard.front_text ||
+			backText.trim() !== editingCard.back_text
+		: true;
+	const canSubmit =
+		frontText.trim() && backText.trim() && !saving && hasChanges;
+	const accentColor = isEditing ? "#f59e0b" : "#22c55e";
+
+	return (
+		<View
+			style={{
+				backgroundColor: theme.background.paper,
+				borderRadius: borderRadius.lg,
+				borderWidth: 1,
+				borderColor: isEditing
+					? "rgba(245, 158, 11, 0.4)"
+					: "rgba(34, 197, 94, 0.4)",
+				overflow: "hidden",
+				marginBottom: spacing.sm,
+			}}
+		>
+			<View style={{ flexDirection: "row" }}>
+				<View style={{ width: 4, backgroundColor: accentColor }} />
+				<View style={{ flex: 1, padding: spacing.md, gap: spacing.sm }}>
+					<Input
+						value={frontText}
+						onChangeText={setFrontText}
+						placeholder={t("enter_the_question_or_term") || "Question / Front"}
+						multiline
+						numberOfLines={2}
+					/>
+					<Input
+						value={backText}
+						onChangeText={setBackText}
+						placeholder={t("enter_the_answer_or_definition") || "Answer / Back"}
+						multiline
+						numberOfLines={2}
+					/>
+					<View
+						style={{
+							flexDirection: "row",
+							justifyContent: "flex-end",
+							gap: spacing.sm,
+						}}
+					>
+						<Pressable
+							onPress={onCancel}
+							style={{
+								width: 36,
+								height: 36,
+								borderRadius: 18,
+								backgroundColor: "rgba(239, 68, 68, 0.12)",
+								alignItems: "center",
+								justifyContent: "center",
+							}}
+						>
+							<Ionicons name="close" size={18} color="#ef4444" />
+						</Pressable>
+						<Pressable
+							onPress={() =>
+								canSubmit && onSubmit(frontText.trim(), backText.trim())
+							}
+							style={{
+								width: 36,
+								height: 36,
+								borderRadius: 18,
+								backgroundColor: canSubmit
+									? accentColor + "22"
+									: "rgba(150,150,150,0.1)",
+								alignItems: "center",
+								justifyContent: "center",
+							}}
+						>
+							{saving ? (
+								<ActivityIndicator size="small" color={accentColor} />
+							) : (
+								<Ionicons
+									name="checkmark"
+									size={18}
+									color={canSubmit ? accentColor : theme.text.disabled}
+								/>
+							)}
+						</Pressable>
+					</View>
+				</View>
+			</View>
+		</View>
+	);
+};
+
 // Flashcards Modal Component
 const FlashcardsModal = ({ visible, onClose, deck, theme, t, onUpdate }) => {
 	const [flashcards, setFlashcards] = useState([]);
 	const [loading, setLoading] = useState(false);
-	const [addModalVisible, setAddModalVisible] = useState(false);
-	const [editingCard, setEditingCard] = useState(null);
-	const [frontText, setFrontText] = useState("");
-	const [backText, setBackText] = useState("");
-	const [saving, setSaving] = useState(false);
+	const [isInlineAdding, setIsInlineAdding] = useState(false);
+	const [editingCardId, setEditingCardId] = useState(null);
+	const [addSaving, setAddSaving] = useState(false);
+	const [editSaving, setEditSaving] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
 
 	// Filter flashcards based on search query
@@ -1188,7 +1494,9 @@ const FlashcardsModal = ({ visible, onClose, deck, theme, t, onUpdate }) => {
 	useEffect(() => {
 		if (visible && deck) {
 			fetchFlashcards();
-			setSearchQuery(""); // Reset search when opening
+			setSearchQuery("");
+			setIsInlineAdding(false);
+			setEditingCardId(null);
 		}
 	}, [visible, deck]);
 
@@ -1208,40 +1516,41 @@ const FlashcardsModal = ({ visible, onClose, deck, theme, t, onUpdate }) => {
 	};
 
 	const handleAddCard = () => {
-		setEditingCard(null);
-		setFrontText("");
-		setBackText("");
-		setAddModalVisible(true);
+		setEditingCardId(null);
+		setIsInlineAdding(true);
 	};
 
 	const handleEditCard = (card) => {
-		setEditingCard(card);
-		setFrontText(card.front_text);
-		setBackText(card.back_text);
-		setAddModalVisible(true);
+		setIsInlineAdding(false);
+		setEditingCardId(card.id);
 	};
 
-	const handleSaveCard = async () => {
-		if (!frontText.trim() || !backText.trim()) return;
-
-		setSaving(true);
+	const handleSubmitAdd = async (front, back) => {
+		setAddSaving(true);
 		try {
-			if (editingCard) {
-				await flashcardsAPI.update(
-					editingCard.id,
-					frontText.trim(),
-					backText.trim(),
-				);
-			} else {
-				await flashcardsAPI.create(deck.id, frontText.trim(), backText.trim());
-			}
-			setAddModalVisible(false);
+			await flashcardsAPI.create(deck.id, front, back);
+			setIsInlineAdding(false);
 			fetchFlashcards();
 			if (onUpdate) onUpdate();
 		} catch (error) {
-			console.error("Error saving card:", error);
+			console.error("Error adding card:", error);
 		} finally {
-			setSaving(false);
+			setAddSaving(false);
+		}
+	};
+
+	const handleSubmitEdit = async (front, back) => {
+		if (!editingCardId) return;
+		setEditSaving(true);
+		try {
+			await flashcardsAPI.update(editingCardId, front, back);
+			setEditingCardId(null);
+			fetchFlashcards();
+			if (onUpdate) onUpdate();
+		} catch (error) {
+			console.error("Error updating card:", error);
+		} finally {
+			setEditSaving(false);
 		}
 	};
 
@@ -1261,25 +1570,29 @@ const FlashcardsModal = ({ visible, onClose, deck, theme, t, onUpdate }) => {
 			onClose={onClose}
 			title={displayTitle}
 			size="large"
+			footer={
+				<View style={styles.modalFooter}>
+					<Button
+						variant="ghost"
+						onPress={onClose}
+						textStyle={{ color: theme.text.secondary }}
+					>
+						{t("close") || "Close"}
+					</Button>
+					<Button
+						variant="success"
+						onPress={handleAddCard}
+						disabled={isInlineAdding}
+					>
+						{t("add_flashcard") || "Add Flashcard"}
+					</Button>
+				</View>
+			}
 		>
 			{loading ? (
 				<LoadingState message={t("loading_cards")} />
 			) : (
 				<View>
-					{/* Add Button */}
-					<Pressable
-						onPress={handleAddCard}
-						style={[
-							styles.addFlashcardButton,
-							{ backgroundColor: theme.success.main },
-						]}
-					>
-						<Ionicons name="add" size={20} color="#ffffff" />
-						<Text style={styles.addFlashcardButtonText}>
-							{t("add_flashcard")}
-						</Text>
-					</Pressable>
-
 					{/* Search Bar (only if flashcards exist) */}
 					{flashcards.length > 0 && (
 						<View
@@ -1338,124 +1651,163 @@ const FlashcardsModal = ({ visible, onClose, deck, theme, t, onUpdate }) => {
 								{searchQuery
 									? `${filteredFlashcards.length} / ${flashcards.length}`
 									: flashcards.length}{" "}
-								{flashcards.length === 1
-									? t("card") || "card"
-									: t("cards") || "cards"}
+								{(flashcards.length > 0 && t("cards")) || "cards"}
 							</Text>
 						</View>
 					)}
 
-					{flashcards.length === 0 ? (
-						<EmptyState
-							icon={
-								<Ionicons
-									name="layers-outline"
-									size={48}
-									color={theme.primary.main}
-								/>
-							}
-							title={t("no_flashcards")}
-							description={t("no_flashcards_desc")}
+					{/* Inline add form */}
+					{isInlineAdding && (
+						<InlineCardForm
+							editingCard={null}
+							onSubmit={handleSubmitAdd}
+							onCancel={() => setIsInlineAdding(false)}
+							saving={addSaving}
+							t={t}
+							theme={theme}
 						/>
-					) : filteredFlashcards.length === 0 ? (
-						<EmptyState
-							icon={
-								<Ionicons
-									name="search-outline"
-									size={48}
-									color={theme.text.secondary}
-								/>
-							}
-							title={t("no_results") || "No results found"}
-							description={
-								t("no_search_results_flashcards") ||
-								"No flashcards match your search"
-							}
-							actionLabel={t("clear_search") || "Clear Search"}
-							onAction={() => setSearchQuery("")}
-						/>
-					) : (
-						filteredFlashcards.map((card) => (
-							<View
-								key={card.id}
-								style={[
-									styles.flashcardItem,
-									{ borderColor: theme.border.main },
-								]}
+					)}
+
+					{/* Empty states */}
+					{flashcards.length === 0 && !isInlineAdding ? (
+						<View
+							style={{
+								alignItems: "center",
+								paddingVertical: spacing.xxl,
+							}}
+						>
+							<MaterialCommunityIcons
+								name="cards-outline"
+								size={48}
+								color={theme.primary.main}
+							/>
+							<ThemedText
+								variant="h3"
+								style={{ marginTop: spacing.md, textAlign: "center" }}
 							>
-								{/* Color indicator */}
-								<View style={styles.flashcardColorIndicator} />
-								<View style={styles.flashcardContent}>
-									<ThemedText style={styles.flashcardFront} numberOfLines={1}>
-										{truncateText(card.front_text, 35)}
-									</ThemedText>
-									<ThemedText
-										color="secondary"
-										style={styles.flashcardBack}
-										numberOfLines={1}
-									>
-										{truncateText(card.back_text, 45)}
-									</ThemedText>
+								{t("no_flashcards")}
+							</ThemedText>
+							<ThemedText
+								color="secondary"
+								style={{
+									marginTop: spacing.sm,
+									textAlign: "center",
+									fontSize: 14,
+								}}
+							>
+								{t("no_flashcards_desc")}
+							</ThemedText>
+						</View>
+					) : filteredFlashcards.length === 0 && flashcards.length > 0 ? (
+						<View
+							style={{
+								alignItems: "center",
+								paddingVertical: spacing.xl,
+							}}
+						>
+							<Ionicons
+								name="search-outline"
+								size={36}
+								color={theme.text.secondary}
+							/>
+							<ThemedText
+								color="secondary"
+								style={{ marginTop: spacing.sm, textAlign: "center" }}
+							>
+								{t("no_results") || "No results found"}
+							</ThemedText>
+						</View>
+					) : (
+						/* Flashcard list */
+						filteredFlashcards.map((card) =>
+							editingCardId === card.id ? (
+								/* Inline edit form replaces the card */
+								<InlineCardForm
+									key={`edit-${card.id}`}
+									editingCard={card}
+									onSubmit={handleSubmitEdit}
+									onCancel={() => setEditingCardId(null)}
+									saving={editSaving}
+									t={t}
+									theme={theme}
+								/>
+							) : (
+								/* Regular card item */
+								<View
+									key={card.id}
+									style={{
+										backgroundColor: theme.background.paper,
+										borderRadius: borderRadius.lg,
+										borderWidth: 1,
+										borderColor: theme.border.main,
+										overflow: "hidden",
+										marginBottom: spacing.sm,
+									}}
+								>
+									<View style={{ flexDirection: "row" }}>
+										{/* Blue-to-purple left indicator */}
+										<View
+											style={{
+												width: 4,
+												backgroundColor: "#3b82f6",
+											}}
+										/>
+										<View
+											style={{
+												flex: 1,
+												padding: spacing.md,
+												flexDirection: "row",
+												alignItems: "center",
+												gap: spacing.sm,
+											}}
+										>
+											<View style={{ flex: 1 }}>
+												<ThemedText
+													style={styles.flashcardFront}
+													numberOfLines={1}
+												>
+													{card.front_text}
+												</ThemedText>
+												<ThemedText
+													color="secondary"
+													style={styles.flashcardBack}
+													numberOfLines={1}
+												>
+													{card.back_text}
+												</ThemedText>
+											</View>
+											<View style={{ flexDirection: "row", gap: spacing.xs }}>
+												<Pressable
+													onPress={() => handleEditCard(card)}
+													style={[
+														styles.flashcardActionBtn,
+														{ backgroundColor: "rgba(251, 191, 36, 0.1)" },
+													]}
+												>
+													<MaterialCommunityIcons
+														name="pencil"
+														size={16}
+														color="#fbbf24"
+													/>
+												</Pressable>
+												<Pressable
+													onPress={() => handleDeleteCard(card.id)}
+													style={[
+														styles.flashcardActionBtn,
+														{ backgroundColor: "rgba(239, 68, 68, 0.1)" },
+													]}
+												>
+													<Ionicons name="trash" size={16} color="#ef4444" />
+												</Pressable>
+											</View>
+										</View>
+									</View>
 								</View>
-								<View style={styles.flashcardActions}>
-									<Pressable
-										onPress={() => handleEditCard(card)}
-										style={[
-											styles.flashcardActionBtn,
-											{ backgroundColor: "rgba(251, 191, 36, 0.1)" },
-										]}
-									>
-										<Ionicons name="create-outline" size={18} color="#fbbf24" />
-									</Pressable>
-									<Pressable
-										onPress={() => handleDeleteCard(card.id)}
-										style={[
-											styles.flashcardActionBtn,
-											{ backgroundColor: "rgba(239, 68, 68, 0.1)" },
-										]}
-									>
-										<Ionicons name="trash-outline" size={18} color="#ef4444" />
-									</Pressable>
-								</View>
-							</View>
-						))
+							),
+						)
 					)}
 				</View>
 			)}
-
-			{/* Add/Edit Flashcard Modal */}
-			<Modal
-				visible={addModalVisible}
-				onClose={() => setAddModalVisible(false)}
-				title={editingCard ? t("update_flashcard") : t("add_flashcard")}
-				footer={
-					<View style={styles.modalFooter}>
-						<Button variant="ghost" onPress={() => setAddModalVisible(false)}>
-							{t("cancel")}
-						</Button>
-						<Button onPress={handleSaveCard} loading={saving}>
-							{t("save")}
-						</Button>
-					</View>
-				}
-			>
-				<Input
-					label={t("front_side")}
-					value={frontText}
-					onChangeText={setFrontText}
-					placeholder={t("enter_the_question_or_term")}
-					multiline
-					numberOfLines={3}
-				/>
-				<Input
-					label={t("back_side")}
-					value={backText}
-					onChangeText={setBackText}
-					placeholder={t("enter_the_answer_or_definition")}
-					multiline
-					numberOfLines={3}
-				/>
-			</Modal>
 		</Modal>
 	);
 };
@@ -1537,6 +1889,13 @@ const styles = StyleSheet.create({
 	},
 	deckCard: {
 		marginBottom: spacing.md,
+		overflow: "hidden",
+	},
+	deckAccentBar: {
+		height: 4,
+		width: "140%",
+		marginTop: -spacing.md,
+		marginLeft: -spacing.md,
 	},
 	deckHeader: {
 		marginBottom: spacing.sm,
@@ -1563,7 +1922,8 @@ const styles = StyleSheet.create({
 		fontWeight: "600",
 	},
 	deckContent: {
-		padding: spacing.md,
+		padding: spacing.sm,
+		paddingTop: 20,
 	},
 	deckTitleRow: {
 		flexDirection: "row",
@@ -1623,7 +1983,7 @@ const styles = StyleSheet.create({
 	iconOnlyButton: {
 		width: 40,
 		height: 40,
-		borderRadius: borderRadius.lg,
+		borderRadius: borderRadius.md,
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -1705,6 +2065,42 @@ const styles = StyleSheet.create({
 	cardCountTextModal: {
 		fontSize: 12,
 		fontWeight: "600",
+	},
+	emptyContainer: {
+		alignItems: "center",
+		justifyContent: "center",
+		paddingVertical: spacing.xxl,
+		paddingHorizontal: spacing.xl,
+	},
+	emptyIconWrap: {
+		width: 96,
+		height: 96,
+		borderRadius: 48,
+		alignItems: "center",
+		justifyContent: "center",
+		marginBottom: spacing.lg,
+	},
+	emptyTitle: {
+		textAlign: "center",
+		marginBottom: spacing.sm,
+	},
+	emptyDescription: {
+		textAlign: "center",
+		fontSize: 14,
+		lineHeight: 20,
+		marginBottom: spacing.xl,
+	},
+	emptyAction: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: spacing.xs,
+		paddingHorizontal: spacing.lg,
+		paddingVertical: spacing.sm + 2,
+		borderRadius: borderRadius.lg,
+	},
+	emptyActionText: {
+		fontWeight: "600",
+		fontSize: 15,
 	},
 });
 

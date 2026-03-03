@@ -12,8 +12,8 @@ import {
 	PanResponder,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../context/ThemeContext";
 import { useI18n } from "../context/I18nContext";
 import { useAchievement } from "../context/AchievementContext";
@@ -44,13 +44,13 @@ const MODE_COLORS = {
 const GAME_MODES = [
 	{
 		id: "standard",
-		icon: "settings-outline",
+		icon: "cog-outline",
 		labelKey: "mode_standard",
 		descKey: "mode_standard_desc",
 	},
 	{
 		id: "write",
-		icon: "create-outline",
+		icon: "pencil-outline",
 		labelKey: "mode_write",
 		descKey: "mode_write_desc",
 	},
@@ -62,7 +62,7 @@ const GAME_MODES = [
 	},
 	{
 		id: "match",
-		icon: "grid-outline",
+		icon: "view-grid-outline",
 		labelKey: "mode_match",
 		descKey: "mode_match_desc",
 	},
@@ -72,7 +72,7 @@ const GAME_MODES = [
 const CHALLENGE_TYPES = [
 	{
 		id: "none",
-		icon: "infinite-outline",
+		icon: "infinity",
 		labelKey: "challenge_none",
 		descKey: "challenge_none_desc",
 		color: "#64748b",
@@ -117,6 +117,7 @@ const GameScreen = ({ route, navigation }) => {
 	const [accountId, setAccountId] = useState(null);
 	const [showRestartDialog, setShowRestartDialog] = useState(false);
 	const [showExitDialog, setShowExitDialog] = useState(false);
+	const [planLimitInfo, setPlanLimitInfo] = useState(null); // set when backend returns 403 limit exceeded
 
 	// Settings state
 	const [cardDirection, setCardDirection] = useState("normal"); // 'normal' | 'reverse'
@@ -164,9 +165,24 @@ const GameScreen = ({ route, navigation }) => {
 	const prevWrongRef = useRef(0);
 	const prevLivesRef = useRef(-1);
 
+	// Mode select entrance animations
+	const modeHeaderAnim = useRef(new Animated.Value(0)).current;
+	const modeCardsAnim = useRef(
+		[0, 1, 2, 3].map(() => new Animated.Value(0)),
+	).current;
+	const challengeSectionAnim = useRef(new Animated.Value(0)).current;
+	const settingsSectionAnim = useRef(new Animated.Value(0)).current;
+	const startButtonAnim = useRef(new Animated.Value(0)).current;
+	const modeDescScaleAnim = useRef(new Animated.Value(1)).current;
+
 	// Swipe animation for standard mode
 	const swipeAnim = useRef(new Animated.ValueXY()).current;
 	const swipeOpacity = useRef(new Animated.Value(1)).current;
+
+	// Card-out animation timing (ms) — adjust to slow down new card arrival
+	const CARD_OUT_DURATION = 340;
+	const CARD_OUT_HANDLE_DELAY = 120;
+
 	const handleAnswerRef = useRef(null);
 	const advancingRef = useRef(false);
 	const endedRef = useRef(false);
@@ -241,6 +257,65 @@ const GameScreen = ({ route, navigation }) => {
 		}
 	}, [gameState, loading]);
 
+	// Animate mode select screen entrance
+	useEffect(() => {
+		if (gameState === "mode_select" && !settingsLoading) {
+			modeHeaderAnim.setValue(0);
+			modeCardsAnim.forEach((a) => a.setValue(0));
+			challengeSectionAnim.setValue(0);
+			settingsSectionAnim.setValue(0);
+			startButtonAnim.setValue(0);
+
+			Animated.parallel([
+				Animated.timing(modeHeaderAnim, {
+					toValue: 1,
+					duration: 180,
+					useNativeDriver: true,
+				}),
+				Animated.stagger(
+					30,
+					modeCardsAnim.map((a) =>
+						Animated.spring(a, {
+							toValue: 1,
+							useNativeDriver: true,
+							speed: 30,
+							bounciness: 6,
+						}),
+					),
+				),
+				Animated.timing(challengeSectionAnim, {
+					toValue: 1,
+					duration: 180,
+					useNativeDriver: true,
+				}),
+				Animated.timing(settingsSectionAnim, {
+					toValue: 1,
+					duration: 180,
+					useNativeDriver: true,
+				}),
+				Animated.spring(startButtonAnim, {
+					toValue: 1,
+					useNativeDriver: true,
+					speed: 30,
+					bounciness: 6,
+				}),
+			]).start();
+		}
+	}, [gameState, settingsLoading]);
+
+	// Animate mode description on mode change
+	useEffect(() => {
+		if (gameState === "mode_select") {
+			modeDescScaleAnim.setValue(0.93);
+			Animated.spring(modeDescScaleAnim, {
+				toValue: 1,
+				useNativeDriver: true,
+				speed: 40,
+				bounciness: 6,
+			}).start();
+		}
+	}, [selectedMode]);
+
 	const panResponder = useRef(
 		PanResponder.create({
 			onStartShouldSetPanResponder: () => false,
@@ -257,13 +332,13 @@ const GameScreen = ({ route, navigation }) => {
 					// Swiped right - correct
 					Animated.parallel([
 						Animated.timing(swipeAnim, {
-							toValue: { x: SCREEN_WIDTH * 1.2, y: -30 },
-							duration: 250,
+							toValue: { x: SCREEN_WIDTH * 1.2, y: 0 },
+							duration: CARD_OUT_DURATION,
 							useNativeDriver: true,
 						}),
 						Animated.timing(swipeOpacity, {
 							toValue: 0,
-							duration: 250,
+							duration: CARD_OUT_DURATION,
 							useNativeDriver: true,
 						}),
 					]).start(() => {
@@ -271,19 +346,19 @@ const GameScreen = ({ route, navigation }) => {
 						swipeOpacity.setValue(1);
 						setTimeout(() => {
 							if (handleAnswerRef.current) handleAnswerRef.current(true);
-						}, 10);
+						}, CARD_OUT_HANDLE_DELAY);
 					});
 				} else if (gestureState.dx < -SWIPE_THRESHOLD) {
 					// Swiped left - incorrect
 					Animated.parallel([
 						Animated.timing(swipeAnim, {
-							toValue: { x: -SCREEN_WIDTH * 1.2, y: -30 },
-							duration: 250,
+							toValue: { x: -SCREEN_WIDTH * 1.2, y: 0 },
+							duration: CARD_OUT_DURATION,
 							useNativeDriver: true,
 						}),
 						Animated.timing(swipeOpacity, {
 							toValue: 0,
-							duration: 250,
+							duration: CARD_OUT_DURATION,
 							useNativeDriver: true,
 						}),
 					]).start(() => {
@@ -291,7 +366,7 @@ const GameScreen = ({ route, navigation }) => {
 						swipeOpacity.setValue(1);
 						setTimeout(() => {
 							if (handleAnswerRef.current) handleAnswerRef.current(false);
-						}, 10);
+						}, CARD_OUT_HANDLE_DELAY);
 					});
 				} else {
 					// Reset position with bounce
@@ -309,6 +384,41 @@ const GameScreen = ({ route, navigation }) => {
 	const resetSwipeAnimation = () => {
 		swipeAnim.setValue({ x: 0, y: 0 });
 		swipeOpacity.setValue(1);
+	};
+
+	// Slide card off screen then process answer — used by both buttons and swipe
+	const animateCardOut = (isCorrect) => {
+		if (advancingRef.current || endedRef.current || finishingRef.current)
+			return;
+
+		// Lock immediately so double-taps are ignored during the animation
+		advancingRef.current = true;
+		// Reset debounce so handleAnswer won't block due to the 220ms animation delay
+		lastAnswerTimeRef.current = 0;
+
+		const targetX = isCorrect ? SCREEN_WIDTH * 1.2 : -SCREEN_WIDTH * 1.2;
+
+		Animated.parallel([
+			Animated.timing(swipeAnim, {
+				toValue: { x: targetX, y: 0 },
+				duration: CARD_OUT_DURATION,
+				useNativeDriver: true,
+			}),
+			Animated.timing(swipeOpacity, {
+				toValue: 0,
+				duration: CARD_OUT_DURATION,
+				useNativeDriver: true,
+			}),
+		]).start(() => {
+			swipeAnim.setValue({ x: 0, y: 0 });
+			swipeOpacity.setValue(1);
+			// Small delay so the native driver fully syncs the reset values
+			// before handleAnswer triggers React state updates / re-renders
+			setTimeout(() => {
+				advancingRef.current = false;
+				if (handleAnswerRef.current) handleAnswerRef.current(isCorrect);
+			}, CARD_OUT_HANDLE_DELAY);
+		});
 	};
 
 	// Hooks
@@ -441,6 +551,9 @@ const GameScreen = ({ route, navigation }) => {
 			}
 		} catch (error) {
 			console.error("Error fetching cards:", error);
+			if (error.response?.status === 403 && error.response?.data?.limitInfo) {
+				setPlanLimitInfo(error.response.data.limitInfo);
+			}
 		} finally {
 			setLoading(false);
 		}
@@ -488,8 +601,38 @@ const GameScreen = ({ route, navigation }) => {
 			console.error("Error saving settings:", error);
 		}
 
+		// stop any running pulses and reset badges to normal size
+		if (correctScaleAnim && correctScaleAnim.stopAnimation) {
+			// stop any running animation then ensure value is 1 on next tick to avoid races
+			correctScaleAnim.stopAnimation(() => {});
+		}
+		if (wrongScaleAnim && wrongScaleAnim.stopAnimation) {
+			wrongScaleAnim.stopAnimation(() => {});
+		}
+		// set on next tick to ensure no pending animations write back a larger value
+		setTimeout(() => {
+			correctScaleAnim.setValue(1);
+			wrongScaleAnim.setValue(1);
+		}, 0);
+		prevCorrectRef.current = 0;
+		prevWrongRef.current = 0;
+
 		setGameMode(mode);
 		setChallengeType(challenge);
+		// stop any running pulses and reset badges to normal size (also for restart)
+		if (correctScaleAnim && correctScaleAnim.stopAnimation) {
+			correctScaleAnim.stopAnimation(() => {});
+		}
+		if (wrongScaleAnim && wrongScaleAnim.stopAnimation) {
+			wrongScaleAnim.stopAnimation(() => {});
+		}
+		setTimeout(() => {
+			correctScaleAnim.setValue(1);
+			wrongScaleAnim.setValue(1);
+		}, 0);
+		prevCorrectRef.current = 0;
+		prevWrongRef.current = 0;
+
 		setGameState("playing");
 		setCurrentIndex(0);
 		setCorrectCount(0);
@@ -510,6 +653,7 @@ const GameScreen = ({ route, navigation }) => {
 		finishingRef.current = false;
 		sessionRecordedRef.current = false;
 		setAnswering(false);
+		setPlanLimitInfo(null);
 
 		fetchCards(mode, hardModeEnabled);
 
@@ -526,6 +670,17 @@ const GameScreen = ({ route, navigation }) => {
 		// Prevent restarting while endGame flow is still finishing
 		if (finishingRef.current) return;
 		const mode = gameMode;
+
+		// reset badge animations so they don't appear enlarged on restart
+		if (correctScaleAnim && correctScaleAnim.stopAnimation)
+			correctScaleAnim.stopAnimation();
+		if (wrongScaleAnim && wrongScaleAnim.stopAnimation)
+			wrongScaleAnim.stopAnimation();
+		correctScaleAnim.setValue(1);
+		wrongScaleAnim.setValue(1);
+		prevCorrectRef.current = 0;
+		prevWrongRef.current = 0;
+
 		setGameState("playing");
 		setCurrentIndex(0);
 		setCorrectCount(0);
@@ -546,6 +701,7 @@ const GameScreen = ({ route, navigation }) => {
 		finishingRef.current = false;
 		sessionRecordedRef.current = false;
 		setAnswering(false);
+		setPlanLimitInfo(null);
 
 		fetchCards(mode, hardModeEnabled);
 
@@ -650,6 +806,8 @@ const GameScreen = ({ route, navigation }) => {
 		setAnswerResult(null);
 		setSelectedOption(null);
 		setShowHint(false);
+		// Safety: ensure swipe values are at neutral for the incoming card
+		resetSwipeAnimation();
 
 		if (gameMode === "multiple_choice" && cards[currentIndex + 1]) {
 			setMcOptions(cards[currentIndex + 1].options || []);
@@ -881,7 +1039,9 @@ const GameScreen = ({ route, navigation }) => {
 		// Free plan users see ads; premium and pro users skip ads entirely.
 		try {
 			if (showVideoAd) {
-				await showVideoAd();
+				await showVideoAd(() =>
+					navigation.navigate("Settings", { screen: "Plans" }),
+				);
 			} else {
 				await showInterstitial();
 			}
@@ -1021,84 +1181,138 @@ const GameScreen = ({ route, navigation }) => {
 
 		return (
 			<ScrollView contentContainerStyle={styles.modeSelectContainer}>
-				<ThemedText variant="h2" style={styles.modeTitle}>
-					{t("select_game_mode")}
-				</ThemedText>
-				<ThemedText color="secondary" style={styles.deckName}>
-					{deck.title}
-				</ThemedText>
+				<Animated.View
+					style={{
+						opacity: modeHeaderAnim,
+						transform: [
+							{
+								translateY: modeHeaderAnim.interpolate({
+									inputRange: [0, 1],
+									outputRange: [-20, 0],
+								}),
+							},
+						],
+					}}
+				>
+					<ThemedText variant="h2" style={styles.modeTitle}>
+						{t("select_game_mode")}
+					</ThemedText>
+					<ThemedText color="secondary" style={styles.deckName}>
+						{deck.title}
+					</ThemedText>
+				</Animated.View>
 
 				{/* Game Modes Grid */}
 				<View style={styles.modesGrid}>
-					{GAME_MODES.map((mode) => {
+					{GAME_MODES.map((mode, index) => {
 						const color = MODE_COLORS[mode.id];
 						const isSelected = selectedMode === mode.id;
 
 						return (
-							<Pressable
+							<Animated.View
 								key={mode.id}
-								onPress={() => setSelectedMode(mode.id)}
-								style={({ pressed }) => [
-									styles.modeCard,
+								style={[
+									styles.modeCardWrapper,
 									{
-										backgroundColor: isSelected
-											? `${color}15`
-											: theme.background.card,
-										borderColor: isSelected ? color : theme.border.main,
-										borderWidth: isSelected ? 2 : 1,
-										opacity: pressed ? 0.8 : 1,
+										opacity: modeCardsAnim[index],
+										transform: [
+											{
+												translateY: modeCardsAnim[index].interpolate({
+													inputRange: [0, 1],
+													outputRange: [28, 0],
+												}),
+											},
+											{
+												scale: modeCardsAnim[index].interpolate({
+													inputRange: [0, 1],
+													outputRange: [0.88, 1],
+												}),
+											},
+										],
 									},
 								]}
 							>
-								<View
-									style={[
-										styles.modeIconContainer,
+								<Pressable
+									onPress={() => setSelectedMode(mode.id)}
+									style={({ pressed }) => [
+										styles.modeCard,
 										{
-											backgroundColor: isSelected ? color : `${color}20`,
-											shadowColor: isSelected ? color : "transparent",
-											shadowOffset: { width: 0, height: 4 },
-											shadowOpacity: isSelected ? 0.4 : 0,
-											shadowRadius: 8,
-											elevation: isSelected ? 4 : 0,
+											backgroundColor: isSelected
+												? `${color}15`
+												: theme.background.card,
+											borderColor: isSelected ? color : theme.border.main,
+											borderWidth: isSelected ? 2 : 1,
+											opacity: pressed ? 0.8 : 1,
+											width: "100%",
 										},
 									]}
 								>
-									<Ionicons
-										name={mode.icon}
-										size={22}
-										color={isSelected ? "#fff" : color}
-									/>
-								</View>
-								<ThemedText
-									style={[
-										styles.modeLabel,
-										{ color: isSelected ? color : theme.text.primary },
-									]}
-								>
-									{t(mode.labelKey)}
-								</ThemedText>
-							</Pressable>
+									<View
+										style={[
+											styles.modeIconContainer,
+											{
+												backgroundColor: isSelected ? color : `${color}20`,
+												shadowColor: isSelected ? color : "transparent",
+												shadowOffset: { width: 0, height: 4 },
+												shadowOpacity: isSelected ? 0.4 : 0,
+												shadowRadius: 8,
+												elevation: isSelected ? 4 : 0,
+											},
+										]}
+									>
+										<MaterialCommunityIcons
+											name={mode.icon}
+											size={22}
+											color={isSelected ? "#fff" : color}
+										/>
+									</View>
+									<ThemedText
+										style={[
+											styles.modeLabel,
+											{ color: isSelected ? color : theme.text.primary },
+										]}
+									>
+										{t(mode.labelKey)}
+									</ThemedText>
+								</Pressable>
+							</Animated.View>
 						);
 					})}
 				</View>
 
 				{/* Mode Description */}
-				<View
+				<Animated.View
 					style={[
 						styles.modeDescription,
 						{
 							backgroundColor: `${modeColor}12`,
 							borderColor: `${modeColor}30`,
+							transform: [{ scale: modeDescScaleAnim }],
 						},
 					]}
 				>
 					<ThemedText style={[styles.modeDescText, { color: modeColor }]}>
 						{t(currentMode?.descKey || "mode_standard_desc")}
 					</ThemedText>
-				</View>
+				</Animated.View>
 
 				{/* Challenge Type Selection */}
-				<View style={styles.challengeSection}>
+				<Animated.View
+					style={[
+						styles.challengeSection,
+						{
+							opacity: challengeSectionAnim,
+							transform: [
+								{
+									translateY: challengeSectionAnim.interpolate({
+										inputRange: [0, 1],
+										outputRange: [20, 0],
+									}),
+								},
+							],
+						},
+					]}
+				>
 					<ThemedText variant="h3" style={styles.challengeTitle}>
 						{t("challenge_type") || "Challenge Type"}
 					</ThemedText>
@@ -1139,7 +1353,7 @@ const GameScreen = ({ route, navigation }) => {
 											},
 										]}
 									>
-										<Ionicons
+										<MaterialCommunityIcons
 											name={challenge.icon}
 											size={24}
 											color={isSelected ? "#fff" : challenge.color}
@@ -1167,7 +1381,7 @@ const GameScreen = ({ route, navigation }) => {
 								"Match mode doesn't support survival challenge"}
 						</ThemedText>
 					)}
-				</View>
+				</Animated.View>
 
 				{/* Timed Challenge - Time Selection */}
 				{selectedChallengeType === "timed" && (
@@ -1187,7 +1401,11 @@ const GameScreen = ({ route, navigation }) => {
 									{ backgroundColor: "#f59e0b20" },
 								]}
 							>
-								<Ionicons name="timer-outline" size={18} color="#f59e0b" />
+								<MaterialCommunityIcons
+									name="timer-outline"
+									size={18}
+									color="#f59e0b"
+								/>
 							</View>
 							<ThemedText
 								style={[styles.modeSpecificTitle, { color: "#f59e0b" }]}
@@ -1247,7 +1465,11 @@ const GameScreen = ({ route, navigation }) => {
 									{ backgroundColor: "#ef444420" },
 								]}
 							>
-								<Ionicons name="heart" size={18} color="#ef4444" />
+								<MaterialCommunityIcons
+									name="heart"
+									size={18}
+									color="#ef4444"
+								/>
 							</View>
 							<ThemedText
 								style={[styles.modeSpecificTitle, { color: "#ef4444" }]}
@@ -1270,7 +1492,7 @@ const GameScreen = ({ route, navigation }) => {
 											},
 										]}
 									>
-										<Ionicons
+										<MaterialCommunityIcons
 											name={isSelected ? "heart" : "heart-outline"}
 											size={20}
 											color={isSelected ? "#fff" : "#ef4444"}
@@ -1291,7 +1513,22 @@ const GameScreen = ({ route, navigation }) => {
 				)}
 
 				{/* Settings Section */}
-				<View style={styles.settingsSection}>
+				<Animated.View
+					style={[
+						styles.settingsSection,
+						{
+							opacity: settingsSectionAnim,
+							transform: [
+								{
+									translateY: settingsSectionAnim.interpolate({
+										inputRange: [0, 1],
+										outputRange: [20, 0],
+									}),
+								},
+							],
+						},
+					]}
+				>
 					{/* Card Direction */}
 					<View
 						style={[
@@ -1309,8 +1546,8 @@ const GameScreen = ({ route, navigation }) => {
 									{ backgroundColor: "#06b6d420" },
 								]}
 							>
-								<Ionicons
-									name="swap-horizontal-outline"
+								<MaterialCommunityIcons
+									name="swap-horizontal"
 									size={20}
 									color="#06b6d4"
 								/>
@@ -1405,7 +1642,7 @@ const GameScreen = ({ route, navigation }) => {
 									{ backgroundColor: "#f9731620" },
 								]}
 							>
-								<Ionicons name="flame-outline" size={20} color="#f97316" />
+								<MaterialCommunityIcons name="fire" size={20} color="#f97316" />
 							</View>
 							<View style={styles.settingTextContainer}>
 								<ThemedText style={styles.settingTitle}>
@@ -1423,30 +1660,51 @@ const GameScreen = ({ route, navigation }) => {
 							thumbColor={hardModeEnabled ? "#f97316" : "#f4f3f4"}
 						/>
 					</View>
-				</View>
+				</Animated.View>
 
 				{/* Start Game Button */}
-				<View style={styles.startButtonContainer}>
+				<Animated.View
+					style={[
+						styles.startButtonContainer,
+						{
+							opacity: startButtonAnim,
+							transform: [
+								{
+									scale: startButtonAnim.interpolate({
+										inputRange: [0, 1],
+										outputRange: [0.8, 1],
+									}),
+								},
+							],
+						},
+					]}
+				>
 					<Pressable
 						onPress={startGame}
 						style={({ pressed }) => [
 							styles.startButton,
 							{
 								backgroundColor: modeColor,
-								opacity: pressed ? 0.9 : 1,
+								opacity: pressed ? 0.85 : 1,
+								transform: [{ scale: pressed ? 0.97 : 1 }],
 							},
 						]}
 					>
-						<Ionicons name="play" size={20} color="#fff" />
+						<MaterialCommunityIcons name="play" size={20} color="#fff" />
 						<Text style={styles.startButtonText}>{t("start_game")}</Text>
 					</Pressable>
-				</View>
+				</Animated.View>
 			</ScrollView>
 		);
 	};
 
 	// Render Playing State
 	const renderPlaying = () => {
+		// Show plan limit warning if backend rejected play with 403
+		if (planLimitInfo) {
+			return renderPlanLimitWarning();
+		}
+
 		if (loading) {
 			return <LoadingState fullScreen message={t("loading_cards")} />;
 		}
@@ -1485,8 +1743,8 @@ const GameScreen = ({ route, navigation }) => {
 					]}
 				>
 					<Pressable onPress={() => setShowExitDialog(true)}>
-						<Ionicons
-							name="arrow-back"
+						<MaterialCommunityIcons
+							name="arrow-left"
 							size={24}
 							color={theme.text.secondary}
 						/>
@@ -1494,11 +1752,13 @@ const GameScreen = ({ route, navigation }) => {
 
 					<View style={styles.progressInfo}>
 						{/* Show card counter for non-timed and non-survival challenges */}
-						{challengeType !== "timed" && challengeType !== "survival" && (
-							<ThemedText style={styles.progressText}>
-								{currentIndex + 1} / {cards.length}
-							</ThemedText>
-						)}
+						{challengeType !== "timed" &&
+							challengeType !== "survival" &&
+							gameMode !== "match" && (
+								<ThemedText style={styles.progressText}>
+									{currentIndex + 1} / {cards.length}
+								</ThemedText>
+							)}
 						{challengeType === "timed" && (
 							<Animated.Text
 								style={[
@@ -1523,7 +1783,7 @@ const GameScreen = ({ route, navigation }) => {
 								]}
 							>
 								{Array.from({ length: lives.lives }, (_, i) => (
-									<Ionicons
+									<MaterialCommunityIcons
 										key={i}
 										name="heart"
 										size={22}
@@ -1534,7 +1794,7 @@ const GameScreen = ({ route, navigation }) => {
 								{Array.from(
 									{ length: lives.maxLives - lives.lives },
 									(_, i) => (
-										<Ionicons
+										<MaterialCommunityIcons
 											key={`empty-${i}`}
 											name="heart-outline"
 											size={22}
@@ -1551,63 +1811,82 @@ const GameScreen = ({ route, navigation }) => {
 						onPress={() => setShowRestartDialog(true)}
 						style={styles.restartButton}
 					>
-						<Ionicons name="refresh" size={22} color={theme.primary.main} />
+						<MaterialCommunityIcons
+							name="refresh"
+							size={22}
+							color={theme.primary.main}
+						/>
 					</Pressable>
 				</Animated.View>
 
 				{/* Progress Bar - Only for non-timed and non-survival challenges */}
-				{challengeType !== "timed" && challengeType !== "survival" && (
-					<View
-						style={[styles.progressBar, { backgroundColor: theme.border.main }]}
+				{challengeType !== "timed" &&
+					challengeType !== "survival" &&
+					gameMode !== "match" && (
+						<View
+							style={[
+								styles.progressBar,
+								{ backgroundColor: theme.border.main },
+							]}
+						>
+							<Animated.View
+								style={[
+									styles.progressFill,
+									{
+										backgroundColor: theme.primary.main,
+										width: progressAnim.interpolate({
+											inputRange: [0, 1],
+											outputRange: ["0%", "100%"],
+										}),
+									},
+								]}
+							/>
+						</View>
+					)}
+
+				{/* Score Info - Under Progress Bar */}
+				{gameMode !== "match" && (
+					<Animated.View
+						style={[styles.scoreInfoRow, { opacity: headerFadeAnim }]}
 					>
 						<Animated.View
 							style={[
-								styles.progressFill,
+								styles.scoreBadge,
 								{
-									backgroundColor: theme.primary.main,
-									width: progressAnim.interpolate({
-										inputRange: [0, 1],
-										outputRange: ["0%", "100%"],
-									}),
+									backgroundColor: "rgba(34, 197, 94, 0.15)",
+									transform: [{ scale: correctScaleAnim }],
 								},
 							]}
-						/>
-					</View>
+						>
+							<MaterialCommunityIcons
+								name="check-circle"
+								size={16}
+								color="#22c55e"
+							/>
+							<Text style={[styles.scoreBadgeText, { color: "#22c55e" }]}>
+								{correctCount}
+							</Text>
+						</Animated.View>
+						<Animated.View
+							style={[
+								styles.scoreBadge,
+								{
+									backgroundColor: "rgba(239, 68, 68, 0.15)",
+									transform: [{ scale: wrongScaleAnim }],
+								},
+							]}
+						>
+							<MaterialCommunityIcons
+								name="close-circle"
+								size={16}
+								color="#ef4444"
+							/>
+							<Text style={[styles.scoreBadgeText, { color: "#ef4444" }]}>
+								{wrongCount}
+							</Text>
+						</Animated.View>
+					</Animated.View>
 				)}
-
-				{/* Score Info - Under Progress Bar */}
-				<Animated.View
-					style={[styles.scoreInfoRow, { opacity: headerFadeAnim }]}
-				>
-					<Animated.View
-						style={[
-							styles.scoreBadge,
-							{
-								backgroundColor: "rgba(34, 197, 94, 0.15)",
-								transform: [{ scale: correctScaleAnim }],
-							},
-						]}
-					>
-						<Ionicons name="checkmark-circle" size={16} color="#22c55e" />
-						<Text style={[styles.scoreBadgeText, { color: "#22c55e" }]}>
-							{correctCount}
-						</Text>
-					</Animated.View>
-					<Animated.View
-						style={[
-							styles.scoreBadge,
-							{
-								backgroundColor: "rgba(239, 68, 68, 0.15)",
-								transform: [{ scale: wrongScaleAnim }],
-							},
-						]}
-					>
-						<Ionicons name="close-circle" size={16} color="#ef4444" />
-						<Text style={[styles.scoreBadgeText, { color: "#ef4444" }]}>
-							{wrongCount}
-						</Text>
-					</Animated.View>
-				</Animated.View>
 
 				{/* Game Content */}
 				<View style={styles.gameContent}>
@@ -1636,90 +1915,15 @@ const GameScreen = ({ route, navigation }) => {
 
 	// Render Standard Mode
 	const renderStandardMode = () => {
-		// Calculate swipe indicator colors based on swipe position
-		const swipeIndicatorLeft = swipeAnim.x.interpolate({
-			inputRange: [-SCREEN_WIDTH, 0],
-			outputRange: [1, 0],
-			extrapolate: "clamp",
-		});
-		const swipeIndicatorRight = swipeAnim.x.interpolate({
-			inputRange: [0, SCREEN_WIDTH],
-			outputRange: [0, 1],
-			extrapolate: "clamp",
-		});
-
-		const swipeRotate = swipeAnim.x.interpolate({
-			inputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH],
-			outputRange: ["-12deg", "0deg", "12deg"],
-			extrapolate: "clamp",
-		});
-
-		const swipeScale = swipeAnim.x.interpolate({
-			inputRange: [
-				-SCREEN_WIDTH,
-				-SCREEN_WIDTH / 4,
-				0,
-				SCREEN_WIDTH / 4,
-				SCREEN_WIDTH,
-			],
-			outputRange: [0.85, 0.95, 1, 0.95, 0.85],
-			extrapolate: "clamp",
-		});
-
 		return (
 			<View style={styles.standardMode}>
-				{/* Swipe Indicators */}
-				<View style={styles.swipeIndicators}>
-					<Animated.View
-						style={[
-							styles.swipeIndicatorLeft,
-							{
-								opacity: swipeIndicatorLeft,
-								transform: [
-									{
-										scale: Animated.add(
-											1,
-											Animated.multiply(swipeIndicatorLeft, 0.2),
-										),
-									},
-								],
-							},
-						]}
-					>
-						<Ionicons name="close-circle" size={36} color="#ef4444" />
-					</Animated.View>
-					<Animated.View
-						style={[
-							styles.swipeIndicatorRight,
-							{
-								opacity: swipeIndicatorRight,
-								transform: [
-									{
-										scale: Animated.add(
-											1,
-											Animated.multiply(swipeIndicatorRight, 0.2),
-										),
-									},
-								],
-							},
-						]}
-					>
-						<Ionicons name="checkmark-circle" size={36} color="#22c55e" />
-					</Animated.View>
-				</View>
-
 				{/* Swipeable Card */}
 				<Animated.View
 					{...panResponder.panHandlers}
 					style={[
 						styles.swipeableCard,
 						{
-							transform: [
-								{ translateX: swipeAnim.x },
-								{ translateY: swipeAnim.y },
-								{ rotate: swipeRotate },
-								{ scale: swipeScale },
-							],
+							transform: [{ translateX: swipeAnim.x }],
 							opacity: swipeOpacity,
 						},
 					]}
@@ -1733,29 +1937,45 @@ const GameScreen = ({ route, navigation }) => {
 					/>
 				</Animated.View>
 
-				{/* Answer Buttons - Always Visible */}
+				{/* Answer Buttons */}
 				<View style={styles.answerButtons}>
 					<Button
 						variant="danger"
-						onPress={() => handleAnswer(false)}
+						onPress={() => {
+							if (
+								answering ||
+								advancingRef.current ||
+								endedRef.current ||
+								finishingRef.current
+							)
+								return;
+							animateCardOut(false);
+						}}
 						style={[styles.answerButton, answering && { opacity: 0.5 }]}
 						size="large"
-						disabled={answering}
 					>
 						<View style={styles.answerButtonContent}>
-							<Ionicons name="close" size={20} color="#ffffff" />
+							<MaterialCommunityIcons name="close" size={20} color="#ffffff" />
 							<Text style={styles.answerButtonText}>{t("incorrect")}</Text>
 						</View>
 					</Button>
 					<Button
 						variant="success"
-						onPress={() => handleAnswer(true)}
+						onPress={() => {
+							if (
+								answering ||
+								advancingRef.current ||
+								endedRef.current ||
+								finishingRef.current
+							)
+								return;
+							animateCardOut(true);
+						}}
 						style={[styles.answerButton, answering && { opacity: 0.5 }]}
 						size="large"
-						disabled={answering}
 					>
 						<View style={styles.answerButtonContent}>
-							<Ionicons name="checkmark" size={20} color="#ffffff" />
+							<MaterialCommunityIcons name="check" size={20} color="#ffffff" />
 							<Text style={styles.answerButtonText}>{t("correct")}</Text>
 						</View>
 					</Button>
@@ -1763,7 +1983,7 @@ const GameScreen = ({ route, navigation }) => {
 
 				{/* Swipe Hint */}
 				<View style={styles.swipeHintContainer}>
-					<Ionicons
+					<MaterialCommunityIcons
 						name="swap-horizontal"
 						size={16}
 						color={theme.text.disabled}
@@ -1809,21 +2029,17 @@ const GameScreen = ({ route, navigation }) => {
 			{/* Hint Section */}
 			{!answerResult && (
 				<View style={styles.writeButtonRow}>
-					<Pressable
+					<Button
 						onPress={() => setShowHint(!showHint)}
-						style={[styles.hintButton, { borderColor: theme.border.main }]}
+						size="small"
+						variant="outline"
 					>
-						<Ionicons name="bulb-outline" size={18} color="#f59e0b" />
-						<Text
-							style={[styles.hintButtonText, { color: theme.text.secondary }]}
-						>
-							{showHint ? t("hide_hint") : t("show_hint")}
-						</Text>
-					</Pressable>
+						{showHint ? t("hide_hint") : t("show_hint")}
+					</Button>
 
 					<Button
 						onPress={handleWriteSubmit}
-						size="large"
+						size="medium"
 						disabled={!userAnswer.trim()}
 					>
 						{t("submit")}
@@ -1855,9 +2071,9 @@ const GameScreen = ({ route, navigation }) => {
 					]}
 				>
 					<View style={styles.feedbackHeader}>
-						<Ionicons
+						<MaterialCommunityIcons
 							name={
-								answerResult === "correct" ? "checkmark-circle" : "close-circle"
+								answerResult === "correct" ? "check-circle" : "close-circle"
 							}
 							size={24}
 							color={answerResult === "correct" ? "#22c55e" : "#ef4444"}
@@ -1983,8 +2199,8 @@ const GameScreen = ({ route, navigation }) => {
 
 								{/* Result Icon */}
 								{showResult && (isCorrect || (isSelected && !isCorrect)) && (
-									<Ionicons
-										name={isCorrect ? "checkmark-circle" : "close-circle"}
+									<MaterialCommunityIcons
+										name={isCorrect ? "check-circle" : "close-circle"}
 										size={22}
 										color={isCorrect ? "#22c55e" : "#ef4444"}
 										style={styles.mcResultIcon}
@@ -2067,8 +2283,8 @@ const GameScreen = ({ route, navigation }) => {
 									]}
 								>
 									{isMatched && (
-										<Ionicons
-											name="checkmark-circle"
+										<MaterialCommunityIcons
+											name="check-circle"
 											size={20}
 											color="#fff"
 											style={styles.matchTileIcon}
@@ -2104,6 +2320,201 @@ const GameScreen = ({ route, navigation }) => {
 		</View>
 	);
 
+	// Render Plan Limit Warning
+	const renderPlanLimitWarning = () => {
+		const info = planLimitInfo;
+		const hasDeckOverage = info.deckOverage > 0;
+		const hasFlashcardOverage = info.flashcardOverage > 0;
+		const planLabel =
+			info.planCode === "pro"
+				? "Pro"
+				: info.planCode === "premium"
+					? "Premium"
+					: "Free";
+		return (
+			<ScrollView
+				contentContainerStyle={styles.limitContainer}
+				showsVerticalScrollIndicator={false}
+			>
+				{/* Warning icon */}
+				<View
+					style={[
+						styles.limitIconCircle,
+						{ backgroundColor: "rgba(239, 68, 68, 0.12)" },
+					]}
+				>
+					<MaterialCommunityIcons
+						name="alert-circle"
+						size={40}
+						color="#ef4444"
+					/>
+				</View>
+
+				{/* Title */}
+				<ThemedText style={[styles.limitTitle, { color: "#ef4444" }]}>
+					{t("plan_limit_title")}
+				</ThemedText>
+
+				{/* Plan badge */}
+				<View
+					style={[
+						styles.limitPlanBadge,
+						{
+							backgroundColor:
+								info.planCode === "pro"
+									? "rgba(139, 92, 246, 0.15)"
+									: info.planCode === "premium"
+										? "rgba(245, 158, 11, 0.15)"
+										: "rgba(107, 114, 128, 0.15)",
+						},
+					]}
+				>
+					<Text
+						style={[
+							styles.limitPlanBadgeText,
+							{
+								color:
+									info.planCode === "pro"
+										? "#8b5cf6"
+										: info.planCode === "premium"
+											? "#f59e0b"
+											: "#6b7280",
+							},
+						]}
+					>
+						{t("current_plan")}: {planLabel}
+					</Text>
+				</View>
+
+				{/* Description */}
+				<ThemedText color="secondary" style={styles.limitDescription}>
+					{t("plan_limit_description")}
+				</ThemedText>
+
+				{/* Limit details box */}
+				<View
+					style={[
+						styles.limitInfoBox,
+						{
+							backgroundColor: theme.background.paper,
+							borderColor: theme.border.main,
+						},
+					]}
+				>
+					{/* Deck limit row */}
+					<View style={styles.limitRow}>
+						<View style={styles.limitRowHeader}>
+							<MaterialCommunityIcons
+								name="layers"
+								size={18}
+								color={hasDeckOverage ? "#ef4444" : theme.primary.main}
+							/>
+							<Text
+								style={[
+									styles.limitRowTitle,
+									{ color: hasDeckOverage ? "#ef4444" : theme.text.primary },
+								]}
+							>
+								{t("plan_limit_deck")}
+							</Text>
+						</View>
+						<View style={styles.limitRowStats}>
+							<ThemedText color="secondary" style={styles.limitStatText}>
+								{t("plan_limit_current")}:{" "}
+								<Text style={{ fontWeight: "700", color: theme.text.primary }}>
+									{info.currentDecks}
+								</Text>
+							</ThemedText>
+							<ThemedText color="secondary" style={styles.limitStatText}>
+								{t("plan_limit_maximum")}:{" "}
+								<Text style={{ fontWeight: "700", color: theme.text.primary }}>
+									{info.maxDecks}
+								</Text>
+							</ThemedText>
+						</View>
+						{hasDeckOverage && (
+							<Text style={styles.limitOverageText}>
+								⚠️ {t("plan_limit_deck_overage", { count: info.deckOverage })}
+							</Text>
+						)}
+					</View>
+
+					{/* Divider */}
+					<View
+						style={[
+							styles.limitDivider,
+							{ backgroundColor: theme.border.main },
+						]}
+					/>
+
+					{/* Flashcard limit row */}
+					<View style={styles.limitRow}>
+						<View style={styles.limitRowHeader}>
+							<MaterialCommunityIcons
+								name="cards"
+								size={18}
+								color={hasFlashcardOverage ? "#ef4444" : theme.primary.main}
+							/>
+							<Text
+								style={[
+									styles.limitRowTitle,
+									{
+										color: hasFlashcardOverage ? "#ef4444" : theme.text.primary,
+									},
+								]}
+							>
+								{t("plan_limit_flashcard")}
+							</Text>
+						</View>
+						<View style={styles.limitRowStats}>
+							<ThemedText color="secondary" style={styles.limitStatText}>
+								{t("plan_limit_current")}:{" "}
+								<Text style={{ fontWeight: "700", color: theme.text.primary }}>
+									{info.currentFlashcards}
+								</Text>
+							</ThemedText>
+							<ThemedText color="secondary" style={styles.limitStatText}>
+								{t("plan_limit_maximum")}:{" "}
+								<Text style={{ fontWeight: "700", color: theme.text.primary }}>
+									{info.maxFlashcards}
+								</Text>
+							</ThemedText>
+						</View>
+						{hasFlashcardOverage && (
+							<Text style={styles.limitOverageText}>
+								⚠️{" "}
+								{t("plan_limit_flashcard_overage", {
+									count: info.flashcardOverage,
+								})}
+							</Text>
+						)}
+					</View>
+				</View>
+
+				{/* Actions */}
+				<View style={styles.limitActions}>
+					{info.planCode !== "premium" && (
+						<Button
+							onPress={() =>
+								navigation.navigate("Settings", { screen: "Plans" })
+							}
+							style={styles.limitUpgradeButton}
+						>
+							{t("plan_limit_upgrade")}
+						</Button>
+					)}
+					<Button
+						onPress={() => navigation.goBack()}
+						variant="outline"
+						style={styles.limitBackButton}
+					>
+						{t("plan_limit_back")}
+					</Button>
+				</View>
+			</ScrollView>
+		);
+	};
+
 	// Render Summary
 	const renderSummary = () => {
 		const { grade, message, color: gradeColor } = getGrade();
@@ -2124,7 +2535,7 @@ const GameScreen = ({ route, navigation }) => {
 				<View
 					style={[styles.statIconContainer, { backgroundColor: `${color}25` }]}
 				>
-					<Ionicons name={iconName} size={18} color={color} />
+					<MaterialCommunityIcons name={iconName} size={18} color={color} />
 				</View>
 				<Text style={[styles.statItemValue, { color }]}>{value}</Text>
 				<Text style={[styles.statItemLabel, { color: theme.text.secondary }]}>
@@ -2208,7 +2619,7 @@ const GameScreen = ({ route, navigation }) => {
 									value={matchedPairs.length}
 									label={t("pairs") || "Pairs"}
 									color={theme.primary.main}
-									iconName="albums"
+									iconName="layers"
 								/>
 								<StatItem
 									value={matchAttempts}
@@ -2223,7 +2634,7 @@ const GameScreen = ({ route, navigation }) => {
 									value={correctCount}
 									label={t("correct")}
 									color={theme.success.main}
-									iconName="checkmark-circle"
+									iconName="check-circle"
 								/>
 								<StatItem
 									value={wrongCount}
@@ -2235,7 +2646,7 @@ const GameScreen = ({ route, navigation }) => {
 									value={totalCards}
 									label={t("total")}
 									color={theme.primary.main}
-									iconName="albums"
+									iconName="layers"
 								/>
 							</>
 						)}
@@ -2255,7 +2666,7 @@ const GameScreen = ({ route, navigation }) => {
 							finishing && { opacity: 0.6 },
 						]}
 					>
-						<Ionicons name="refresh" size={20} color="#fff" />
+						<MaterialCommunityIcons name="refresh" size={20} color="#fff" />
 						<Text style={styles.summaryButtonTextPrimary}>
 							{t("play_again")}
 						</Text>
@@ -2275,7 +2686,11 @@ const GameScreen = ({ route, navigation }) => {
 								pressed && { opacity: 0.8 },
 							]}
 						>
-							<Ionicons name="home" size={18} color={theme.text.primary} />
+							<MaterialCommunityIcons
+								name="home"
+								size={18}
+								color={theme.text.primary}
+							/>
 							<Text
 								style={[
 									styles.summaryButtonTextSecondary,
@@ -2299,7 +2714,11 @@ const GameScreen = ({ route, navigation }) => {
 								pressed && { opacity: 0.8 },
 							]}
 						>
-							<Ionicons name="settings" size={18} color={theme.text.primary} />
+							<MaterialCommunityIcons
+								name="cog"
+								size={18}
+								color={theme.text.primary}
+							/>
 							<Text
 								style={[
 									styles.summaryButtonTextSecondary,
@@ -2379,13 +2798,15 @@ const styles = StyleSheet.create({
 		gap: spacing.sm,
 		justifyContent: "space-between",
 	},
-	modeCard: {
+	modeCardWrapper: {
 		width: (SCREEN_WIDTH - spacing.lg * 2 - spacing.sm) / 2,
+		marginBottom: spacing.sm,
+	},
+	modeCard: {
 		paddingVertical: spacing.md,
 		paddingHorizontal: spacing.sm,
 		borderRadius: borderRadius.lg,
 		alignItems: "center",
-		marginBottom: spacing.sm,
 	},
 	modeIconContainer: {
 		width: 44,
@@ -2496,7 +2917,7 @@ const styles = StyleSheet.create({
 	},
 	toggleButton: {
 		paddingVertical: spacing.sm,
-		paddingHorizontal: spacing.md,
+		paddingHorizontal: spacing.sm,
 		borderWidth: 1,
 	},
 	toggleButtonLeft: {
@@ -3057,6 +3478,93 @@ const styles = StyleSheet.create({
 	summaryButtonTextSecondary: {
 		fontSize: 14,
 		fontWeight: "600",
+	},
+	// Plan Limit Warning
+	limitContainer: {
+		flexGrow: 1,
+		alignItems: "center",
+		padding: spacing.lg,
+		paddingBottom: spacing.xl * 2,
+	},
+	limitIconCircle: {
+		width: 80,
+		height: 80,
+		borderRadius: 40,
+		alignItems: "center",
+		justifyContent: "center",
+		marginTop: spacing.xl,
+		marginBottom: spacing.md,
+	},
+	limitTitle: {
+		fontSize: 22,
+		fontWeight: "700",
+		textAlign: "center",
+		marginBottom: spacing.md,
+	},
+	limitPlanBadge: {
+		paddingHorizontal: spacing.md,
+		paddingVertical: spacing.xs,
+		borderRadius: borderRadius.md,
+		marginBottom: spacing.md,
+	},
+	limitPlanBadgeText: {
+		fontSize: 13,
+		fontWeight: "600",
+	},
+	limitDescription: {
+		fontSize: 14,
+		textAlign: "center",
+		marginBottom: spacing.lg,
+		lineHeight: 20,
+	},
+	limitInfoBox: {
+		width: "100%",
+		borderRadius: borderRadius.lg,
+		borderWidth: 1,
+		padding: spacing.md,
+		marginBottom: spacing.lg,
+	},
+	limitRow: {
+		paddingVertical: spacing.sm,
+	},
+	limitRowHeader: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: spacing.sm,
+		marginBottom: spacing.xs,
+	},
+	limitRowTitle: {
+		fontSize: 14,
+		fontWeight: "600",
+	},
+	limitRowStats: {
+		flexDirection: "row",
+		justifyContent: "space-between",
+		paddingHorizontal: spacing.xs,
+	},
+	limitStatText: {
+		fontSize: 13,
+	},
+	limitOverageText: {
+		fontSize: 13,
+		color: "#ef4444",
+		fontWeight: "500",
+		marginTop: spacing.xs,
+		paddingHorizontal: spacing.xs,
+	},
+	limitDivider: {
+		height: 1,
+		marginVertical: spacing.sm,
+	},
+	limitActions: {
+		width: "100%",
+		gap: spacing.sm,
+	},
+	limitUpgradeButton: {
+		width: "100%",
+	},
+	limitBackButton: {
+		width: "100%",
 	},
 });
 

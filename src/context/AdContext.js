@@ -7,7 +7,7 @@ import React, {
 	useRef,
 } from "react";
 import { Platform } from "react-native";
-import VideoAdModal from "../components/ads/VideoAdModal.js";
+import PlansAdModal from "../components/ads/PlansAdModal.js";
 import { usePlan } from "./PlanContext";
 
 const AdContext = createContext(null);
@@ -66,40 +66,33 @@ export const AdProvider = ({ children }) => {
 		}
 	}, [hasAds, loadInterstitial]);
 
-	// Video ad modal state and controller
+	// Plans promo ad modal state and controller
 	const [videoAdVisible, setVideoAdVisible] = useState(false);
-	const [videoAdSource, setVideoAdSource] = useState(null);
+	const [videoAdOnUpgrade, setVideoAdOnUpgrade] = useState(null);
 	const videoAdResolveRef = useRef(null);
 
-	const showVideoAd = useCallback(() => {
-		if (!hasAds) {
-			console.log(
-				"[AdContext] Premium/Pro kullanıcı - video reklam gösterilmeyecek",
-			);
-			return Promise.resolve();
-		}
-		return new Promise((resolve) => {
-			try {
-				const ads = [
-					require("../../assets/videos/ads/apple.mp4"),
-					require("../../assets/videos/ads/thy.mp4"),
-				];
-				const src = ads[Math.floor(Math.random() * ads.length)];
-				console.log("[AdContext] showVideoAd called, selected src:", src);
-				videoAdResolveRef.current = resolve;
-				setVideoAdSource(src);
-				setVideoAdVisible(true);
-			} catch (e) {
-				console.error("Error loading video ad source:", e);
-				resolve();
+	const showVideoAd = useCallback(
+		(onUpgrade) => {
+			if (!hasAds) {
+				console.log(
+					"[AdContext] Premium/Pro kullanıcı - reklam gösterilmeyecek",
+				);
+				return Promise.resolve();
 			}
-		});
-	}, [hasAds]);
+			return new Promise((resolve) => {
+				console.log("[AdContext] showVideoAd called");
+				videoAdResolveRef.current = resolve;
+				setVideoAdOnUpgrade(() => onUpgrade || null);
+				setVideoAdVisible(true);
+			});
+		},
+		[hasAds],
+	);
 
 	const handleVideoAdClose = () => {
 		console.log("[AdContext] handleVideoAdClose called");
 		setVideoAdVisible(false);
-		setVideoAdSource(null);
+		setVideoAdOnUpgrade(null);
 		if (videoAdResolveRef.current) {
 			videoAdResolveRef.current();
 			videoAdResolveRef.current = null;
@@ -117,10 +110,10 @@ export const AdProvider = ({ children }) => {
 	return (
 		<AdContext.Provider value={value}>
 			{children}
-			<VideoAdModal
+			<PlansAdModal
 				visible={videoAdVisible}
-				source={videoAdSource}
 				onClose={handleVideoAdClose}
+				onUpgrade={videoAdOnUpgrade}
 			/>
 		</AdContext.Provider>
 	);

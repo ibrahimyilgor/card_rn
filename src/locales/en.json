@@ -292,7 +292,7 @@
 	"direction_normal": "Normal",
 	"direction_reverse": "Reverse",
 	"hard_mode": "Hard Mode",
-	"hard_mode_desc": "Only study cards you got wrong",
+	"hard_mode_desc": "Only study cards you got correct less than 50%",
 	"download_csv": "Download CSV",
 	"download_error": "Error downloading file",
 	"download_success": "File downloaded successfully",
@@ -442,5 +442,15 @@
 	"file_copied": "File content copied to clipboard",
 	"import_format_title": "File Format",
 	"import_csv_format": "First row as header (FRONT, BACK), then data rows",
-	"import_json_format": "[{\"front\": \"...\", \"back\": \"...\"}]"
+	"import_json_format": "[{\"front\": \"...\", \"back\": \"...\"}]",
+	"plan_limit_title": "Plan Limit Exceeded",
+	"plan_limit_description": "You have exceeded your plan limits and cannot play until you reduce your content or upgrade your plan.",
+	"plan_limit_deck": "Deck Limit",
+	"plan_limit_flashcard": "Flashcard Limit",
+	"plan_limit_current": "Current",
+	"plan_limit_maximum": "Maximum",
+	"plan_limit_deck_overage": "{{count}} deck(s) over limit. Delete to play.",
+	"plan_limit_flashcard_overage": "{{count}} card(s) over limit. Delete to play.",
+	"plan_limit_back": "Back to Decks",
+	"plan_limit_upgrade": "Upgrade Plan"
 }

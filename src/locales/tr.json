@@ -292,7 +292,7 @@
 	"direction_normal": "Normal",
 	"direction_reverse": "Ters",
 	"hard_mode": "Zor Mod",
-	"hard_mode_desc": "Sadece yanlış yaptığınız kartları çalışın",
+	"hard_mode_desc": "Sadece %50'den az doğru bildiğiniz kartları çalışın",
 	"download_csv": "CSV İndir",
 	"download_error": "Dosya indirme hatası",
 	"download_success": "Dosya başarıyla indirildi",
@@ -442,5 +442,15 @@
 	"file_copied": "Dosya içeriği panoya kopyalandı",
 	"import_format_title": "Dosya Formatı",
 	"import_csv_format": "İlk satır başlık (FRONT, BACK), sonra veri satırları",
-	"import_json_format": "[{\"front\": \"...\", \"back\": \"...\"}]"
+	"import_json_format": "[{\"front\": \"...\", \"back\": \"...\"}]",
+	"plan_limit_title": "Plan Limiti Aşıldı",
+	"plan_limit_description": "Plan limitinizi aştınız. İçeriklerinizi azaltana ya da planınızı yükseltene kadar oyun oynayamazsınız.",
+	"plan_limit_deck": "Deste Limiti",
+	"plan_limit_flashcard": "Kart Limiti",
+	"plan_limit_current": "Mevcut",
+	"plan_limit_maximum": "Maksimum",
+	"plan_limit_deck_overage": "{{count}} deste limitin üzerinde. Oynamak için silin.",
+	"plan_limit_flashcard_overage": "{{count}} kart limitin üzerinde. Oynamak için silin.",
+	"plan_limit_back": "Destelere Dön",
+	"plan_limit_upgrade": "Planı Yükselt"
 }

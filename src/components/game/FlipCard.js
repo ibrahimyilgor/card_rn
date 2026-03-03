@@ -1,14 +1,11 @@
 import React, { useRef, useEffect } from "react";
-import {
-	View,
-	Text,
-	StyleSheet,
-	Pressable,
-	Animated,
-	Platform,
-} from "react-native";
+import { View, Text, StyleSheet, Pressable, Animated } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useTheme } from "../../context/ThemeContext";
 import { borderRadius, spacing } from "../../styles/theme";
+
+const FRONT_ACCENT = "#8b5cf6"; // purple
+const BACK_ACCENT = "#22c55e"; // green
 
 const FlipCard = ({
 	frontText,
@@ -46,30 +43,28 @@ const FlipCard = ({
 	});
 
 	const frontOpacity = flipAnim.interpolate({
-		inputRange: [0, 0.5, 1],
-		outputRange: [1, 0, 0],
+		inputRange: [0, 0.49, 0.5, 1],
+		outputRange: [1, 1, 0, 0],
 	});
 
 	const backOpacity = flipAnim.interpolate({
-		inputRange: [0, 0.5, 1],
-		outputRange: [0, 0, 1],
+		inputRange: [0, 0.49, 0.5, 1],
+		outputRange: [0, 0, 1, 1],
 	});
 
 	return (
 		<Pressable
 			onPress={disabled ? undefined : onFlip}
-			style={[styles.container, style]}
+			style={[styles.container, shadows.large, style]}
 		>
 			{/* Front Side */}
 			<Animated.View
 				style={[
 					styles.card,
-					styles.cardFront,
 					{
 						backgroundColor: theme.background.elevated,
 						borderColor: theme.border.main,
 					},
-					shadows.large,
 					{
 						transform: [{ perspective: 1000 }, { rotateY: frontRotate }],
 						opacity: frontOpacity,
@@ -77,25 +72,36 @@ const FlipCard = ({
 					},
 				]}
 			>
-				<Text style={[styles.label, { color: theme.primary.main }]}>FRONT</Text>
-				<Text style={[styles.text, { color: theme.text.primary }]}>
-					{frontText}
-				</Text>
-				<Text style={[styles.hint, { color: theme.text.disabled }]}>
-					Tap to flip
-				</Text>
+				{/* Purple accent bar */}
+				<View style={[styles.accentBar, { backgroundColor: FRONT_ACCENT }]} />
+				{/* Content */}
+				<View style={styles.contentArea}>
+					<Text style={[styles.text, { color: theme.text.primary }]}>
+						{frontText}
+					</Text>
+				</View>
+				{/* Tap hint */}
+				<View style={styles.hintRow}>
+					<MaterialCommunityIcons
+						name="gesture-tap"
+						size={15}
+						color={theme.text.disabled}
+						style={styles.hintIcon}
+					/>
+					<Text style={[styles.hint, { color: theme.text.disabled }]}>
+						Tap to flip
+					</Text>
+				</View>
 			</Animated.View>
 
 			{/* Back Side */}
 			<Animated.View
 				style={[
 					styles.card,
-					styles.cardBack,
 					{
-						backgroundColor: theme.primary.dark,
-						borderColor: theme.primary.main,
+						backgroundColor: theme.background.elevated,
+						borderColor: theme.border.main,
 					},
-					shadows.large,
 					{
 						transform: [{ perspective: 1000 }, { rotateY: backRotate }],
 						opacity: backOpacity,
@@ -103,8 +109,28 @@ const FlipCard = ({
 					},
 				]}
 			>
-				<Text style={[styles.label, { color: theme.primary.light }]}>BACK</Text>
-				<Text style={[styles.text, { color: "#ffffff" }]}>{backText}</Text>
+				{/* Green accent bar */}
+				<View style={[styles.accentBar, { backgroundColor: BACK_ACCENT }]} />
+				{/* ANSWER label */}
+				<Text style={styles.answerLabel}>ANSWER</Text>
+				{/* Content */}
+				<View style={styles.contentArea}>
+					<Text style={[styles.text, { color: theme.text.primary }]}>
+						{backText}
+					</Text>
+				</View>
+				{/* Tap hint */}
+				<View style={styles.hintRow}>
+					<MaterialCommunityIcons
+						name="gesture-tap"
+						size={15}
+						color={theme.text.disabled}
+						style={styles.hintIcon}
+					/>
+					<Text style={[styles.hint, { color: theme.text.disabled }]}>
+						Tap to flip back
+					</Text>
+				</View>
 			</Animated.View>
 		</Pressable>
 	);
@@ -123,19 +149,35 @@ const styles = StyleSheet.create({
 		height: "100%",
 		borderRadius: borderRadius.xl,
 		borderWidth: 2,
-		padding: spacing.lg,
+		overflow: "hidden",
 		justifyContent: "center",
 		alignItems: "center",
 	},
-	cardFront: {},
-	cardBack: {},
-	label: {
+	accentBar: {
 		position: "absolute",
-		top: spacing.md,
-		left: spacing.md,
-		fontSize: 12,
-		fontWeight: "700",
-		letterSpacing: 1,
+		top: 0,
+		left: 0,
+		right: 0,
+		height: 4,
+		borderTopLeftRadius: borderRadius.xl,
+		borderTopRightRadius: borderRadius.xl,
+	},
+	answerLabel: {
+		position: "absolute",
+		top: "30%",
+		fontSize: 11,
+		fontWeight: "800",
+		letterSpacing: 2,
+		color: BACK_ACCENT,
+		textTransform: "uppercase",
+	},
+	contentArea: {
+		flex: 1,
+		justifyContent: "center",
+		alignItems: "center",
+		paddingHorizontal: spacing.lg,
+		paddingTop: spacing.xl,
+		paddingBottom: spacing.xl,
 	},
 	text: {
 		fontSize: 24,
@@ -143,9 +185,16 @@ const styles = StyleSheet.create({
 		textAlign: "center",
 		lineHeight: 32,
 	},
-	hint: {
+	hintRow: {
 		position: "absolute",
 		bottom: spacing.md,
+		flexDirection: "row",
+		alignItems: "center",
+	},
+	hintIcon: {
+		marginRight: 4,
+	},
+	hint: {
 		fontSize: 12,
 	},
 });

@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, {
+	useState,
+	useEffect,
+	useCallback,
+	useRef,
+	useEffectEvent,
+} from "react";
 import {
 	View,
 	Text,
@@ -151,6 +157,9 @@ const GameScreen = ({ route, navigation }) => {
 	const [matchAttempts, setMatchAttempts] = useState(0);
 	const [isCheckingMatch, setIsCheckingMatch] = useState(false);
 
+	useEffect(() => {
+		console.log("answer:", answerResult);
+	}, [answerResult]);
 	// Game start time for stats
 	const gameStartTime = useRef(null);
 
@@ -877,16 +886,19 @@ const GameScreen = ({ route, navigation }) => {
 				correctAnswer,
 			);
 
-			const { isCorrect, similarity } = response.data;
+			const { correct, similarity } = response.data;
+			console.log("answerr", response.data);
+			// "almost" (similarity >= 0.7) counts as correct
+			const isClose = correct || similarity >= 0.7;
 
-			if (isCorrect) {
+			if (correct) {
 				setAnswerResult("correct");
 				sounds.correct();
 				setCorrectCount((prev) => prev + 1);
 			} else if (similarity >= 0.7) {
 				setAnswerResult("almost");
-				sounds.incorrect();
-				setWrongCount((prev) => prev + 1);
+				sounds.correct();
+				setCorrectCount((prev) => prev + 1);
 			} else {
 				setAnswerResult("wrong");
 				sounds.incorrect();
@@ -896,7 +908,7 @@ const GameScreen = ({ route, navigation }) => {
 				}
 			}
 
-			await gamesAPI.updateCardStats(currentCard.id, isCorrect);
+			await gamesAPI.updateCardStats(currentCard.id, isClose);
 
 			// Auto advance after delay
 			setTimeout(() => {
@@ -2010,11 +2022,14 @@ const GameScreen = ({ route, navigation }) => {
 					styles.writeInput,
 					{
 						backgroundColor: theme.background.paper,
-						borderColor: answerResult
-							? answerResult === "correct"
+						borderColor:
+							answerResult === "correct"
 								? theme.success.main
-								: theme.error.main
-							: theme.border.main,
+								: answerResult === "almost"
+									? theme.warning.main
+									: answerResult === "wrong"
+										? theme.error.main
+										: theme.border.main,
 						color: theme.text.primary,
 					},
 				]}
@@ -2064,23 +2079,40 @@ const GameScreen = ({ route, navigation }) => {
 						styles.answerFeedback,
 						{
 							backgroundColor:
-								answerResult === "correct" ? "#22c55e20" : "#ef444420",
+								answerResult === "correct"
+									? "#22c55e20"
+									: answerResult === "almost"
+										? "#f59e0b20"
+										: "#ef444420",
 							borderColor:
-								answerResult === "correct" ? "#22c55e40" : "#ef444440",
+								answerResult === "correct"
+									? "#22c55e40"
+									: answerResult === "almost"
+										? "#f59e0b40"
+										: "#ef444440",
 						},
 					]}
 				>
 					<View style={styles.feedbackHeader}>
 						<MaterialCommunityIcons
-							name={
-								answerResult === "correct" ? "check-circle" : "close-circle"
-							}
+							name={answerResult === "wrong" ? "close-circle" : "check-circle"}
 							size={24}
-							color={answerResult === "correct" ? "#22c55e" : "#ef4444"}
+							color={
+								answerResult === "correct"
+									? "#22c55e"
+									: answerResult === "almost"
+										? "#f59e0b"
+										: "#ef4444"
+							}
 						/>
 						<Text
 							style={{
-								color: answerResult === "correct" ? "#22c55e" : "#ef4444",
+								color:
+									answerResult === "correct"
+										? "#22c55e"
+										: answerResult === "almost"
+											? "#f59e0b"
+											: "#ef4444",
 								fontSize: 18,
 								fontWeight: "600",
 								marginLeft: spacing.sm,
@@ -2093,7 +2125,15 @@ const GameScreen = ({ route, navigation }) => {
 									: t("wrong_answer")}
 						</Text>
 					</View>
-					{answerResult !== "correct" && (
+					{answerResult === "almost" && (
+						<ThemedText color="secondary" style={{ marginTop: spacing.sm }}>
+							{t("correct_was")}{" "}
+							<Text style={{ fontWeight: "600" }}>
+								{getBackText(currentCard)}
+							</Text>
+						</ThemedText>
+					)}
+					{answerResult === "wrong" && (
 						<ThemedText color="secondary" style={{ marginTop: spacing.sm }}>
 							{t("correct_was")}{" "}
 							<Text style={{ fontWeight: "600" }}>
@@ -2559,56 +2599,6 @@ const GameScreen = ({ route, navigation }) => {
 					<Text style={[styles.summaryMessage, { color: gradeColor }]}>
 						{message}
 					</Text>
-
-					{/* Percentage Circle - Hide for match mode */}
-					{gameMode !== "match" && (
-						<View style={styles.percentageCircleContainer}>
-							{/* Background Circle */}
-							<View
-								style={[
-									styles.percentageCircleBg,
-									{ borderColor: `${theme.text.secondary}20` },
-								]}
-							/>
-							{/* Progress Arc - using multiple segments for visual effect */}
-							<View style={styles.percentageCircleProgress}>
-								{/* Simple filled arc approximation */}
-								<View
-									style={[
-										styles.percentageArc,
-										{
-											borderColor: gradeColor,
-											borderTopColor:
-												percentage >= 25 ? gradeColor : "transparent",
-											borderRightColor:
-												percentage >= 50 ? gradeColor : "transparent",
-											borderBottomColor:
-												percentage >= 75 ? gradeColor : "transparent",
-											borderLeftColor:
-												percentage >= 100 ? gradeColor : "transparent",
-											transform: [
-												{ rotate: `${(percentage / 100) * 360 - 90}deg` },
-											],
-										},
-									]}
-								/>
-							</View>
-							{/* Inner content */}
-							<View style={styles.percentageContent}>
-								<Text style={[styles.percentageValue, { color: gradeColor }]}>
-									{percentage}%
-								</Text>
-								<Text
-									style={[
-										styles.percentageLabel,
-										{ color: theme.text.secondary },
-									]}
-								>
-									{t("success_rate")}
-								</Text>
-							</View>
-						</View>
-					)}
 
 					{/* Stats Row */}
 					<View style={styles.statsRow}>
@@ -3375,45 +3365,7 @@ const styles = StyleSheet.create({
 		marginBottom: spacing.lg,
 		textAlign: "center",
 	},
-	percentageCircleContainer: {
-		width: 140,
-		height: 140,
-		position: "relative",
-		marginBottom: spacing.xl,
-		alignItems: "center",
-		justifyContent: "center",
-	},
-	percentageCircleBg: {
-		position: "absolute",
-		width: "100%",
-		height: "100%",
-		borderRadius: 70,
-		borderWidth: 8,
-	},
-	percentageCircleProgress: {
-		position: "absolute",
-		width: "100%",
-		height: "100%",
-	},
-	percentageArc: {
-		width: "100%",
-		height: "100%",
-		borderRadius: 70,
-		borderWidth: 8,
-	},
-	percentageContent: {
-		alignItems: "center",
-		justifyContent: "center",
-	},
-	percentageValue: {
-		fontSize: 36,
-		fontWeight: "800",
-		lineHeight: 40,
-	},
-	percentageLabel: {
-		fontSize: 12,
-		fontWeight: "500",
-	},
+
 	statsRow: {
 		flexDirection: "row",
 		justifyContent: "center",

@@ -6,8 +6,10 @@ import {
 	StyleSheet,
 	Pressable,
 	Animated,
+	unstable_batchedUpdates,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "./ThemeContext";
 import { useI18n } from "./I18nContext";
 import { borderRadius, spacing } from "../styles/theme";
@@ -32,7 +34,13 @@ export const AchievementProvider = ({ children }) => {
 		if (achievements && achievements.length > 0) {
 			setAchievementQueue((prev) => {
 				const existingIds = new Set(prev.map((a) => a.id));
-				const unique = achievements.filter((a) => !existingIds.has(a.id));
+				const unique = [];
+				for (const a of achievements) {
+					if (!existingIds.has(a.id)) {
+						existingIds.add(a.id);
+						unique.push(a);
+					}
+				}
 				return [...prev, ...unique];
 			});
 		}
@@ -60,9 +68,14 @@ export const AchievementProvider = ({ children }) => {
 			duration: 150,
 			useNativeDriver: true,
 		}).start(() => {
-			setIsVisible(false);
-			setCurrentAchievement(null);
-			setAchievementQueue((prev) => prev.slice(1));
+			// Batch all three updates into a single render so the queue-processing
+			// effect doesn't fire between setIsVisible(false) and setAchievementQueue
+			// (which would re-show the just-dismissed achievement).
+			unstable_batchedUpdates(() => {
+				setIsVisible(false);
+				setCurrentAchievement(null);
+				setAchievementQueue((prev) => prev.slice(1));
+			});
 		});
 	}, []);
 
@@ -71,17 +84,27 @@ export const AchievementProvider = ({ children }) => {
 		showAchievements,
 	};
 
-	// Get category color
-	const getCategoryColor = (category) => {
+	// Category colors — matches web AchievementModal
+	const CATEGORY_COLORS = {
+		streak: "#f97316",
+		accuracy: "#4ECDC4",
+		volume: "#9B59B6",
+	};
+
+	const getCategoryColor = (category) =>
+		CATEGORY_COLORS[category] || theme.primary.main;
+
+	// Category icons — matches web AchievementModal icons
+	const getCategoryIcon = (category) => {
 		switch (category) {
 			case "streak":
-				return "#f59e0b";
+				return "flame";
 			case "accuracy":
-				return "#22c55e";
+				return "locate";
 			case "volume":
-				return "#3b82f6";
+				return "book";
 			default:
-				return theme.primary.main;
+				return "trophy";
 		}
 	};
 
@@ -89,35 +112,32 @@ export const AchievementProvider = ({ children }) => {
 	const getAchievementName = (achievement) => {
 		if (!achievement) return "";
 		const { name, category, threshold } = achievement;
-
-		// Try specific translation key first (e.g., "accuracy_100", "streak_7")
 		const specificKey = `${category}_${threshold}`;
 		const specificTranslation = t(specificKey);
-		if (specificTranslation && specificTranslation !== specificKey) {
+		if (specificTranslation && specificTranslation !== specificKey)
 			return specificTranslation;
-		}
-
-		// Also try the name directly (e.g., "accuracy_100")
 		if (name) {
 			const nameTranslation = t(name);
-			if (nameTranslation && nameTranslation !== name) {
-				return nameTranslation;
-			}
+			if (nameTranslation && nameTranslation !== name) return nameTranslation;
 		}
-
-		// Fallback to name or description
 		return name || achievement.description || "";
+	};
+
+	const getCategoryLabel = (category) => {
+		const key = `achievement_category_${category}`;
+		const translated = t(key);
+		if (translated && translated !== key) return translated;
+		return category ? category.charAt(0).toUpperCase() + category.slice(1) : "";
 	};
 
 	return (
 		<AchievementContext.Provider value={value}>
 			{children}
 
-			{/* Achievement Modal */}
 			<Modal
 				visible={isVisible}
 				transparent
-				animationType="fade"
+				animationType="none"
 				onRequestClose={closeAchievement}
 			>
 				<Pressable style={styles.overlay} onPress={closeAchievement}>
@@ -126,82 +146,117 @@ export const AchievementProvider = ({ children }) => {
 							styles.container,
 							{
 								backgroundColor: theme.background.elevated,
-								borderColor: currentAchievement
-									? getCategoryColor(currentAchievement.category)
-									: theme.primary.main,
-								transform: [{ scale: scaleAnim }],
 							},
-							shadows.large,
+							currentAchievement && {
+								borderColor: getCategoryColor(currentAchievement.category),
+								shadowColor: getCategoryColor(currentAchievement.category),
+							},
+							{ transform: [{ scale: scaleAnim }] },
 						]}
 					>
 						{currentAchievement && (
-							<>
-								{/* Icon Container */}
-								<View
-									style={[
-										styles.iconContainer,
-										{
-											backgroundColor: `${getCategoryColor(
-												currentAchievement.category,
-											)}20`,
-										},
-									]}
+							<Pressable
+								onPress={() => {}}
+								style={{ width: "100%", alignItems: "center" }}
+							>
+								{/* Close button */}
+								<Pressable
+									onPress={closeAchievement}
+									style={styles.closeButton}
+									hitSlop={12}
 								>
-									<Text style={styles.icon}>
-										{currentAchievement.icon || "🏆"}
-									</Text>
-								</View>
-
-								{/* Title */}
-								<Text
-									style={[
-										styles.title,
-										{ color: getCategoryColor(currentAchievement.category) },
-									]}
-								>
-									{t("achievement_earned") || "Achievement Earned!"}
-								</Text>
-
-								{/* Achievement Name */}
-								<Text style={[styles.name, { color: theme.text.primary }]}>
-									{getAchievementName(currentAchievement)}
-								</Text>
-
-								{/* Description */}
-								<Text
-									style={[styles.description, { color: theme.text.secondary }]}
-								>
-									{currentAchievement.description}
-								</Text>
+									<Ionicons
+										name="close"
+										size={20}
+										color={theme.text.secondary}
+									/>
+								</Pressable>
 
 								{/* Queue indicator */}
 								{achievementQueue.length > 1 && (
 									<Text
-										style={[styles.queueText, { color: theme.text.secondary }]}
+										style={[styles.queueBadge, { color: theme.text.secondary }]}
 									>
 										+{achievementQueue.length - 1} {t("more") || "more"}
 									</Text>
 								)}
 
-								{/* Button */}
-								<Pressable
-									style={({ pressed }) => [
-										styles.button,
+								{/* Icon container with gradient */}
+								<LinearGradient
+									colors={[
+										`${getCategoryColor(currentAchievement.category)}33`,
+										`${getCategoryColor(currentAchievement.category)}11`,
+									]}
+									style={[
+										styles.iconContainer,
 										{
-											backgroundColor: getCategoryColor(
+											borderColor: getCategoryColor(
 												currentAchievement.category,
 											),
 										},
-										pressed && { opacity: 0.8 },
 									]}
-									onPress={closeAchievement}
 								>
-									<Ionicons name="checkmark" size={20} color="#fff" />
-									<Text style={styles.buttonText}>
-										{t("awesome") || "Awesome!"}
+									<Ionicons
+										name={getCategoryIcon(currentAchievement.category)}
+										size={48}
+										color={getCategoryColor(currentAchievement.category)}
+									/>
+								</LinearGradient>
+
+								{/* "Achievement Earned!" label */}
+								<Text style={[styles.earnedLabel, { color: "white" }]}>
+									{t("achievement_earned") || "Achievement Earned!"}
+								</Text>
+
+								{/* Achievement Name */}
+								<Text
+									style={[
+										styles.name,
+										{
+											color: getCategoryColor(currentAchievement.category),
+										},
+									]}
+								>
+									{getAchievementName(currentAchievement)}
+								</Text>
+
+								{/* Category badge */}
+								<View
+									style={[
+										styles.categoryBadge,
+										{
+											backgroundColor: `${getCategoryColor(currentAchievement.category)}22`,
+										},
+									]}
+								>
+									<Text
+										style={[
+											styles.categoryBadgeText,
+											{
+												color: getCategoryColor(currentAchievement.category),
+											},
+										]}
+									>
+										{getCategoryLabel(currentAchievement.category)}
 									</Text>
-								</Pressable>
-							</>
+								</View>
+
+								{/* Repeat indicator */}
+								{currentAchievement.isRepeat &&
+									currentAchievement.done_count > 1 && (
+										<Text
+											style={[
+												styles.repeatText,
+												{ color: theme.text.secondary },
+											]}
+										>
+											{t("earned_times") || "Earned"}{" "}
+											<Text style={{ fontWeight: "700" }}>
+												x{currentAchievement.done_count}
+											</Text>
+										</Text>
+									)}
+							</Pressable>
 						)}
 					</Animated.View>
 				</Pressable>
@@ -215,15 +270,33 @@ const styles = StyleSheet.create({
 		flex: 1,
 		justifyContent: "center",
 		alignItems: "center",
-		backgroundColor: "rgba(0, 0, 0, 0.7)",
+		backgroundColor: "rgba(0, 0, 0, 0.75)",
 	},
 	container: {
-		width: "85%",
-		maxWidth: 340,
+		width: "88%",
+		maxWidth: 360,
 		borderRadius: borderRadius.xl,
-		borderWidth: 2,
+		borderWidth: 2.5,
 		padding: spacing.xl,
 		alignItems: "center",
+		backgroundColor: "#1a1a2e", // overridden by theme at runtime via inline style absent; kept as fallback
+		shadowOffset: { width: 0, height: 0 },
+		shadowOpacity: 0.5,
+		shadowRadius: 24,
+		elevation: 16,
+	},
+	closeButton: {
+		position: "absolute",
+		top: -spacing.sm,
+		right: -spacing.sm,
+		padding: spacing.xs,
+	},
+	queueBadge: {
+		position: "absolute",
+		top: -spacing.sm,
+		left: -spacing.sm,
+		fontSize: 11,
+		fontWeight: "600",
 	},
 	iconContainer: {
 		width: 100,
@@ -232,44 +305,56 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		justifyContent: "center",
 		marginBottom: spacing.md,
+		marginTop: spacing.sm,
+		borderWidth: 2.5,
 	},
-	icon: {
-		fontSize: 56,
-	},
-	title: {
-		fontSize: 16,
-		fontWeight: "600",
-		marginBottom: spacing.xs,
+	earnedLabel: {
+		fontSize: 15,
+		fontWeight: "700",
+		letterSpacing: 1.5,
 		textTransform: "uppercase",
-		letterSpacing: 1,
+		marginBottom: spacing.xs,
 	},
 	name: {
-		fontSize: 24,
-		fontWeight: "700",
+		fontSize: 22,
+		fontWeight: "800",
 		textAlign: "center",
 		marginBottom: spacing.sm,
 	},
 	description: {
-		fontSize: 14,
+		fontSize: 13,
 		textAlign: "center",
 		marginBottom: spacing.md,
-		lineHeight: 20,
+		lineHeight: 19,
 	},
-	queueText: {
+	categoryBadge: {
+		paddingHorizontal: spacing.md,
+		paddingVertical: spacing.xs,
+		borderRadius: borderRadius.md,
+		marginBottom: spacing.md,
+	},
+	categoryBadgeText: {
 		fontSize: 12,
+		fontWeight: "700",
+		textTransform: "capitalize",
+		letterSpacing: 0.5,
+	},
+	repeatText: {
+		fontSize: 13,
 		marginBottom: spacing.md,
 	},
 	button: {
 		flexDirection: "row",
 		alignItems: "center",
-		paddingVertical: spacing.sm,
+		paddingVertical: spacing.sm + 2,
 		paddingHorizontal: spacing.xl,
 		borderRadius: borderRadius.lg,
 		gap: spacing.xs,
+		marginTop: spacing.xs,
 	},
 	buttonText: {
-		fontSize: 16,
-		fontWeight: "600",
+		fontSize: 15,
+		fontWeight: "700",
 		color: "#fff",
 	},
 });

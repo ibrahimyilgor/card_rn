@@ -748,9 +748,6 @@ const GameScreen = ({ route, navigation }) => {
 		advancingRef.current = true;
 		setAnswering(true);
 
-		// Reset swipe animation for next card
-		resetSwipeAnimation();
-
 		// Calculate new counts immediately
 		const newCorrectCount = isCorrect ? correctCount + 1 : correctCount;
 		const newWrongCount = isCorrect ? wrongCount : wrongCount + 1;
@@ -792,6 +789,8 @@ const GameScreen = ({ route, navigation }) => {
 				advancingRef.current = false;
 				lastAnswerRef.current = false;
 			} else {
+				// Hide card so it doesn't flash back before summary
+				swipeOpacity.setValue(0);
 				// Pass the updated counts to endGame
 				endGame(newCorrectCount, newWrongCount);
 			}
@@ -2596,9 +2595,13 @@ const GameScreen = ({ route, navigation }) => {
 					<ThemedText variant="h2" style={styles.summaryTitle}>
 						{t("game_summary")}
 					</ThemedText>
-					<Text style={[styles.summaryMessage, { color: gradeColor }]}>
-						{message}
-					</Text>
+					{gameMode !== "match" && (
+						<Text style={[styles.summaryMessage, { color: gradeColor }]}>
+							{message}
+						</Text>
+					)}
+
+					{gameMode === "match" && <View style={{ padding: 5 }}></View>}
 
 					{/* Stats Row */}
 					<View style={styles.statsRow}>

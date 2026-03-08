@@ -1670,7 +1670,16 @@ const StatsScreen = () => {
 					{/* Content wrapper — blurred overlay for locked users */}
 					<View style={{ position: "relative" }}>
 						{isLocked && (
-							<View pointerEvents="none" style={styles.blurOverlay} />
+							<View
+								style={[
+									styles.blurOverlay,
+									{
+										backgroundColor: isDark
+											? "rgba(15,23,42,0.45)"
+											: "rgba(255,255,255,0.55)",
+									},
+								]}
+							/>
 						)}
 						<Animated.View
 							style={{

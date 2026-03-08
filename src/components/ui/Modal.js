@@ -8,6 +8,7 @@ import {
 	ScrollView,
 	Platform,
 	Animated,
+	KeyboardAvoidingView,
 } from "react-native";
 import { useTheme } from "../../context/ThemeContext";
 import { borderRadius, spacing } from "../../styles/theme";
@@ -85,6 +86,10 @@ const Modal = ({
 			statusBarTranslucent
 			onRequestClose={onClose}
 		>
+			<KeyboardAvoidingView
+				style={{ flex: 1 }}
+				behavior={Platform.OS === "ios" ? "padding" : "height"}
+			>
 			<View style={styles.overlay}>
 				<Animated.View style={[styles.backdrop, { opacity: backdropAnim }]}>
 					<Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
@@ -148,6 +153,7 @@ const Modal = ({
 					)}
 				</Animated.View>
 			</View>
+			</KeyboardAvoidingView>
 		</RNModal>
 	);
 };

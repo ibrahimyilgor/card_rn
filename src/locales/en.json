@@ -306,7 +306,7 @@
 	"deck_title_placeholder": "e.g., Spanish Vocabulary",
 	"delete_account": "Delete Account",
 	"delete_account_title": "Delete Account",
-	"delete_account_message": "Bu işlem geri alınamaz ve desteler, kartlar ve istatistikler dahil tüm verileriniz kalıcı olarak silinecektir.",
+	"delete_account_message": "This action cannot be undone and will permanently delete all your decks, cards, and statistics.",
 	"delete_account_confirm": "Delete Account",
 	"delete_account_success": "Your account has been deleted successfully",
 	"delete_account_error": "Failed to delete account",
@@ -452,5 +452,9 @@
 	"plan_limit_deck_overage": "{{count}} deck(s) over limit. Delete to play.",
 	"plan_limit_flashcard_overage": "{{count}} card(s) over limit. Delete to play.",
 	"plan_limit_back": "Back to Decks",
-	"plan_limit_upgrade": "Upgrade Plan"
+	"plan_limit_upgrade": "Upgrade Plan",
+	"deck_limit_reached_title": "Deck Limit Reached",
+	"deck_limit_reached": "Deck limit reached. Upgrade your plan to create more.",
+	"card_limit_reached_title": "Card Limit Reached",
+	"card_limit_reached": "Card limit reached. Upgrade your plan to add more."
 }

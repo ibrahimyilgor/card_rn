@@ -30,6 +30,7 @@ import * as DocumentPicker from "expo-document-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "../context/ThemeContext";
 import { useI18n } from "../context/I18nContext";
+import { usePlan } from "../context/PlanContext";
 import { decksAPI, flashcardsAPI } from "../services/api";
 import {
 	ThemedView,
@@ -43,10 +44,14 @@ import {
 	ConfirmDialog,
 } from "../components/ui";
 import { spacing, borderRadius } from "../styles/theme";
+import LimitWarningModal from "../components/LimitWarningModal";
 
 const HomeScreen = ({ navigation, onLogout }) => {
 	const { theme, shadows } = useTheme();
 	const { t } = useI18n();
+	const { canCreateDeck, canCreateFlashcard, refreshPlan } = usePlan();
+	const [limitModalVisible, setLimitModalVisible] = useState(false);
+	const [limitModalType, setLimitModalType] = useState("deck");
 
 	const [decks, setDecks] = useState([]);
 	const [loading, setLoading] = useState(true);
@@ -185,6 +190,11 @@ const HomeScreen = ({ navigation, onLogout }) => {
 
 	// Deck CRUD operations
 	const handleCreateDeck = () => {
+		if (!canCreateDeck) {
+			setLimitModalType("deck");
+			setLimitModalVisible(true);
+			return;
+		}
 		setSelectedDeck(null);
 		setDeckTitle("");
 		setDeckDescription("");
@@ -220,6 +230,7 @@ const HomeScreen = ({ navigation, onLogout }) => {
 			}
 			setDeckModalVisible(false);
 			fetchDecks(accountId);
+			refreshPlan();
 		} catch (error) {
 			console.error("Error saving deck:", error);
 		} finally {
@@ -236,6 +247,7 @@ const HomeScreen = ({ navigation, onLogout }) => {
 			setDeleteDialogVisible(false);
 			setSelectedDeck(null);
 			fetchDecks(accountId);
+			refreshPlan();
 		} catch (error) {
 			console.error("Error deleting deck:", error);
 		} finally {
@@ -468,6 +480,11 @@ const HomeScreen = ({ navigation, onLogout }) => {
 
 	// Open import modal
 	const handleOpenImportModal = () => {
+		if (!canCreateDeck) {
+			setLimitModalType("deck");
+			setLimitModalVisible(true);
+			return;
+		}
 		setImportTitle("");
 		setImportDescription("");
 		setImportFlashcards([]);
@@ -948,7 +965,19 @@ const HomeScreen = ({ navigation, onLogout }) => {
 					deck={selectedDeck}
 					theme={theme}
 					t={t}
-					onUpdate={() => fetchDecks(accountId, true)}
+					onUpdate={() => { fetchDecks(accountId, true); refreshPlan(); }}
+					canCreateFlashcard={canCreateFlashcard}
+					onLimitReached={() => {
+						setLimitModalType("flashcard");
+						setLimitModalVisible(true);
+					}}
+				/>
+
+				{/* Plan Limit Modal */}
+				<LimitWarningModal
+					visible={limitModalVisible}
+					onClose={() => setLimitModalVisible(false)}
+					limitType={limitModalType}
 				/>
 
 				{/* Alert Modal */}
@@ -1457,7 +1486,7 @@ const InlineCardForm = ({
 };
 
 // Flashcards Modal Component
-const FlashcardsModal = ({ visible, onClose, deck, theme, t, onUpdate }) => {
+const FlashcardsModal = ({ visible, onClose, deck, theme, t, onUpdate, canCreateFlashcard, onLimitReached }) => {
 	const [flashcards, setFlashcards] = useState([]);
 	const [loading, setLoading] = useState(false);
 	const [isInlineAdding, setIsInlineAdding] = useState(false);
@@ -1516,6 +1545,10 @@ const FlashcardsModal = ({ visible, onClose, deck, theme, t, onUpdate }) => {
 	};
 
 	const handleAddCard = () => {
+		if (canCreateFlashcard === false) {
+			if (onLimitReached) onLimitReached();
+			return;
+		}
 		setEditingCardId(null);
 		setIsInlineAdding(true);
 	};

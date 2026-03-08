@@ -452,5 +452,9 @@
 	"plan_limit_deck_overage": "{{count}} deste limitin üzerinde. Oynamak için silin.",
 	"plan_limit_flashcard_overage": "{{count}} kart limitin üzerinde. Oynamak için silin.",
 	"plan_limit_back": "Destelere Dön",
-	"plan_limit_upgrade": "Planı Yükselt"
+	"plan_limit_upgrade": "Planı Yükselt",
+	"deck_limit_reached_title": "Deste Limitine Ulaşıldı",
+	"deck_limit_reached": "Deste limitine ulaşıldı. Daha fazla oluşturmak için planınızı yükseltin.",
+	"card_limit_reached_title": "Kart Limitine Ulaşıldı",
+	"card_limit_reached": "Kart limitine ulaşıldı. Daha fazla eklemek için planınızı yükseltin."
 }

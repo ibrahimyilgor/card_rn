@@ -7,6 +7,7 @@ import {
 } from "@react-navigation/native";
 import { View, StyleSheet, Animated } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../context/ThemeContext";
 import { useI18n } from "../context/I18nContext";
 
@@ -93,19 +94,22 @@ const SettingsStack = ({ onLogout }) => {
 const MainTabs = ({ onLogout }) => {
 	const { theme } = useTheme();
 	const { t } = useI18n();
+	const insets = useSafeAreaInsets();
+
+	const tabBarBaseStyle = {
+		backgroundColor: theme.background.paper,
+		borderTopColor: theme.border.main,
+		borderTopWidth: 1,
+		height: 55 + insets.bottom,
+		paddingBottom: Math.max(insets.bottom, 8),
+		paddingTop: 6,
+	};
 
 	return (
 		<Tab.Navigator
 			screenOptions={{
 				headerShown: false,
-				tabBarStyle: {
-					backgroundColor: theme.background.paper,
-					borderTopColor: theme.border.main,
-					borderTopWidth: 1,
-					height: 65,
-					paddingBottom: 10,
-					paddingTop: 6,
-				},
+				tabBarStyle: tabBarBaseStyle,
 				tabBarActiveTintColor: theme.primary.main,
 				tabBarInactiveTintColor: theme.text.secondary,
 				tabBarLabelStyle: {
@@ -128,16 +132,7 @@ const MainTabs = ({ onLogout }) => {
 							<TabIcon name="home" focused={focused} color={color} />
 						),
 						tabBarStyle:
-							routeName === "Game"
-								? { display: "none" }
-								: {
-										backgroundColor: theme.background.paper,
-										borderTopColor: theme.border.main,
-										borderTopWidth: 1,
-										height: 65,
-										paddingBottom: 10,
-										paddingTop: 6,
-									},
+							routeName === "Game" ? { display: "none" } : tabBarBaseStyle,
 					};
 				}}
 				listeners={({ navigation }) => ({

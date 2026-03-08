@@ -2,6 +2,7 @@
 	"expo": {
 		"name": "MemoDeck",
 		"slug": "card_rn",
+		"scheme": "memodeck",
 		"version": "1.0.0",
 		"orientation": "portrait",
 		"icon": "./assets/icon.png",

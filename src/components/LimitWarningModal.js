@@ -37,18 +37,18 @@ const LimitWarningModal = ({ visible, onClose, limitType = "general" }) => {
 			case "deck":
 				return {
 					icon: "folder-multiple",
-					title: t("deck_limit_reached") || "Deck Limit Reached",
+					title: t("deck_limit_reached_title") || "Deck Limit Reached",
 					message:
-						t("deck_limit_message") ||
+						t("deck_limit_reached") ||
 						`You have reached your deck limit (${currentDecks}/${maxDecks}). Upgrade your plan to create more decks.`,
 					showUsage: true,
 				};
 			case "flashcard":
 				return {
 					icon: "cards",
-					title: t("flashcard_limit_reached") || "Flashcard Limit Reached",
+					title: t("card_limit_reached_title") || "Flashcard Limit Reached",
 					message:
-						t("flashcard_limit_message") ||
+						t("card_limit_reached") ||
 						`You have reached your flashcard limit (${currentFlashcards}/${maxFlashcards}). Upgrade your plan to create more flashcards.`,
 					showUsage: true,
 				};
@@ -136,7 +136,10 @@ const LimitWarningModal = ({ visible, onClose, limitType = "general" }) => {
 				<Animated.View
 					style={[
 						styles.iconContainer,
-						{ backgroundColor: theme.warning.main + "20", transform: [{ scale: iconScale }] },
+						{
+							backgroundColor: theme.warning.main + "20",
+							transform: [{ scale: iconScale }],
+						},
 					]}
 				>
 					<MaterialCommunityIcons
@@ -162,8 +165,13 @@ const LimitWarningModal = ({ visible, onClose, limitType = "general" }) => {
 				</View>
 
 				{/* Message */}
-				<Animated.View style={{ opacity: contentOpacity, transform: [{ translateY: contentTranslateY }] }}>
-				<ThemedText style={styles.message}>{content.message}</ThemedText>
+				<Animated.View
+					style={{
+						opacity: contentOpacity,
+						transform: [{ translateY: contentTranslateY }],
+					}}
+				>
+					<ThemedText style={styles.message}>{content.message}</ThemedText>
 				</Animated.View>
 
 				{/* Usage Stats */}

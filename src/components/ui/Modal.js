@@ -88,71 +88,78 @@ const Modal = ({
 		>
 			<KeyboardAvoidingView
 				style={{ flex: 1 }}
-				behavior={Platform.OS === "ios" ? "padding" : "height"}
+				behavior={Platform.OS === "ios" ? "padding" : undefined}
+				enabled={Platform.OS === "ios"}
 			>
-			<View style={styles.overlay}>
-				<Animated.View style={[styles.backdrop, { opacity: backdropAnim }]}>
-					<Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-				</Animated.View>
+				<View style={styles.overlay}>
+					<Animated.View style={[styles.backdrop, { opacity: backdropAnim }]}>
+						<Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+					</Animated.View>
 
-				<Animated.View
-					style={[
-						styles.container,
-						{
-							width: getWidth(),
-							backgroundColor: theme.background.elevated,
-							borderColor: theme.border.main,
-							opacity: contentOpacity,
-							transform: [{ scale: scaleAnim }, { translateY: translateYAnim }],
-						},
-						shadows.large,
-						size === "full" && styles.fullSize,
-					]}
-				>
-					{/* Header */}
-					{(title || showCloseButton) && (
-						<View
-							style={[
-								styles.header,
-								{ borderBottomColor: theme.border.subtle },
-							]}
-						>
-							<Text style={[styles.title, { color: theme.text.primary }]}>
-								{title}
-							</Text>
-							{showCloseButton && (
-								<Pressable onPress={onClose} style={styles.closeButton}>
-									<Text
-										style={[styles.closeIcon, { color: theme.text.secondary }]}
-									>
-										✕
-									</Text>
-								</Pressable>
-							)}
-						</View>
-					)}
-
-					{/* Content */}
-					<ScrollView
-						style={styles.content}
-						contentContainerStyle={styles.contentContainer}
-						showsVerticalScrollIndicator={false}
-						keyboardShouldPersistTaps="handled"
-						automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+					<Animated.View
+						style={[
+							styles.container,
+							{
+								width: getWidth(),
+								backgroundColor: theme.background.elevated,
+								borderColor: theme.border.main,
+								opacity: contentOpacity,
+								transform: [
+									{ scale: scaleAnim },
+									{ translateY: translateYAnim },
+								],
+							},
+							shadows.large,
+							size === "full" && styles.fullSize,
+						]}
 					>
-						{children}
-					</ScrollView>
+						{/* Header */}
+						{(title || showCloseButton) && (
+							<View
+								style={[
+									styles.header,
+									{ borderBottomColor: theme.border.subtle },
+								]}
+							>
+								<Text style={[styles.title, { color: theme.text.primary }]}>
+									{title}
+								</Text>
+								{showCloseButton && (
+									<Pressable onPress={onClose} style={styles.closeButton}>
+										<Text
+											style={[
+												styles.closeIcon,
+												{ color: theme.text.secondary },
+											]}
+										>
+											✕
+										</Text>
+									</Pressable>
+								)}
+							</View>
+						)}
 
-					{/* Footer */}
-					{footer && (
-						<View
-							style={[styles.footer, { borderTopColor: theme.border.subtle }]}
+						{/* Content */}
+						<ScrollView
+							style={styles.content}
+							contentContainerStyle={styles.contentContainer}
+							showsVerticalScrollIndicator={false}
+							keyboardShouldPersistTaps="handled"
+							automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
 						>
-							{footer}
-						</View>
-					)}
-				</Animated.View>
-			</View>
+							{children}
+						</ScrollView>
+
+						{/* Footer */}
+						{footer && (
+							<View
+								style={[styles.footer, { borderTopColor: theme.border.subtle }]}
+							>
+								{footer}
+							</View>
+						)}
+					</Animated.View>
+				</View>
 			</KeyboardAvoidingView>
 		</RNModal>
 	);

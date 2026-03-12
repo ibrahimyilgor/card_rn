@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { NavigationContainer } from "@react-navigation/native";
-import { View, ActivityIndicator } from "react-native";
+import { View, ActivityIndicator, Platform } from "react-native";
+import { StatusBar } from "expo-status-bar";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../context/ThemeContext";
 import { useI18n } from "../context/I18nContext";
@@ -139,6 +140,13 @@ const RootNavigator = () => {
 
 	return (
 		<NavigationContainer theme={navigationTheme}>
+			<StatusBar
+				style={theme.mode === "dark" ? "light" : "dark"}
+				// hidden={Platform.OS === "android"}
+				translucent
+				backgroundColor="transparent"
+				animated
+			/>
 			{isAuthenticated ? (
 				<MainTabs onLogout={handleLogout} />
 			) : (

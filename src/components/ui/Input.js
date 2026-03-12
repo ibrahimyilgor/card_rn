@@ -1,5 +1,12 @@
 import React, { useState, useRef, useEffect } from "react";
-import { View, TextInput, Text, StyleSheet, Pressable, Animated } from "react-native";
+import {
+	View,
+	TextInput,
+	Text,
+	StyleSheet,
+	Pressable,
+	Animated,
+} from "react-native";
 import { useTheme } from "../../context/ThemeContext";
 import { borderRadius, spacing, typography } from "../../styles/theme";
 
@@ -43,13 +50,31 @@ const Input = ({
 
 	const borderColor = focusAnim.interpolate({
 		inputRange: [0, 1],
-		outputRange: [error ? theme.error.main : theme.border.main, error ? theme.error.main : theme.primary.main],
+		outputRange: [
+			error ? theme.error.main : theme.border.main,
+			error ? theme.error.main : theme.primary.main,
+		],
 	});
 
 	return (
 		<View style={[styles.container, style]}>
 			{label && (
-				<Animated.Text style={[styles.label, { color: theme.text.primary, transform: [{ translateX: labelAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 2] }) }] }]}>
+				<Animated.Text
+					style={[
+						styles.label,
+						{
+							color: theme.text.primary,
+							transform: [
+								{
+									translateX: labelAnim.interpolate({
+										inputRange: [0, 1],
+										outputRange: [0, 2],
+									}),
+								},
+							],
+						},
+					]}
+				>
 					{label}
 				</Animated.Text>
 			)}
@@ -60,17 +85,13 @@ const Input = ({
 					{
 						backgroundColor: theme.background.paper,
 						borderColor: borderColor,
-						borderWidth: isFocused ? 2 : 1,
+						borderWidth: 1,
 					},
 					multiline && { minHeight: numberOfLines * 24 + spacing.md * 2 },
 					disabled && { opacity: 0.5 },
 				]}
 			>
-				{leftIcon && (
-					<View style={styles.iconContainer}>
-						{leftIcon}
-					</View>
-				)}
+				{leftIcon && <View style={styles.iconContainer}>{leftIcon}</View>}
 
 				<TextInput
 					value={value}
@@ -96,9 +117,7 @@ const Input = ({
 
 				{rightIcon && (
 					<Pressable onPress={onRightIconPress}>
-						<View style={styles.iconContainer}>
-							{rightIcon}
-						</View>
+						<View style={styles.iconContainer}>{rightIcon}</View>
 					</Pressable>
 				)}
 			</Animated.View>

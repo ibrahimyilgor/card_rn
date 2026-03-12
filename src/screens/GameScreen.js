@@ -1,10 +1,4 @@
-import React, {
-	useState,
-	useEffect,
-	useCallback,
-	useRef,
-	useEffectEvent,
-} from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
 	View,
 	Text,
@@ -188,15 +182,20 @@ const GameScreen = ({ route, navigation }) => {
 	const swipeAnim = useRef(new Animated.ValueXY()).current;
 	const swipeOpacity = useRef(new Animated.Value(1)).current;
 
-	// Card-out animation timing (ms) — adjust to slow down new card arrival
-	const CARD_OUT_DURATION = 340;
-	const CARD_OUT_HANDLE_DELAY = 120;
+	// Card-out animation timing (ms) — tuned for faster next-card flow
+	const CARD_OUT_DURATION = 280;
+	const CARD_OUT_HANDLE_DELAY = 40;
 
 	const handleAnswerRef = useRef(null);
 	const advancingRef = useRef(false);
 	const endedRef = useRef(false);
 	const finishingRef = useRef(false);
 	const sessionRecordedRef = useRef(false);
+	const sessionTokenRef = useRef(0);
+	const timedSessionTokenRef = useRef(null);
+	const timedStartedSessionRef = useRef(null);
+	const handleTimeUpCallbackRef = useRef(() => {});
+	const handleGameOverCallbackRef = useRef(() => {});
 	const lastAnswerTimeRef = useRef(0);
 	const [finishing, setFinishing] = useState(false);
 	const lastAnswerRef = useRef(false);
@@ -352,7 +351,6 @@ const GameScreen = ({ route, navigation }) => {
 						}),
 					]).start(() => {
 						swipeAnim.setValue({ x: 0, y: 0 });
-						swipeOpacity.setValue(1);
 						setTimeout(() => {
 							if (handleAnswerRef.current) handleAnswerRef.current(true);
 						}, CARD_OUT_HANDLE_DELAY);
@@ -372,7 +370,6 @@ const GameScreen = ({ route, navigation }) => {
 						}),
 					]).start(() => {
 						swipeAnim.setValue({ x: 0, y: 0 });
-						swipeOpacity.setValue(1);
 						setTimeout(() => {
 							if (handleAnswerRef.current) handleAnswerRef.current(false);
 						}, CARD_OUT_HANDLE_DELAY);
@@ -402,7 +399,7 @@ const GameScreen = ({ route, navigation }) => {
 
 		// Lock immediately so double-taps are ignored during the animation
 		advancingRef.current = true;
-		// Reset debounce so handleAnswer won't block due to the 220ms animation delay
+		// Reset debounce so handleAnswer won't block due to the animation delay
 		lastAnswerTimeRef.current = 0;
 
 		const targetX = isCorrect ? SCREEN_WIDTH * 1.2 : -SCREEN_WIDTH * 1.2;
@@ -419,10 +416,10 @@ const GameScreen = ({ route, navigation }) => {
 				useNativeDriver: true,
 			}),
 		]).start(() => {
+			// Reset animation values immediately after card goes off screen
 			swipeAnim.setValue({ x: 0, y: 0 });
-			swipeOpacity.setValue(1);
-			// Small delay so the native driver fully syncs the reset values
-			// before handleAnswer triggers React state updates / re-renders
+
+			// Ensure handleAnswer is called with proper delay to allow smooth transition
 			setTimeout(() => {
 				advancingRef.current = false;
 				if (handleAnswerRef.current) handleAnswerRef.current(isCorrect);
@@ -431,8 +428,8 @@ const GameScreen = ({ route, navigation }) => {
 	};
 
 	// Hooks
-	const timer = useTimer(30, () => handleTimeUp());
-	const lives = useLives(3, () => handleGameOver());
+	const timer = useTimer(30, () => handleTimeUpCallbackRef.current());
+	const lives = useLives(3, () => handleGameOverCallbackRef.current());
 
 	// Shake hearts when losing a life
 	useEffect(() => {
@@ -529,6 +526,48 @@ const GameScreen = ({ route, navigation }) => {
 		}
 	}, [selectedMode]);
 
+	// Timer management: pause timer when not in playing state or not in timed mode
+	useEffect(() => {
+		if (gameState !== "playing" || challengeType !== "timed") {
+			timer.pause();
+		}
+	}, [gameState, challengeType]);
+
+	// Cleanup timer on component unmount
+	useEffect(() => {
+		return () => {
+			sessionTokenRef.current += 1;
+			timedSessionTokenRef.current = null;
+		};
+	}, []);
+
+	const resetSessionStateForExit = useCallback(() => {
+		sessionTokenRef.current += 1;
+		timedSessionTokenRef.current = null;
+		timedStartedSessionRef.current = null;
+		endedRef.current = true;
+		advancingRef.current = false;
+		finishingRef.current = false;
+		lastAnswerRef.current = false;
+		sessionRecordedRef.current = false;
+		setAnswering(false);
+		setCurrentIndex(0);
+		setCorrectCount(0);
+		setWrongCount(0);
+		setIsFlipped(false);
+		setUserAnswer("");
+		setAnswerResult(null);
+		setSelectedOption(null);
+		setShowHint(false);
+		setMatchedPairs([]);
+		setFlippedIndices([]);
+		setMatchAttempts(0);
+		setIsCheckingMatch(false);
+		setCards([]);
+		setPlanLimitInfo(null);
+		timer.reset(timeLimit);
+	}, [timeLimit]);
+
 	const currentCard = cards[currentIndex];
 
 	// Fetch cards based on mode and settings
@@ -563,8 +602,13 @@ const GameScreen = ({ route, navigation }) => {
 			if (error.response?.status === 403 && error.response?.data?.limitInfo) {
 				setPlanLimitInfo(error.response.data.limitInfo);
 			}
+			// Set empty cards array on error to ensure UI doesn't show stale data
+			setCards([]);
 		} finally {
-			setLoading(false);
+			// Ensure loading is set to false and force a re-render
+			setTimeout(() => {
+				setLoading(false);
+			}, 100);
 		}
 	};
 
@@ -593,6 +637,8 @@ const GameScreen = ({ route, navigation }) => {
 
 	// Save settings and start game
 	const startGame = async () => {
+		sessionTokenRef.current += 1;
+		timedStartedSessionRef.current = null;
 		const mode = selectedMode;
 		const challenge = selectedChallengeType;
 
@@ -642,6 +688,9 @@ const GameScreen = ({ route, navigation }) => {
 		prevCorrectRef.current = 0;
 		prevWrongRef.current = 0;
 
+		// Reset swipe animation to ensure clean state
+		resetSwipeAnimation();
+
 		setGameState("playing");
 		setCurrentIndex(0);
 		setCorrectCount(0);
@@ -664,10 +713,20 @@ const GameScreen = ({ route, navigation }) => {
 		setAnswering(false);
 		setPlanLimitInfo(null);
 
-		fetchCards(mode, hardModeEnabled);
+		// Fetch cards after state is reset to ensure proper rendering
+		setTimeout(() => {
+			fetchCards(mode, hardModeEnabled);
+		}, 50);
 
 		if (challenge === "timed") {
+			timedSessionTokenRef.current = sessionTokenRef.current;
+			timedStartedSessionRef.current = sessionTokenRef.current;
 			timer.restart(timeLimit);
+		} else {
+			timedSessionTokenRef.current = null;
+			timedStartedSessionRef.current = null;
+			// Ensure timer is stopped for non-timed modes
+			timer.reset(timeLimit);
 		}
 		if (challenge === "survival") {
 			lives.reset(initialLives);
@@ -678,6 +737,8 @@ const GameScreen = ({ route, navigation }) => {
 	const restartGame = () => {
 		// Prevent restarting while endGame flow is still finishing
 		if (finishingRef.current) return;
+		sessionTokenRef.current += 1;
+		timedStartedSessionRef.current = null;
 		const mode = gameMode;
 
 		// reset badge animations so they don't appear enlarged on restart
@@ -690,6 +751,10 @@ const GameScreen = ({ route, navigation }) => {
 		prevCorrectRef.current = 0;
 		prevWrongRef.current = 0;
 
+		// Reset swipe animation to ensure clean state
+		resetSwipeAnimation();
+
+		// Reset game state first
 		setGameState("playing");
 		setCurrentIndex(0);
 		setCorrectCount(0);
@@ -712,10 +777,20 @@ const GameScreen = ({ route, navigation }) => {
 		setAnswering(false);
 		setPlanLimitInfo(null);
 
-		fetchCards(mode, hardModeEnabled);
+		// Fetch cards after state is reset to ensure proper rendering
+		setTimeout(() => {
+			fetchCards(mode, hardModeEnabled);
+		}, 50);
 
 		if (challengeType === "timed") {
+			timedSessionTokenRef.current = sessionTokenRef.current;
+			timedStartedSessionRef.current = sessionTokenRef.current;
 			timer.restart(timeLimit);
+		} else {
+			timedSessionTokenRef.current = null;
+			timedStartedSessionRef.current = null;
+			// Ensure timer is stopped for non-timed modes
+			timer.reset(timeLimit);
 		}
 		if (challengeType === "survival") {
 			lives.reset(initialLives);
@@ -805,21 +880,26 @@ const GameScreen = ({ route, navigation }) => {
 	});
 
 	const nextCard = () => {
-		// allow next advances
-		advancingRef.current = false;
-		setAnswering(false);
-		setIsFlipped(false);
-		setCurrentIndex((prev) => prev + 1);
-		setUserAnswer("");
-		setAnswerResult(null);
-		setSelectedOption(null);
-		setShowHint(false);
-		// Safety: ensure swipe values are at neutral for the incoming card
-		resetSwipeAnimation();
+		// Keep card hidden until next card state is committed to avoid old-text flash.
+		setTimeout(() => {
+			// allow next advances
+			advancingRef.current = false;
+			setAnswering(false);
+			setIsFlipped(false);
+			setCurrentIndex((prev) => prev + 1);
+			setUserAnswer("");
+			setAnswerResult(null);
+			setSelectedOption(null);
+			setShowHint(false);
 
-		if (gameMode === "multiple_choice" && cards[currentIndex + 1]) {
-			setMcOptions(cards[currentIndex + 1].options || []);
-		}
+			if (gameMode === "multiple_choice" && cards[currentIndex + 1]) {
+				setMcOptions(cards[currentIndex + 1].options || []);
+			}
+
+			requestAnimationFrame(() => {
+				resetSwipeAnimation();
+			});
+		}, 20);
 	};
 
 	// Helper function to generate hint
@@ -838,36 +918,34 @@ const GameScreen = ({ route, navigation }) => {
 		);
 	};
 
-	const handleTimeUp = () => {
-		// In timed challenge, when total time is up, end the game
-		if (challengeType === "timed") {
-			endGame();
+	const handleTimeUp = useCallback(() => {
+		if (timedSessionTokenRef.current !== sessionTokenRef.current) {
 			return;
 		}
 
-		// For other modes with per-card timer (if any)
-		setWrongCount((prev) => prev + 1);
-		sounds.incorrect();
-
-		if (currentIndex + 1 >= cards.length) {
-			// Reshuffle cards and continue
-			const shuffled = [...cards].sort(() => Math.random() - 0.5);
-			setCards(shuffled);
-			setCurrentIndex(0);
-			setIsFlipped(false);
-			setUserAnswer("");
-			setAnswerResult(null);
-			setAnswering(false);
-			advancingRef.current = false;
-			lastAnswerRef.current = false;
-		} else {
-			nextCard();
+		// Ignore timer events if not in timed challenge or not playing
+		if (challengeType !== "timed" || gameState !== "playing") {
+			return;
 		}
-	};
 
-	const handleGameOver = () => {
 		endGame();
-	};
+	}, [challengeType, gameState]);
+
+	const handleGameOver = useCallback(() => {
+		// Ignore game over events if not in survival challenge or not playing
+		if (challengeType !== "survival" || gameState !== "playing") {
+			return;
+		}
+		endGame();
+	}, [challengeType, gameState]);
+
+	useEffect(() => {
+		handleTimeUpCallbackRef.current = handleTimeUp;
+	}, [handleTimeUp]);
+
+	useEffect(() => {
+		handleGameOverCallbackRef.current = handleGameOver;
+	}, [handleGameOver]);
 
 	const handleWriteSubmit = async () => {
 		if (!userAnswer.trim()) return;
@@ -915,14 +993,17 @@ const GameScreen = ({ route, navigation }) => {
 					if (challengeType === "timed" || challengeType === "survival") {
 						const shuffled = [...cards].sort(() => Math.random() - 0.5);
 						setCards(shuffled);
-						setCurrentIndex(0);
-						setIsFlipped(false);
-						setUserAnswer("");
-						setAnswerResult(null);
-						setSelectedOption(null);
-						setAnswering(false);
-						advancingRef.current = false;
-						lastAnswerRef.current = false;
+						// Reset state with small delay to ensure smooth transition
+						setTimeout(() => {
+							setCurrentIndex(0);
+							setIsFlipped(false);
+							setUserAnswer("");
+							setAnswerResult(null);
+							setSelectedOption(null);
+							setAnswering(false);
+							advancingRef.current = false;
+							lastAnswerRef.current = false;
+						}, 50);
 					} else {
 						endGame();
 					}
@@ -968,17 +1049,20 @@ const GameScreen = ({ route, navigation }) => {
 				if (challengeType === "timed" || challengeType === "survival") {
 					const shuffled = [...cards].sort(() => Math.random() - 0.5);
 					setCards(shuffled);
-					setCurrentIndex(0);
-					setIsFlipped(false);
-					setUserAnswer("");
-					setAnswerResult(null);
-					setSelectedOption(null);
-					setAnswering(false);
-					advancingRef.current = false;
-					lastAnswerRef.current = false;
-					if (gameMode === "multiple_choice" && shuffled[0]) {
-						setMcOptions(shuffled[0].options || []);
-					}
+					// Reset state with small delay to ensure smooth transition
+					setTimeout(() => {
+						setCurrentIndex(0);
+						setIsFlipped(false);
+						setUserAnswer("");
+						setAnswerResult(null);
+						setSelectedOption(null);
+						setAnswering(false);
+						advancingRef.current = false;
+						lastAnswerRef.current = false;
+						if (gameMode === "multiple_choice" && shuffled[0]) {
+							setMcOptions(shuffled[0].options || []);
+						}
+					}, 50);
 				} else {
 					endGame();
 				}
@@ -1021,7 +1105,22 @@ const GameScreen = ({ route, navigation }) => {
 
 					// Check if game complete
 					if (matchedPairs.length + 1 === matchCards.length / 2) {
-						setTimeout(() => endGame(), 500);
+						if (challengeType === "survival") {
+							setTimeout(() => {
+								const reshuffled = [...cards].sort(() => Math.random() - 0.5);
+								if (reshuffled.length === 0) {
+									endGame();
+									return;
+								}
+								setCards(reshuffled);
+								setMatchedPairs([]);
+								setFlippedIndices([]);
+								setMatchAttempts(0);
+								setupMatchGame(reshuffled.slice(0, 6));
+							}, 350);
+						} else {
+							setTimeout(() => endGame(), 500);
+						}
 					}
 				}, 500);
 			} else {
@@ -1039,20 +1138,24 @@ const GameScreen = ({ route, navigation }) => {
 	const endGame = async (finalCorrect = null, finalWrong = null) => {
 		// Prevent endGame from running twice per session
 		if (endedRef.current || finishingRef.current) return;
+		let suppressAchievementPopup = false;
 		endedRef.current = true;
 		finishingRef.current = true;
 		setFinishing(true);
 
 		timer.pause();
+		timedSessionTokenRef.current = null;
+		timedStartedSessionRef.current = null;
 		sounds.complete();
 
 		// Ads are handled by AdContext which checks the user's plan via PlanContext.
 		// Free plan users see ads; premium and pro users skip ads entirely.
 		try {
 			if (showVideoAd) {
-				await showVideoAd(() =>
-					navigation.navigate("Settings", { screen: "Plans" }),
-				);
+				await showVideoAd(() => {
+					suppressAchievementPopup = true;
+					navigation.navigate("Settings", { screen: "Plans" });
+				});
 			} else {
 				await showInterstitial();
 			}
@@ -1120,7 +1223,10 @@ const GameScreen = ({ route, navigation }) => {
 
 				console.log("Achievement response:", achievementResponse.data);
 
-				if (achievementResponse.data?.newlyEarned?.length > 0) {
+				if (
+					!suppressAchievementPopup &&
+					achievementResponse.data?.newlyEarned?.length > 0
+				) {
 					showAchievements(achievementResponse.data.newlyEarned);
 				}
 			} catch (error) {
@@ -1825,7 +1931,7 @@ const GameScreen = ({ route, navigation }) => {
 						<MaterialCommunityIcons
 							name="refresh"
 							size={22}
-							color={theme.primary.main}
+							color={theme.text.secondary}
 						/>
 					</Pressable>
 				</Animated.View>
@@ -2695,7 +2801,10 @@ const GameScreen = ({ route, navigation }) => {
 						</Pressable>
 
 						<Pressable
-							onPress={() => setGameState("mode_select")}
+							onPress={() => {
+								resetSessionStateForExit();
+								setGameState("mode_select");
+							}}
 							style={({ pressed }) => [
 								styles.summaryButton,
 								styles.summaryButtonSecondary,
@@ -2758,6 +2867,7 @@ const GameScreen = ({ route, navigation }) => {
 				confirmVariant="danger"
 				onConfirm={() => {
 					setShowExitDialog(false);
+					resetSessionStateForExit();
 					setGameState("mode_select");
 				}}
 				onClose={() => setShowExitDialog(false)}

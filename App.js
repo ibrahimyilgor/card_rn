@@ -1,6 +1,5 @@
-import React from "react";
-import { StatusBar } from "expo-status-bar";
-import { ActivityIndicator, View } from "react-native";
+import React, { useEffect } from "react";
+import { ActivityIndicator, AppState, Platform, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useFonts } from "expo-font";
@@ -13,6 +12,39 @@ import RootNavigator from "./src/navigation/RootNavigator";
 
 export default function App() {
 	const [fontsLoaded] = useFonts({});
+
+	useEffect(() => {
+		if (Platform.OS !== "android") return;
+
+		let NavigationBar;
+		try {
+			NavigationBar = require("expo-navigation-bar");
+		} catch (error) {
+			console.log("expo-navigation-bar not available:", error?.message);
+			return;
+		}
+
+		const applyNavigationBarHidden = async () => {
+			try {
+				await NavigationBar.setBehaviorAsync("overlay-swipe");
+				await NavigationBar.setVisibilityAsync("hidden");
+			} catch (error) {
+				console.log("Navigation bar hide failed:", error);
+			}
+		};
+
+		applyNavigationBarHidden();
+
+		const appStateSub = AppState.addEventListener("change", (state) => {
+			if (state === "active") {
+				applyNavigationBarHidden();
+			}
+		});
+
+		return () => {
+			appStateSub.remove();
+		};
+	}, []);
 
 	if (!fontsLoaded) {
 		return (
@@ -38,7 +70,6 @@ export default function App() {
 							<AdProvider>
 								<AchievementProvider>
 									<RootNavigator />
-									<StatusBar style="auto" />
 								</AchievementProvider>
 							</AdProvider>
 						</PlanProvider>

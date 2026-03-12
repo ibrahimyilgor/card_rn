@@ -52,6 +52,8 @@ const FlipCard = ({
 		outputRange: [0, 0, 1, 1],
 	});
 
+	const isBackTextLong = (backText || "").trim().length > 60;
+
 	return (
 		<Pressable
 			onPress={disabled ? undefined : onFlip}
@@ -112,7 +114,11 @@ const FlipCard = ({
 				{/* Green accent bar */}
 				<View style={[styles.accentBar, { backgroundColor: BACK_ACCENT }]} />
 				{/* ANSWER label */}
-				<Text style={styles.answerLabel}>ANSWER</Text>
+				<Text
+					style={[styles.answerLabel, isBackTextLong && styles.answerLabelLong]}
+				>
+					ANSWER
+				</Text>
 				{/* Content */}
 				<View style={styles.contentArea}>
 					<Text style={[styles.text, { color: theme.text.primary }]}>
@@ -170,6 +176,9 @@ const styles = StyleSheet.create({
 		letterSpacing: 2,
 		color: BACK_ACCENT,
 		textTransform: "uppercase",
+	},
+	answerLabelLong: {
+		top: "24%",
 	},
 	contentArea: {
 		flex: 1,

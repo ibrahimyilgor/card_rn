@@ -1,71 +1,89 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from "react";
 
 export const useTimer = (initialTime = 30, onTimeUp = () => {}) => {
-  const [timeLeft, setTimeLeft] = useState(initialTime);
-  const [isRunning, setIsRunning] = useState(false);
-  const intervalRef = useRef(null);
-  const onTimeUpRef = useRef(onTimeUp);
+	const [timeLeft, setTimeLeft] = useState(initialTime);
+	const [isRunning, setIsRunning] = useState(false);
+	const intervalRef = useRef(null);
+	const onTimeUpRef = useRef(onTimeUp);
 
-  useEffect(() => {
-    onTimeUpRef.current = onTimeUp;
-  }, [onTimeUp]);
+	const clearTimerInterval = useCallback(() => {
+		if (intervalRef.current) {
+			clearInterval(intervalRef.current);
+			intervalRef.current = null;
+		}
+	}, []);
 
-  useEffect(() => {
-    if (isRunning && timeLeft > 0) {
-      intervalRef.current = setInterval(() => {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
-            clearInterval(intervalRef.current);
-            setIsRunning(false);
-            onTimeUpRef.current();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
+	useEffect(() => {
+		onTimeUpRef.current = onTimeUp;
+	}, [onTimeUp]);
 
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
-  }, [isRunning, timeLeft]);
+	useEffect(() => {
+		if (!isRunning) {
+			clearTimerInterval();
+			return;
+		}
 
-  const start = useCallback(() => {
-    setIsRunning(true);
-  }, []);
+		clearTimerInterval();
+		intervalRef.current = setInterval(() => {
+			setTimeLeft((prev) => {
+				if (prev <= 1) {
+					clearTimerInterval();
+					setIsRunning(false);
+					onTimeUpRef.current();
+					return 0;
+				}
+				return prev - 1;
+			});
+		}, 1000);
 
-  const pause = useCallback(() => {
-    setIsRunning(false);
-  }, []);
+		return () => {
+			clearTimerInterval();
+		};
+	}, [isRunning, clearTimerInterval]);
 
-  const reset = useCallback((newTime = initialTime) => {
-    setTimeLeft(newTime);
-    setIsRunning(false);
-  }, [initialTime]);
+	const start = useCallback(() => {
+		setIsRunning(true);
+	}, []);
 
-  const restart = useCallback((newTime = initialTime) => {
-    setTimeLeft(newTime);
-    setIsRunning(true);
-  }, [initialTime]);
+	const pause = useCallback(() => {
+		clearTimerInterval();
+		setIsRunning(false);
+	}, [clearTimerInterval]);
 
-  const formatTime = useCallback((seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  }, []);
+	const reset = useCallback(
+		(newTime = initialTime) => {
+			clearTimerInterval();
+			setTimeLeft(newTime);
+			setIsRunning(false);
+		},
+		[initialTime, clearTimerInterval],
+	);
 
-  return {
-    timeLeft,
-    isRunning,
-    start,
-    pause,
-    reset,
-    restart,
-    formattedTime: formatTime(timeLeft),
-    percentage: (timeLeft / initialTime) * 100,
-  };
+	const restart = useCallback(
+		(newTime = initialTime) => {
+			clearTimerInterval();
+			setTimeLeft(newTime);
+			setIsRunning(true);
+		},
+		[initialTime, clearTimerInterval],
+	);
+
+	const formatTime = useCallback((seconds) => {
+		const mins = Math.floor(seconds / 60);
+		const secs = seconds % 60;
+		return `${mins}:${secs.toString().padStart(2, "0")}`;
+	}, []);
+
+	return {
+		timeLeft,
+		isRunning,
+		start,
+		pause,
+		reset,
+		restart,
+		formattedTime: formatTime(timeLeft),
+		percentage: (timeLeft / initialTime) * 100,
+	};
 };
 
 export default useTimer;

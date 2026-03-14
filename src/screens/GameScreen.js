@@ -579,6 +579,9 @@ const GameScreen = ({ route, navigation }) => {
 				response = await gamesAPI.getMultipleChoice(deck.id);
 				let flashcards = response.data?.flashcards || response.data || [];
 				setCards(flashcards);
+				progressAnim.setValue(
+					flashcards.length > 0 ? 1 / flashcards.length : 0,
+				);
 				if (flashcards.length > 0) {
 					setMcOptions(flashcards[0].options || []);
 				}
@@ -591,6 +594,7 @@ const GameScreen = ({ route, navigation }) => {
 				// Shuffle cards
 				const shuffled = [...flashcards].sort(() => Math.random() - 0.5);
 				setCards(shuffled);
+				progressAnim.setValue(shuffled.length > 0 ? 1 / shuffled.length : 0);
 
 				// Setup match game
 				if (mode === "match") {
@@ -641,6 +645,7 @@ const GameScreen = ({ route, navigation }) => {
 		timedStartedSessionRef.current = null;
 		const mode = selectedMode;
 		const challenge = selectedChallengeType;
+		progressAnim.setValue(0);
 
 		// Save settings to backend
 		try {
@@ -740,6 +745,7 @@ const GameScreen = ({ route, navigation }) => {
 		sessionTokenRef.current += 1;
 		timedStartedSessionRef.current = null;
 		const mode = gameMode;
+		progressAnim.setValue(0);
 
 		// reset badge animations so they don't appear enlarged on restart
 		if (correctScaleAnim && correctScaleAnim.stopAnimation)
@@ -856,6 +862,7 @@ const GameScreen = ({ route, navigation }) => {
 				setUserAnswer("");
 				setAnswerResult(null);
 				setSelectedOption(null);
+				resetSwipeAnimation();
 				setAnswering(false);
 				if (gameMode === "multiple_choice" && shuffled[0]) {
 					setMcOptions(shuffled[0].options || []);
@@ -1311,9 +1318,22 @@ const GameScreen = ({ route, navigation }) => {
 						],
 					}}
 				>
-					<ThemedText variant="h2" style={styles.modeTitle}>
-						{t("select_game_mode")}
-					</ThemedText>
+					<View style={styles.modeHeaderRow}>
+						<Pressable
+							onPress={() => navigation.goBack()}
+							style={styles.modeBackButton}
+						>
+							<MaterialCommunityIcons
+								name="arrow-left"
+								size={24}
+								color={theme.text.secondary}
+							/>
+						</Pressable>
+						<ThemedText variant="h2" style={styles.modeTitle}>
+							{t("select_game_mode")}
+						</ThemedText>
+						<View style={styles.modeHeaderRightSpacer} />
+					</View>
 					<ThemedText color="secondary" style={styles.deckName}>
 						{deck.title}
 					</ThemedText>
@@ -2887,9 +2907,21 @@ const styles = StyleSheet.create({
 	modeSelectContainer: {
 		padding: spacing.lg,
 	},
+	modeHeaderRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		marginBottom: spacing.xs,
+	},
+	modeBackButton: {
+		padding: spacing.xs,
+	},
+	modeHeaderRightSpacer: {
+		width: 24 + spacing.xs * 2,
+	},
 	modeTitle: {
 		textAlign: "center",
-		marginBottom: spacing.xs,
+		flex: 1,
 	},
 	deckName: {
 		textAlign: "center",

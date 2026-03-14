@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 export const useTimer = (initialTime = 30, onTimeUp = () => {}) => {
 	const [timeLeft, setTimeLeft] = useState(initialTime);
 	const [isRunning, setIsRunning] = useState(false);
+	const [restartNonce, setRestartNonce] = useState(0);
 	const intervalRef = useRef(null);
 	const onTimeUpRef = useRef(onTimeUp);
 
@@ -39,7 +40,7 @@ export const useTimer = (initialTime = 30, onTimeUp = () => {}) => {
 		return () => {
 			clearTimerInterval();
 		};
-	}, [isRunning, clearTimerInterval]);
+	}, [isRunning, restartNonce, clearTimerInterval]);
 
 	const start = useCallback(() => {
 		setIsRunning(true);
@@ -64,6 +65,7 @@ export const useTimer = (initialTime = 30, onTimeUp = () => {}) => {
 			clearTimerInterval();
 			setTimeLeft(newTime);
 			setIsRunning(true);
+			setRestartNonce((prev) => prev + 1);
 		},
 		[initialTime, clearTimerInterval],
 	);

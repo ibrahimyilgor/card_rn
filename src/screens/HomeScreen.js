@@ -41,7 +41,6 @@ import {
 	EmptyState,
 	Modal,
 	Input,
-	ConfirmDialog,
 } from "../components/ui";
 import { spacing, borderRadius } from "../styles/theme";
 import LimitWarningModal from "../components/LimitWarningModal";
@@ -61,13 +60,17 @@ const HomeScreen = ({ navigation, onLogout }) => {
 	const [accountId, setAccountId] = useState(null);
 
 	// Modal states
-	const [deckModalVisible, setDeckModalVisible] = useState(false);
-	const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
 	const [selectedDeck, setSelectedDeck] = useState(null);
-	const [deckTitle, setDeckTitle] = useState("");
-	const [deckDescription, setDeckDescription] = useState("");
 	const [saving, setSaving] = useState(false);
+	const [inlineDeckSaving, setInlineDeckSaving] = useState(false);
 	const [flashcardsModalVisible, setFlashcardsModalVisible] = useState(false);
+	const [inlineDeleteDeckId, setInlineDeleteDeckId] = useState(null);
+	const [inlineDeck, setInlineDeck] = useState({
+		mode: null, // 'create' | 'edit' | null
+		deckId: null,
+		title: "",
+		description: "",
+	});
 
 	// Import modal states
 	const [importModalVisible, setImportModalVisible] = useState(false);
@@ -79,6 +82,7 @@ const HomeScreen = ({ navigation, onLogout }) => {
 	const [importLoading, setImportLoading] = useState(false);
 	// Sort modal
 	const [sortModalVisible, setSortModalVisible] = useState(false);
+	const [keyboardInset, setKeyboardInset] = useState(0);
 
 	// Alert modal
 	const [alertMessage, setAlertMessage] = useState("");
@@ -125,6 +129,26 @@ const HomeScreen = ({ navigation, onLogout }) => {
 		}, []),
 	);
 
+	useEffect(() => {
+		const showEvent =
+			Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+		const hideEvent =
+			Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+		const showSub = Keyboard.addListener(showEvent, (event) => {
+			setKeyboardInset(event?.endCoordinates?.height || 0);
+		});
+
+		const hideSub = Keyboard.addListener(hideEvent, () => {
+			setKeyboardInset(0);
+		});
+
+		return () => {
+			showSub.remove();
+			hideSub.remove();
+		};
+	}, []);
+
 	const loadAccountAndDecks = async () => {
 		try {
 			const id = await AsyncStorage.getItem("accountId");
@@ -152,7 +176,9 @@ const HomeScreen = ({ navigation, onLogout }) => {
 		} finally {
 			if (!silent) setLoading(false);
 			setRefreshing(false);
-			startAnimations();
+			if (!silent) {
+				startAnimations();
+			}
 		}
 	};
 
@@ -188,6 +214,18 @@ const HomeScreen = ({ navigation, onLogout }) => {
 			}
 		});
 
+	const displayDecks = useMemo(() => {
+		if (inlineDeck.mode !== "create") return filteredDecks;
+		const list = [
+			{
+				id: "__inline_new_deck__",
+				isInlineCreate: true,
+			},
+			...filteredDecks,
+		];
+		return list;
+	}, [filteredDecks, inlineDeck.mode]);
+
 	// Deck CRUD operations
 	const handleCreateDeck = () => {
 		if (!canCreateDeck) {
@@ -195,58 +233,66 @@ const HomeScreen = ({ navigation, onLogout }) => {
 			setLimitModalVisible(true);
 			return;
 		}
-		setSelectedDeck(null);
-		setDeckTitle("");
-		setDeckDescription("");
-		setDeckModalVisible(true);
+		setInlineDeck({
+			mode: "create",
+			deckId: null,
+			title: "",
+			description: "",
+		});
+		setInlineDeleteDeckId(null);
 	};
 
 	const handleEditDeck = (deck) => {
-		setSelectedDeck(deck);
-		setDeckTitle(deck.title);
-		setDeckDescription(deck.description || "");
-		setDeckModalVisible(true);
+		setInlineDeck({
+			mode: "edit",
+			deckId: deck.id,
+			title: deck.title || "",
+			description: deck.description || "",
+		});
+		setInlineDeleteDeckId(null);
 	};
 
-	const handleSaveDeck = async () => {
-		if (!deckTitle.trim()) return;
+	const handleSaveInlineDeck = async () => {
+		if (!inlineDeck.title.trim()) return;
 
-		setSaving(true);
+		setInlineDeckSaving(true);
 		try {
-			let deckId = selectedDeck?.id;
-			if (selectedDeck) {
+			if (inlineDeck.mode === "edit" && inlineDeck.deckId) {
 				await decksAPI.update(
-					selectedDeck.id,
-					deckTitle.trim(),
-					deckDescription.trim(),
+					inlineDeck.deckId,
+					inlineDeck.title.trim(),
+					inlineDeck.description.trim(),
 				);
-			} else {
-				const response = await decksAPI.create(
+			} else if (inlineDeck.mode === "create") {
+				await decksAPI.create(
 					accountId,
-					deckTitle.trim(),
-					deckDescription.trim(),
+					inlineDeck.title.trim(),
+					inlineDeck.description.trim(),
 				);
-				deckId = response.data?.deck?.id;
 			}
-			setDeckModalVisible(false);
-			fetchDecks(accountId);
+			setInlineDeck({ mode: null, deckId: null, title: "", description: "" });
+			await fetchDecks(accountId, true);
 			refreshPlan();
 		} catch (error) {
 			console.error("Error saving deck:", error);
 		} finally {
-			setSaving(false);
+			setInlineDeckSaving(false);
 		}
 	};
 
-	const handleDeleteDeck = async () => {
-		if (!selectedDeck) return;
+	const handleCancelInlineDeck = () => {
+		setInlineDeck({ mode: null, deckId: null, title: "", description: "" });
+	};
+
+	const handleDeleteDeck = async (deckId) => {
+		if (!deckId) return;
 
 		setSaving(true);
 		try {
-			await decksAPI.delete(selectedDeck.id);
-			setDeleteDialogVisible(false);
-			setSelectedDeck(null);
-			fetchDecks(accountId);
+			await decksAPI.delete(deckId);
+			setInlineDeleteDeckId(null);
+			setDecks((prev) => prev.filter((deck) => deck.id !== deckId));
+			await fetchDecks(accountId, true);
 			refreshPlan();
 		} catch (error) {
 			console.error("Error deleting deck:", error);
@@ -255,11 +301,27 @@ const HomeScreen = ({ navigation, onLogout }) => {
 		}
 	};
 
+	const handleFlashcardsCountUpdate = useCallback(
+		(deckId, flashcardCount) => {
+			if (!deckId) return;
+			setDecks((prev) =>
+				prev.map((deck) =>
+					deck.id === deckId
+						? { ...deck, flashcard_count: flashcardCount }
+						: deck,
+				),
+			);
+			refreshPlan();
+		},
+		[refreshPlan],
+	);
+
 	const handlePlayDeck = (deck) => {
 		navigation.navigate("Game", { deck });
 	};
 
 	const handleManageFlashcards = (deck) => {
+		setInlineDeleteDeckId(null);
 		setSelectedDeck(deck);
 		setFlashcardsModalVisible(true);
 	};
@@ -493,157 +555,248 @@ const HomeScreen = ({ navigation, onLogout }) => {
 		setImportModalVisible(true);
 	};
 
-	const renderDeckItem = ({ item }) => (
-		<Card style={styles.deckCard}>
-			<LinearGradient
-				colors={["#3b82f6", "#8b5cf6"]}
-				start={{ x: 0, y: 0 }}
-				end={{ x: 0, y: 0 }}
-				style={styles.deckAccentBar}
-			/>
-			<View style={styles.deckContent}>
-				{/* Title and Play Button Row */}
-				<View style={styles.deckTitleRow}>
-					<View style={styles.deckInfo}>
-						<ThemedText variant="h3" style={styles.deckTitle} numberOfLines={1}>
-							{item.title}
-						</ThemedText>
+	const renderDeckItem = ({ item }) => {
+		if (item.isInlineCreate) {
+			return (
+				<InlineDeckForm
+					mode="create"
+					title={inlineDeck.title}
+					description={inlineDeck.description}
+					onChangeTitle={(title) =>
+						setInlineDeck((prev) => ({ ...prev, title }))
+					}
+					onChangeDescription={(description) =>
+						setInlineDeck((prev) => ({ ...prev, description }))
+					}
+					onCancel={handleCancelInlineDeck}
+					onSave={handleSaveInlineDeck}
+					saving={inlineDeckSaving}
+					theme={theme}
+					t={t}
+				/>
+			);
+		}
+
+		if (inlineDeck.mode === "edit" && inlineDeck.deckId === item.id) {
+			return (
+				<InlineDeckForm
+					mode="edit"
+					title={inlineDeck.title}
+					description={inlineDeck.description}
+					onChangeTitle={(title) =>
+						setInlineDeck((prev) => ({ ...prev, title }))
+					}
+					onChangeDescription={(description) =>
+						setInlineDeck((prev) => ({ ...prev, description }))
+					}
+					onCancel={handleCancelInlineDeck}
+					onSave={handleSaveInlineDeck}
+					saving={inlineDeckSaving}
+					theme={theme}
+					t={t}
+				/>
+			);
+		}
+
+		return (
+			<Card style={styles.deckCard}>
+				<LinearGradient
+					colors={["#3b82f6", "#8b5cf6"]}
+					start={{ x: 0, y: 0 }}
+					end={{ x: 0, y: 0 }}
+					style={styles.deckAccentBar}
+				/>
+				<View style={styles.deckContent}>
+					{/* Title and Play Button Row */}
+					<View style={styles.deckTitleRow}>
+						<View style={styles.deckInfo}>
+							<ThemedText
+								variant="h3"
+								style={styles.deckTitle}
+								numberOfLines={1}
+							>
+								{item.title}
+							</ThemedText>
+						</View>
+
+						{/* Play Button - Top Right */}
+						{inlineDeleteDeckId !== item.id && (
+							<Pressable
+								onPress={() => handlePlayDeck(item)}
+								style={[
+									styles.playButton,
+									{
+										backgroundColor: "rgba(34, 197, 94, 0.15)",
+									},
+								]}
+							>
+								<Ionicons name="play" size={18} color="#22c55e" />
+							</Pressable>
+						)}
 					</View>
 
-					{/* Play Button - Top Right */}
-					<Pressable
-						onPress={() => handlePlayDeck(item)}
-						style={[
-							styles.playButton,
-							{
-								backgroundColor: "rgba(34, 197, 94, 0.15)",
-							},
-						]}
+					{/* Description */}
+					<ThemedText
+						color="secondary"
+						style={styles.deckDescription}
+						numberOfLines={1}
 					>
-						<Ionicons name="play" size={18} color="#22c55e" />
-					</Pressable>
-				</View>
+						{item.description || ""}
+					</ThemedText>
 
-				{/* Description */}
-				<ThemedText
-					color="secondary"
-					style={styles.deckDescription}
-					numberOfLines={1}
-				>
-					{item.description || ""}
-				</ThemedText>
+					{/* Card count and badges */}
+					<View style={styles.deckMeta}>
+						<View
+							style={[
+								styles.cardCountBadge,
+								{
+									backgroundColor: theme.primary.main + "20",
+								},
+							]}
+						>
+							<MaterialCommunityIcons
+								name="layers"
+								size={18}
+								color={theme.primary.main}
+							/>
+							<Text
+								style={[styles.cardCountText, { color: theme.primary.main }]}
+							>
+								{item.flashcard_count || 0} {t("cards")}
+							</Text>
+						</View>
 
-				{/* Card count and badges */}
-				<View style={styles.deckMeta}>
-					<View
-						style={[
-							styles.cardCountBadge,
-							{
-								backgroundColor: theme.primary.main + "20",
-							},
-						]}
-					>
-						<MaterialCommunityIcons
-							name="layers"
-							size={18}
-							color={theme.primary.main}
-						/>
-						<Text style={[styles.cardCountText, { color: theme.primary.main }]}>
-							{item.flashcard_count || 0} {t("cards")}
-						</Text>
+						{/* Hard Mode badge */}
+						{item.difficulty_enabled && (
+							<View
+								style={[
+									styles.modeBadge,
+									{ backgroundColor: "rgba(249, 115, 22, 0.15)" },
+								]}
+							>
+								<Ionicons name="flame" size={14} color="#f97316" />
+							</View>
+						)}
+
+						{/* Reverse badge */}
+						{item.card_direction === "reverse" && (
+							<View
+								style={[
+									styles.modeBadge,
+									{ backgroundColor: "rgba(6, 182, 212, 0.15)" },
+								]}
+							>
+								<Ionicons name="swap-horizontal" size={14} color="#06b6d4" />
+							</View>
+						)}
 					</View>
 
-					{/* Hard Mode badge */}
-					{item.difficulty_enabled && (
+					{inlineDeleteDeckId === item.id ? (
 						<View
 							style={[
-								styles.modeBadge,
-								{ backgroundColor: "rgba(249, 115, 22, 0.15)" },
+								styles.inlineDeleteConfirm,
+								{ borderTopColor: theme.border.main },
 							]}
 						>
-							<Ionicons name="flame" size={14} color="#f97316" />
+							<ThemedText color="secondary" style={styles.inlineDeleteText}>
+								{t("delete_deck_warning")}
+							</ThemedText>
+							<View style={styles.inlineDeleteActions}>
+								<Pressable
+									onPress={() => setInlineDeleteDeckId(null)}
+									style={[
+										styles.inlineConfirmButton,
+										{ backgroundColor: "rgba(239, 68, 68, 0.12)" },
+									]}
+								>
+									<Ionicons name="close" size={18} color="#ef4444" />
+								</Pressable>
+								<Pressable
+									onPress={() => handleDeleteDeck(item.id)}
+									style={[
+										styles.inlineConfirmButton,
+										{ backgroundColor: "rgba(34, 197, 94, 0.12)" },
+									]}
+								>
+									{saving ? (
+										<ActivityIndicator size="small" color="#22c55e" />
+									) : (
+										<Ionicons name="checkmark" size={18} color="#22c55e" />
+									)}
+								</Pressable>
+							</View>
 						</View>
-					)}
-
-					{/* Reverse badge */}
-					{item.card_direction === "reverse" && (
+					) : (
 						<View
 							style={[
-								styles.modeBadge,
-								{ backgroundColor: "rgba(6, 182, 212, 0.15)" },
+								styles.deckActions,
+								{ borderTopColor: theme.border.main },
 							]}
 						>
-							<Ionicons name="swap-horizontal" size={14} color="#06b6d4" />
+							{/* Edit Button */}
+							<Pressable
+								onPress={() => handleEditDeck(item)}
+								style={[
+									styles.actionIconButton,
+									{ backgroundColor: "rgba(251, 191, 36, 0.1)" },
+								]}
+							>
+								<MaterialCommunityIcons
+									name="pencil"
+									size={18}
+									color={"#fbbf24"}
+								/>
+							</Pressable>
+
+							{/* Flashcards Button */}
+							<Pressable
+								onPress={() => handleManageFlashcards(item)}
+								style={[
+									styles.actionIconButton,
+									{ backgroundColor: theme.primary.main + "15" },
+								]}
+							>
+								<MaterialCommunityIcons
+									name="cards"
+									size={18}
+									color={theme.primary.main}
+								/>
+							</Pressable>
+
+							{/* Download Button */}
+							<Pressable
+								onPress={() => handleDownloadCSV(item)}
+								style={[
+									styles.actionIconButton,
+									{ backgroundColor: "rgba(34, 197, 94, 0.1)" },
+								]}
+							>
+								<MaterialCommunityIcons
+									name="download"
+									size={18}
+									color={"#22c55e"}
+								/>
+							</Pressable>
+
+							{/* Spacer */}
+							<View style={{ flex: 1 }} />
+
+							{/* Delete Button */}
+							<Pressable
+								onPress={() => setInlineDeleteDeckId(item.id)}
+								style={[
+									styles.actionIconButton,
+									{ backgroundColor: "rgba(239, 68, 68, 0.1)" },
+								]}
+							>
+								<Ionicons name="trash" size={18} color="#ef4444" />
+							</Pressable>
 						</View>
 					)}
 				</View>
-
-				{/* Action Buttons Row */}
-				<View
-					style={[styles.deckActions, { borderTopColor: theme.border.main }]}
-				>
-					{/* Edit Button */}
-					<Pressable
-						onPress={() => handleEditDeck(item)}
-						style={[
-							styles.actionIconButton,
-							{ backgroundColor: "rgba(251, 191, 36, 0.1)" },
-						]}
-					>
-						<MaterialCommunityIcons name="pencil" size={18} color={"#fbbf24"} />
-					</Pressable>
-
-					{/* Flashcards Button */}
-					<Pressable
-						onPress={() => handleManageFlashcards(item)}
-						style={[
-							styles.actionIconButton,
-							{ backgroundColor: theme.primary.main + "15" },
-						]}
-					>
-						<MaterialCommunityIcons
-							name="cards"
-							size={18}
-							color={theme.primary.main}
-						/>
-					</Pressable>
-
-					{/* Download Button */}
-					<Pressable
-						onPress={() => handleDownloadCSV(item)}
-						style={[
-							styles.actionIconButton,
-							{ backgroundColor: "rgba(34, 197, 94, 0.1)" },
-						]}
-					>
-						{/* <Ionicons name="download-outline" size={18} color="#22c55e" /> */}
-						<MaterialCommunityIcons
-							name="download"
-							size={18}
-							color={"#22c55e"}
-						/>
-					</Pressable>
-
-					{/* Spacer */}
-					<View style={{ flex: 1 }} />
-
-					{/* Delete Button */}
-					<Pressable
-						onPress={() => {
-							setSelectedDeck(item);
-							setDeleteDialogVisible(true);
-						}}
-						style={[
-							styles.actionIconButton,
-							{ backgroundColor: "rgba(239, 68, 68, 0.1)" },
-						]}
-					>
-						<Ionicons name="trash" size={18} color="#ef4444" />
-					</Pressable>
-				</View>
-			</View>
-		</Card>
-	);
+			</Card>
+		);
+	};
 
 	const searchInputRef = useRef(null);
 
@@ -833,7 +986,7 @@ const HomeScreen = ({ navigation, onLogout }) => {
 					}}
 				>
 					<FlatList
-						data={filteredDecks}
+						data={displayDecks}
 						renderItem={renderDeckItem}
 						keyExtractor={(item) => item.id.toString()}
 						ListHeaderComponent={renderHeader}
@@ -897,9 +1050,13 @@ const HomeScreen = ({ navigation, onLogout }) => {
 								</Pressable>
 							</View>
 						}
-						contentContainerStyle={styles.listContent}
+						contentContainerStyle={[
+							styles.listContent,
+							{ paddingBottom: spacing.xxl + keyboardInset + spacing.lg },
+						]}
 						keyboardShouldPersistTaps="always"
-						keyboardDismissMode="none"
+						keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "none"}
+						automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
 						removeClippedSubviews={false}
 						refreshControl={
 							<RefreshControl
@@ -911,53 +1068,6 @@ const HomeScreen = ({ navigation, onLogout }) => {
 					/>
 				</Animated.View>
 
-				{/* Deck Modal */}
-				<Modal
-					visible={deckModalVisible}
-					onClose={() => setDeckModalVisible(false)}
-					title={selectedDeck ? t("edit_deck") : t("new_deck")}
-					footer={
-						<View style={styles.modalFooter}>
-							<Button
-								variant="ghost"
-								onPress={() => setDeckModalVisible(false)}
-								textStyle={{ color: theme.text.secondary }}
-							>
-								{t("close")}
-							</Button>
-							<Button onPress={handleSaveDeck} loading={saving}>
-								{t("save")}
-							</Button>
-						</View>
-					}
-				>
-					<Input
-						label={t("deck_title")}
-						value={deckTitle}
-						onChangeText={setDeckTitle}
-						placeholder={t("deck_title_placeholder")}
-					/>
-					<Input
-						label={t("deck_description")}
-						value={deckDescription}
-						onChangeText={setDeckDescription}
-						placeholder={t("deck_description_placeholder")}
-						multiline
-						numberOfLines={3}
-					/>
-				</Modal>
-
-				{/* Delete Confirmation */}
-				<ConfirmDialog
-					visible={deleteDialogVisible}
-					onClose={() => setDeleteDialogVisible(false)}
-					onConfirm={handleDeleteDeck}
-					title={t("delete_deck")}
-					message={t("delete_deck_warning")}
-					confirmLabel={t("delete")}
-					loading={saving}
-				/>
-
 				{/* Flashcards Modal */}
 				<FlashcardsModal
 					visible={flashcardsModalVisible}
@@ -965,7 +1075,7 @@ const HomeScreen = ({ navigation, onLogout }) => {
 					deck={selectedDeck}
 					theme={theme}
 					t={t}
-					onUpdate={() => { fetchDecks(accountId, true); refreshPlan(); }}
+					onUpdate={handleFlashcardsCountUpdate}
 					canCreateFlashcard={canCreateFlashcard}
 					onLimitReached={() => {
 						setLimitModalType("flashcard");
@@ -1378,6 +1488,106 @@ const HomeScreen = ({ navigation, onLogout }) => {
 	);
 };
 
+const InlineDeckForm = ({
+	mode,
+	title,
+	description,
+	onChangeTitle,
+	onChangeDescription,
+	onSave,
+	onCancel,
+	saving,
+	t,
+	theme,
+}) => {
+	const accentColor = mode === "edit" ? "#f59e0b" : "#22c55e";
+	const canSubmit = !!title.trim() && !saving;
+
+	return (
+		<Card style={styles.deckCard}>
+			<LinearGradient
+				colors={["#3b82f6", "#8b5cf6"]}
+				start={{ x: 0, y: 0 }}
+				end={{ x: 0, y: 0 }}
+				style={styles.deckAccentBar}
+			/>
+			<View style={styles.deckContent}>
+				<View
+				// style={{
+				// 	backgroundColor: theme.background.paper,
+				// 	borderRadius: borderRadius.lg,
+				// 	borderWidth: 1,
+				// 	borderColor: theme.border.main,
+				// 	padding: spacing.md,
+				// 	gap: spacing.sm,
+				// }}
+				>
+					<Input
+						label={t("deck_title")}
+						value={title}
+						onChangeText={onChangeTitle}
+						placeholder={t("deck_title_placeholder")}
+					/>
+					<Input
+						label={t("deck_description")}
+						value={description}
+						onChangeText={onChangeDescription}
+						placeholder={t("deck_description_placeholder")}
+						multiline
+						numberOfLines={3}
+					/>
+
+					<View
+						style={{
+							flexDirection: "row",
+							justifyContent: "flex-end",
+							gap: spacing.sm,
+						}}
+					>
+						<Pressable
+							onPress={onCancel}
+							style={{
+								width: 36,
+								height: 36,
+								borderRadius: borderRadius.md,
+								backgroundColor: "rgba(239, 68, 68, 0.12)",
+								alignItems: "center",
+								justifyContent: "center",
+							}}
+						>
+							<Ionicons name="close" size={18} color="#ef4444" />
+						</Pressable>
+
+						<Pressable
+							onPress={() => canSubmit && onSave()}
+							style={{
+								width: 36,
+								height: 36,
+								borderRadius: borderRadius.md,
+								backgroundColor: canSubmit
+									? accentColor + "22"
+									: "rgba(150,150,150,0.1)",
+								alignItems: "center",
+								justifyContent: "center",
+							}}
+						>
+							{saving ? (
+								<ActivityIndicator size="small" color={accentColor} />
+							) : (
+								<Ionicons
+									name="checkmark"
+									size={18}
+									color={canSubmit ? accentColor : theme.text.disabled}
+								/>
+							)}
+						</Pressable>
+					</View>
+				</View>
+			</View>
+		</Card>
+	);
+};
+
 // ── Inline card form (add / edit) ────────────────────────────────────────────
 const InlineCardForm = ({
 	editingCard,
@@ -1486,7 +1696,16 @@ const InlineCardForm = ({
 };
 
 // Flashcards Modal Component
-const FlashcardsModal = ({ visible, onClose, deck, theme, t, onUpdate, canCreateFlashcard, onLimitReached }) => {
+const FlashcardsModal = ({
+	visible,
+	onClose,
+	deck,
+	theme,
+	t,
+	onUpdate,
+	canCreateFlashcard,
+	onLimitReached,
+}) => {
 	const [flashcards, setFlashcards] = useState([]);
 	const [loading, setLoading] = useState(false);
 	const [isInlineAdding, setIsInlineAdding] = useState(false);
@@ -1529,18 +1748,22 @@ const FlashcardsModal = ({ visible, onClose, deck, theme, t, onUpdate, canCreate
 		}
 	}, [visible, deck]);
 
-	const fetchFlashcards = async () => {
+	const fetchFlashcards = async (silent = false) => {
 		if (!deck) return;
-		setLoading(true);
+		if (!silent) setLoading(true);
 		try {
 			const response = await flashcardsAPI.getByDeck(deck.id);
 			// Backend returns { decks: [...] } for flashcards (naming quirk)
 			const flashcardsData = response.data?.decks || response.data || [];
-			setFlashcards(Array.isArray(flashcardsData) ? flashcardsData : []);
+			const nextFlashcards = Array.isArray(flashcardsData)
+				? flashcardsData
+				: [];
+			setFlashcards(nextFlashcards);
+			if (onUpdate) onUpdate(deck.id, nextFlashcards.length);
 		} catch (error) {
 			console.error("Error fetching flashcards:", error);
 		} finally {
-			setLoading(false);
+			if (!silent) setLoading(false);
 		}
 	};
 
@@ -1563,8 +1786,7 @@ const FlashcardsModal = ({ visible, onClose, deck, theme, t, onUpdate, canCreate
 		try {
 			await flashcardsAPI.create(deck.id, front, back);
 			setIsInlineAdding(false);
-			fetchFlashcards();
-			if (onUpdate) onUpdate();
+			await fetchFlashcards(true);
 		} catch (error) {
 			console.error("Error adding card:", error);
 		} finally {
@@ -1578,8 +1800,7 @@ const FlashcardsModal = ({ visible, onClose, deck, theme, t, onUpdate, canCreate
 		try {
 			await flashcardsAPI.update(editingCardId, front, back);
 			setEditingCardId(null);
-			fetchFlashcards();
-			if (onUpdate) onUpdate();
+			await fetchFlashcards(true);
 		} catch (error) {
 			console.error("Error updating card:", error);
 		} finally {
@@ -1590,8 +1811,7 @@ const FlashcardsModal = ({ visible, onClose, deck, theme, t, onUpdate, canCreate
 	const handleDeleteCard = async (cardId) => {
 		try {
 			await flashcardsAPI.delete(cardId);
-			fetchFlashcards();
-			if (onUpdate) onUpdate();
+			await fetchFlashcards(true);
 		} catch (error) {
 			console.error("Error deleting card:", error);
 		}
@@ -2006,6 +2226,32 @@ const styles = StyleSheet.create({
 		borderTopWidth: 1,
 		paddingTop: spacing.sm,
 		marginTop: spacing.xs,
+	},
+	inlineDeleteConfirm: {
+		borderTopWidth: 1,
+		paddingTop: spacing.sm,
+		marginTop: spacing.xs,
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		gap: spacing.sm,
+	},
+	inlineDeleteText: {
+		fontSize: 13,
+		lineHeight: 18,
+		flex: 1,
+		paddingRight: spacing.sm,
+	},
+	inlineDeleteActions: {
+		flexDirection: "row",
+		gap: spacing.sm,
+	},
+	inlineConfirmButton: {
+		width: 36,
+		height: 36,
+		borderRadius: borderRadius.md,
+		alignItems: "center",
+		justifyContent: "center",
 	},
 	actionButton: {
 		flex: 1,

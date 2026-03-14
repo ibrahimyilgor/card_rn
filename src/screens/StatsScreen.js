@@ -253,7 +253,7 @@ const CardPerformanceRow = ({ card, theme, t }) => {
 						)}
 					</View>
 					{card.deck_title && (
-					<View
+						<View
 							style={[
 								styles.deckBadge,
 								{ backgroundColor: theme.primary.main + "20" },
@@ -1535,7 +1535,6 @@ const StatsScreen = () => {
 					color: () => "#ef4444",
 				},
 			],
-			legend: [t("correct") || "Correct", t("incorrect") || "Incorrect"],
 		};
 	}, [filledChartData, t]);
 

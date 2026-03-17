@@ -11,6 +11,7 @@ import {
 	Animated,
 	PanResponder,
 } from "react-native";
+import { Slider } from "@miblanchard/react-native-slider";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -127,6 +128,12 @@ const GameScreen = ({ route, navigation }) => {
 	const [settingsLoading, setSettingsLoading] = useState(true);
 	const [timeLimit, setTimeLimit] = useState(60); // seconds for timed mode
 	const [initialLives, setInitialLives] = useState(3); // lives for survival mode
+	const [deckFlashcardCount, setDeckFlashcardCount] = useState(
+		Math.max(0, Number(deck?.flashcard_count) || 0),
+	);
+	const [standardCardCount, setStandardCardCount] = useState(
+		Math.max(1, Number(deck?.flashcard_count) || 1),
+	);
 
 	// Time options for timed mode (in seconds)
 	const TIME_OPTIONS = [
@@ -505,12 +512,21 @@ const GameScreen = ({ route, navigation }) => {
 				const res = await decksAPI.getSettings(deck.id);
 				if (res.data && res.data.settings) {
 					const settings = res.data.settings;
+					const totalCards = Math.max(
+						0,
+						Number(settings.flashcard_count ?? deck?.flashcard_count) || 0,
+					);
+					const maxSelectableCards = Math.max(1, totalCards);
 					setSelectedMode(settings.mode || "standard");
 					setSelectedChallengeType(settings.challenge_type || "none");
 					setCardDirection(settings.card_direction || "normal");
 					setHardModeEnabled(settings.difficulty_enabled || false);
 					setTimeLimit(settings.time_limit || 60);
 					setInitialLives(settings.starting_lives || 3);
+					setDeckFlashcardCount(totalCards);
+					setStandardCardCount((prev) =>
+						Math.min(Math.max(prev || 1, 1), maxSelectableCards),
+					);
 				}
 			} catch (error) {
 				console.error("Error loading deck settings:", error);
@@ -523,8 +539,12 @@ const GameScreen = ({ route, navigation }) => {
 
 	// Reset challenge type to none if match mode is selected with survival
 	useEffect(() => {
-		if (selectedMode === "match" && selectedChallengeType === "survival") {
+		if (selectedMode !== "match") return;
+		if (selectedChallengeType === "survival") {
 			setSelectedChallengeType("none");
+		}
+		if (cardDirection !== "normal") {
+			setCardDirection("normal");
 		}
 	}, [selectedMode]);
 
@@ -573,19 +593,28 @@ const GameScreen = ({ route, navigation }) => {
 	const currentCard = cards[currentIndex];
 
 	// Fetch cards based on mode and settings
-	const fetchCards = async (mode, isHardMode) => {
+	const fetchCards = async (mode, isHardMode, challenge = challengeType) => {
 		setLoading(true);
 		try {
+			const shouldLimitByCardCount = challenge === "none";
+			const maxSelectedCards = Math.max(standardCardCount || 1, 1);
+			const limitCards = (items) =>
+				shouldLimitByCardCount
+					? items.slice(0, Math.min(maxSelectedCards, items.length))
+					: items;
 			let response;
 			if (mode === "multiple_choice") {
-				response = await gamesAPI.getMultipleChoice(deck.id);
+				response = await gamesAPI.getMultipleChoice(deck.id, cardDirection);
 				let flashcards = response.data?.flashcards || response.data || [];
 				// Shuffle questions so Test mode doesn't always start with the same card
 				const shuffled = [...flashcards].sort(() => Math.random() - 0.5);
-				setCards(shuffled);
-				progressAnim.setValue(shuffled.length > 0 ? 1 / shuffled.length : 0);
-				if (shuffled.length > 0) {
-					setMcOptions(shuffled[0].options || []);
+				const limitedCards = limitCards(shuffled);
+				setCards(limitedCards);
+				progressAnim.setValue(
+					limitedCards.length > 0 ? 1 / limitedCards.length : 0,
+				);
+				if (limitedCards.length > 0) {
+					setMcOptions(limitedCards[0].options || []);
 				}
 			} else {
 				// Use hard cards if hard mode enabled
@@ -595,12 +624,15 @@ const GameScreen = ({ route, navigation }) => {
 				let flashcards = response.data?.flashcards || response.data || [];
 				// Shuffle cards
 				const shuffled = [...flashcards].sort(() => Math.random() - 0.5);
-				setCards(shuffled);
-				progressAnim.setValue(shuffled.length > 0 ? 1 / shuffled.length : 0);
+				const limitedCards = limitCards(shuffled);
+				setCards(limitedCards);
+				progressAnim.setValue(
+					limitedCards.length > 0 ? 1 / limitedCards.length : 0,
+				);
 
 				// Setup match game
 				if (mode === "match") {
-					setupMatchGame(shuffled.slice(0, 6)); // Use 6 cards = 12 tiles
+					setupMatchGame(limitedCards);
 				}
 			}
 		} catch (error) {
@@ -647,6 +679,7 @@ const GameScreen = ({ route, navigation }) => {
 		timedStartedSessionRef.current = null;
 		const mode = selectedMode;
 		const challenge = selectedChallengeType;
+		const effectiveCardDirection = mode === "match" ? "normal" : cardDirection;
 		progressAnim.setValue(0);
 
 		// Save settings to backend
@@ -654,13 +687,17 @@ const GameScreen = ({ route, navigation }) => {
 			await decksAPI.updateSettings(deck.id, {
 				mode: mode,
 				challenge_type: challenge,
-				card_direction: cardDirection,
+				card_direction: effectiveCardDirection,
 				difficulty_enabled: hardModeEnabled,
 				time_limit: timeLimit,
 				starting_lives: initialLives,
 			});
 		} catch (error) {
 			console.error("Error saving settings:", error);
+		}
+
+		if (mode === "match" && cardDirection !== "normal") {
+			setCardDirection("normal");
 		}
 
 		// stop any running pulses and reset badges to normal size
@@ -722,7 +759,7 @@ const GameScreen = ({ route, navigation }) => {
 
 		// Fetch cards after state is reset to ensure proper rendering
 		setTimeout(() => {
-			fetchCards(mode, hardModeEnabled);
+			fetchCards(mode, hardModeEnabled, challenge);
 		}, 50);
 
 		if (challenge === "timed") {
@@ -787,7 +824,7 @@ const GameScreen = ({ route, navigation }) => {
 
 		// Fetch cards after state is reset to ensure proper rendering
 		setTimeout(() => {
-			fetchCards(mode, hardModeEnabled);
+			fetchCards(mode, hardModeEnabled, challengeType);
 		}, 50);
 
 		if (challengeType === "timed") {
@@ -969,7 +1006,7 @@ const GameScreen = ({ route, navigation }) => {
 			const response = await gamesAPI.validateAnswer(
 				currentCard.id,
 				userAnswer.trim(),
-				correctAnswer,
+				cardDirection,
 			);
 
 			const { correct, similarity } = response.data;
@@ -1307,6 +1344,13 @@ const GameScreen = ({ route, navigation }) => {
 
 		const currentMode = GAME_MODES.find((m) => m.id === selectedMode);
 		const modeColor = MODE_COLORS[selectedMode] || "#3b82f6";
+		const maxSelectableCards = Math.max(1, deckFlashcardCount);
+		const displayMaxCards = Math.max(0, deckFlashcardCount);
+		const displaySelectedCards =
+			displayMaxCards === 0
+				? 0
+				: Math.min(Math.max(standardCardCount || 1, 1), maxSelectableCards);
+		const isCardCountDisabled = displayMaxCards === 0;
 
 		return (
 			<ScrollView contentContainerStyle={styles.modeSelectContainer}>
@@ -1672,100 +1716,163 @@ const GameScreen = ({ route, navigation }) => {
 					]}
 				>
 					{/* Card Direction */}
-					<View
-						style={[
-							styles.settingCard,
-							{
-								backgroundColor: theme.background.card,
-								borderColor: theme.border.main,
-							},
-						]}
-					>
-						<View style={styles.settingInfo}>
-							<View
-								style={[
-									styles.settingIconContainer,
-									{ backgroundColor: "#06b6d420" },
-								]}
-							>
-								<MaterialCommunityIcons
-									name="swap-horizontal"
-									size={20}
-									color="#06b6d4"
-								/>
-							</View>
-							<View style={styles.settingTextContainer}>
-								<ThemedText style={styles.settingTitle}>
-									{t("card_direction")}
-								</ThemedText>
-								<ThemedText color="secondary" style={styles.settingDesc}>
-									{t("card_direction_desc")}
-								</ThemedText>
-							</View>
-						</View>
-						<View style={styles.toggleGroup}>
-							<Pressable
-								onPress={() => setCardDirection("normal")}
-								style={[
-									styles.toggleButton,
-									styles.toggleButtonLeft,
-									cardDirection === "normal" && styles.toggleButtonActive,
-									{
-										borderColor:
-											cardDirection === "normal"
-												? "#06b6d4"
-												: theme.border.main,
-										backgroundColor:
-											cardDirection === "normal" ? "#06b6d420" : "transparent",
-									},
-								]}
-							>
-								<Text
+					{selectedMode !== "match" && (
+						<View
+							style={[
+								styles.settingCard,
+								{
+									backgroundColor: theme.background.card,
+									borderColor: theme.border.main,
+								},
+							]}
+						>
+							<View style={styles.settingInfo}>
+								<View
 									style={[
-										styles.toggleText,
+										styles.settingIconContainer,
+										{ backgroundColor: "#06b6d420" },
+									]}
+								>
+									<MaterialCommunityIcons
+										name="swap-horizontal"
+										size={20}
+										color="#06b6d4"
+									/>
+								</View>
+								<View style={styles.settingTextContainer}>
+									<ThemedText style={styles.settingTitle}>
+										{t("card_direction")}
+									</ThemedText>
+									<ThemedText color="secondary" style={styles.settingDesc}>
+										{t("card_direction_desc")}
+									</ThemedText>
+								</View>
+							</View>
+							<View style={styles.toggleGroup}>
+								<Pressable
+									onPress={() => setCardDirection("normal")}
+									style={[
+										styles.toggleButton,
+										styles.toggleButtonLeft,
+										cardDirection === "normal" && styles.toggleButtonActive,
 										{
-											color:
+											borderColor:
 												cardDirection === "normal"
 													? "#06b6d4"
-													: theme.text.secondary,
+													: theme.border.main,
+											backgroundColor:
+												cardDirection === "normal"
+													? "#06b6d420"
+													: "transparent",
 										},
 									]}
 								>
-									{t("direction_normal")}
-								</Text>
-							</Pressable>
-							<Pressable
-								onPress={() => setCardDirection("reverse")}
-								style={[
-									styles.toggleButton,
-									styles.toggleButtonRight,
-									cardDirection === "reverse" && styles.toggleButtonActive,
-									{
-										borderColor:
-											cardDirection === "reverse"
-												? "#06b6d4"
-												: theme.border.main,
-										backgroundColor:
-											cardDirection === "reverse" ? "#06b6d420" : "transparent",
-									},
-								]}
-							>
-								<Text
+									<Text
+										style={[
+											styles.toggleText,
+											{
+												color:
+													cardDirection === "normal"
+														? "#06b6d4"
+														: theme.text.secondary,
+											},
+										]}
+									>
+										{t("direction_normal")}
+									</Text>
+								</Pressable>
+								<Pressable
+									onPress={() => setCardDirection("reverse")}
 									style={[
-										styles.toggleText,
+										styles.toggleButton,
+										styles.toggleButtonRight,
+										cardDirection === "reverse" && styles.toggleButtonActive,
 										{
-											color:
+											borderColor:
 												cardDirection === "reverse"
 													? "#06b6d4"
-													: theme.text.secondary,
+													: theme.border.main,
+											backgroundColor:
+												cardDirection === "reverse"
+													? "#06b6d420"
+													: "transparent",
 										},
 									]}
 								>
-									{t("direction_reverse")}
-								</Text>
-							</Pressable>
+									<Text
+										style={[
+											styles.toggleText,
+											{
+												color:
+													cardDirection === "reverse"
+														? "#06b6d4"
+														: theme.text.secondary,
+											},
+										]}
+									>
+										{t("direction_reverse")}
+									</Text>
+								</Pressable>
+							</View>
 						</View>
-					</View>
+					)}
+
+					{/* Card Count (only when challenge type is none) */}
+					{selectedChallengeType === "none" && (
+						<View
+							style={[
+								styles.settingCard,
+								{
+									backgroundColor: theme.background.card,
+									borderColor: theme.border.main,
+								},
+							]}
+						>
+							<View style={styles.settingInfo}>
+								<View
+									style={[
+										styles.settingIconContainer,
+										{ backgroundColor: "#3b82f620" },
+									]}
+								>
+									<MaterialCommunityIcons
+										name="numeric"
+										size={20}
+										color="#3b82f6"
+									/>
+								</View>
+								<View style={styles.settingTextContainer}>
+									<ThemedText style={styles.settingTitle}>
+										{t("card_count")}
+									</ThemedText>
+									<ThemedText color="secondary" style={styles.settingDesc}>
+										{t("card_count_desc")}
+									</ThemedText>
+								</View>
+							</View>
+							<View style={styles.countSliderWrap}>
+								<Slider
+									style={styles.countSlider}
+									value={displaySelectedCards || 1}
+									onValueChange={(value) =>
+										setStandardCardCount(
+											Array.isArray(value) ? value[0] : value,
+										)
+									}
+									minimumValue={1}
+									maximumValue={maxSelectableCards}
+									step={1}
+									disabled={isCardCountDisabled}
+									minimumTrackTintColor="#3b82f6"
+									maximumTrackTintColor={theme.border.main}
+									thumbTintColor="#3b82f6"
+								/>
+								<ThemedText color="secondary" style={styles.countMetaText}>
+									{`${displaySelectedCards} / ${displayMaxCards}`}
+								</ThemedText>
+							</View>
+						</View>
+					)}
 
 					{/* Hard Mode */}
 					<View
@@ -1854,7 +1961,14 @@ const GameScreen = ({ route, navigation }) => {
 		if (cards.length === 0) {
 			return (
 				<View style={styles.emptyContainer}>
-					<ThemedText>{t("no_flashcards")}</ThemedText>
+					<ThemedText>
+						{hardModeEnabled ? t("no_hard_cards") : t("no_flashcards")}
+					</ThemedText>
+					<ThemedText color="secondary" style={{ marginTop: spacing.xs }}>
+						{hardModeEnabled
+							? t("no_hard_cards_desc")
+							: t("no_flashcards_desc")}
+					</ThemedText>
 					<Button
 						onPress={() => navigation.goBack()}
 						style={{ marginTop: spacing.lg }}
@@ -2155,61 +2269,63 @@ const GameScreen = ({ route, navigation }) => {
 					</ThemedText>
 				</Card>
 
-			<TextInput
-				style={[
-					styles.writeInput,
-					{
-						backgroundColor: theme.background.paper,
-						borderColor:
-							answerResult === "correct"
-								? theme.success.main
-								: answerResult === "almost"
-									? theme.warning.main
-									: answerResult === "wrong"
-										? theme.error.main
-										: theme.border.main,
-						color: theme.text.primary,
-					},
-				]}
-				placeholder={t("type_your_answer")}
-				placeholderTextColor={theme.text.disabled}
-				value={userAnswer}
-				onChangeText={setUserAnswer}
-				editable={!answerResult}
-				onSubmitEditing={handleWriteSubmit}
-			/>
-
-			{/* Hint Section */}
-			{!answerResult && (
-				<View style={styles.writeButtonRow}>
-					<Button
-						onPress={() => setShowHint(!showHint)}
-						size="small"
-						variant="outline"
-					>
-						{showHint ? t("hide_hint") : t("show_hint")}
-					</Button>
-
-					<Button
-						onPress={handleWriteSubmit}
-						size="medium"
-						disabled={!userAnswer.trim()}
-					>
-						{t("submit")}
-					</Button>
-				</View>
-			)}
-
-			{showHint && !answerResult && (
-				<View
+				<TextInput
 					style={[
-						styles.hintBox,
-						{ backgroundColor: "#f59e0b20", borderColor: "#f59e0b40" },
+						styles.writeInput,
+						{
+							backgroundColor: theme.background.paper,
+							borderColor:
+								answerResult === "correct"
+									? theme.success.main
+									: answerResult === "almost"
+										? theme.warning.main
+										: answerResult === "wrong"
+											? theme.error.main
+											: theme.border.main,
+							color: theme.text.primary,
+						},
 					]}
-				>
-					<Text style={styles.hintText}>{getHint()}</Text>
-				</View>
-			)}
+					placeholder={t("type_your_answer")}
+					placeholderTextColor={theme.text.disabled}
+					value={userAnswer}
+					onChangeText={setUserAnswer}
+					editable={!answerResult}
+					onSubmitEditing={handleWriteSubmit}
+				/>
+
+				{/* Hint Section */}
+				{!answerResult && (
+					<View style={styles.writeButtonRow}>
+						<Button
+							onPress={() => setShowHint(!showHint)}
+							size="medium"
+							variant="outline"
+							style={styles.writeModeButton}
+						>
+							{showHint ? t("hide_hint") : t("show_hint")}
+						</Button>
+
+						<Button
+							onPress={handleWriteSubmit}
+							size="medium"
+							disabled={!userAnswer.trim()}
+							style={styles.writeModeButton}
+						>
+							{t("submit")}
+						</Button>
+					</View>
+				)}
+
+				{showHint && !answerResult && (
+					<View
+						style={[
+							styles.hintBox,
+							{ backgroundColor: "#f59e0b20", borderColor: "#f59e0b40" },
+						]}
+					>
+						<Text style={styles.hintText}>{getHint()}</Text>
+					</View>
+				)}
 
 				{answerResult && (
 					<View
@@ -2233,7 +2349,9 @@ const GameScreen = ({ route, navigation }) => {
 					>
 						<View style={styles.feedbackHeader}>
 							<MaterialCommunityIcons
-								name={answerResult === "wrong" ? "close-circle" : "check-circle"}
+								name={
+									answerResult === "wrong" ? "close-circle" : "check-circle"
+								}
 								size={24}
 								color={
 									answerResult === "correct"
@@ -3068,11 +3186,15 @@ const styles = StyleSheet.create({
 	},
 	toggleGroup: {
 		flexDirection: "row",
+		width: 150,
 	},
 	toggleButton: {
+		flex: 1,
 		paddingVertical: spacing.sm,
 		paddingHorizontal: spacing.sm,
 		borderWidth: 1,
+		alignItems: "center",
+		justifyContent: "center",
 	},
 	toggleButtonLeft: {
 		borderTopLeftRadius: borderRadius.md,
@@ -3087,6 +3209,19 @@ const styles = StyleSheet.create({
 	toggleText: {
 		fontSize: 12,
 		fontWeight: "500",
+	},
+	countSliderWrap: {
+		width: 130,
+		justifyContent: "center",
+	},
+	countSlider: {
+		width: "100%",
+		height: 30,
+	},
+	countMetaText: {
+		fontSize: 11,
+		marginTop: 2,
+		textAlign: "center",
 	},
 	// Mode-specific settings (Timed/Survival)
 	modeSpecificCard: {
@@ -3353,10 +3488,14 @@ const styles = StyleSheet.create({
 	},
 	writeButtonRow: {
 		flexDirection: "row",
-		justifyContent: "center",
+		justifyContent: "space-between",
 		alignItems: "center",
 		gap: spacing.md,
 		marginTop: spacing.md,
+		width: "100%",
+	},
+	writeModeButton: {
+		flex: 1,
 	},
 	hintButton: {
 		flexDirection: "row",

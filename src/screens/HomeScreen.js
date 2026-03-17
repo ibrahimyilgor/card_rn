@@ -44,6 +44,9 @@ import {
 import { spacing, borderRadius } from "../styles/theme";
 import LimitWarningModal from "../components/LimitWarningModal";
 
+const MAX_TEXT_LENGTH = 512;
+const MAX_DECK_TITLE_LENGTH = 255;
+
 const HomeScreen = ({ navigation, onLogout }) => {
 	const { theme, shadows } = useTheme();
 	const { t } = useI18n();
@@ -79,6 +82,9 @@ const HomeScreen = ({ navigation, onLogout }) => {
 	const [importFileName, setImportFileName] = useState("");
 	const [importError, setImportError] = useState("");
 	const [importLoading, setImportLoading] = useState(false);
+	const importTitleTooLong = importTitle.length > MAX_DECK_TITLE_LENGTH;
+	const importDescriptionTooLong = importDescription.length > MAX_TEXT_LENGTH;
+	const importHasLengthError = importTitleTooLong || importDescriptionTooLong;
 	// Sort modal
 	const [sortModalVisible, setSortModalVisible] = useState(false);
 
@@ -232,6 +238,17 @@ const HomeScreen = ({ navigation, onLogout }) => {
 
 	const handleSaveInlineDeck = async () => {
 		if (!inlineDeck.title.trim()) return;
+		if (
+			inlineDeck.title.length > MAX_DECK_TITLE_LENGTH ||
+			inlineDeck.description.length > MAX_TEXT_LENGTH
+		) {
+			showAlert(
+				inlineDeck.title.length > MAX_DECK_TITLE_LENGTH
+					? t("max_characters_error", { max: MAX_DECK_TITLE_LENGTH })
+					: t("max_characters_error", { max: MAX_TEXT_LENGTH }),
+			);
+			return;
+		}
 
 		setInlineDeckSaving(true);
 		try {
@@ -253,6 +270,12 @@ const HomeScreen = ({ navigation, onLogout }) => {
 			refreshPlan();
 		} catch (error) {
 			console.error("Error saving deck:", error);
+			showAlert(
+				error?.response?.data?.message ||
+					error?.response?.data?.error ||
+					t("error") ||
+					"Error",
+			);
 		} finally {
 			setInlineDeckSaving(false);
 		}
@@ -490,6 +513,14 @@ const HomeScreen = ({ navigation, onLogout }) => {
 	// Handle import deck submit
 	const handleImportDeck = async () => {
 		if (!importTitle.trim() || importFlashcards.length === 0) return;
+		if (importHasLengthError) {
+			showAlert(
+				importTitleTooLong
+					? t("max_characters_error", { max: MAX_DECK_TITLE_LENGTH })
+					: t("max_characters_error", { max: MAX_TEXT_LENGTH }),
+			);
+			return;
+		}
 
 		setImportLoading(true);
 		try {
@@ -512,7 +543,12 @@ const HomeScreen = ({ navigation, onLogout }) => {
 			setImportError("");
 		} catch (error) {
 			console.error("Error importing deck:", error);
-			showAlert(t("import_error") || "Error importing deck");
+			showAlert(
+				error?.response?.data?.message ||
+					error?.response?.data?.error ||
+					t("import_error") ||
+					"Error importing deck",
+			);
 		} finally {
 			setImportLoading(false);
 		}
@@ -1053,6 +1089,7 @@ const HomeScreen = ({ navigation, onLogout }) => {
 					deck={selectedDeck}
 					theme={theme}
 					t={t}
+					showAlert={showAlert}
 					onUpdate={handleFlashcardsCountUpdate}
 					canCreateFlashcard={canCreateFlashcard}
 					onLimitReached={() => {
@@ -1171,7 +1208,8 @@ const HomeScreen = ({ navigation, onLogout }) => {
 								disabled={
 									!importTitle.trim() ||
 									importFlashcards.length === 0 ||
-									importLoading
+									importLoading ||
+									importHasLengthError
 								}
 								loading={importLoading}
 							>
@@ -1360,6 +1398,17 @@ const HomeScreen = ({ navigation, onLogout }) => {
 								label={t("deck_title") || "Deck Title"}
 								value={importTitle}
 								onChangeText={setImportTitle}
+								maxLength={MAX_DECK_TITLE_LENGTH + 1}
+								error={
+									importTitleTooLong
+										? t("max_characters_error", { max: MAX_DECK_TITLE_LENGTH })
+										: ""
+								}
+								helperText={
+									importTitleTooLong
+										? undefined
+										: `${importTitle.length}/${MAX_DECK_TITLE_LENGTH}`
+								}
 								placeholder={
 									t("deck_title_placeholder") || "e.g., Spanish Vocabulary"
 								}
@@ -1372,6 +1421,17 @@ const HomeScreen = ({ navigation, onLogout }) => {
 								label={t("deck_description") || "Deck Description"}
 								value={importDescription}
 								onChangeText={setImportDescription}
+								maxLength={MAX_TEXT_LENGTH + 1}
+								error={
+									importDescriptionTooLong
+										? t("max_characters_error", { max: MAX_TEXT_LENGTH })
+										: ""
+								}
+								helperText={
+									importDescriptionTooLong
+										? undefined
+										: `${importDescription.length}/${MAX_TEXT_LENGTH}`
+								}
 								placeholder={
 									t("deck_description_placeholder") ||
 									"Optional description for your deck..."
@@ -1480,7 +1540,10 @@ const InlineDeckForm = ({
 	theme,
 }) => {
 	const accentColor = mode === "edit" ? "#f59e0b" : "#22c55e";
-	const canSubmit = !!title.trim() && !saving;
+	const titleTooLong = title.length > MAX_DECK_TITLE_LENGTH;
+	const descriptionTooLong = description.length > MAX_TEXT_LENGTH;
+	const canSubmit =
+		!!title.trim() && !saving && !titleTooLong && !descriptionTooLong;
 
 	return (
 		<Card style={styles.deckCard}>
@@ -1506,6 +1569,17 @@ const InlineDeckForm = ({
 						value={title}
 						onChangeText={onChangeTitle}
 						placeholder={t("deck_title_placeholder")}
+						maxLength={MAX_DECK_TITLE_LENGTH + 1}
+						error={
+							titleTooLong
+								? t("max_characters_error", { max: MAX_DECK_TITLE_LENGTH })
+								: ""
+						}
+						helperText={
+							titleTooLong
+								? undefined
+								: `${title.length}/${MAX_DECK_TITLE_LENGTH}`
+						}
 					/>
 					<Input
 						label={t("deck_description")}
@@ -1514,6 +1588,17 @@ const InlineDeckForm = ({
 						placeholder={t("deck_description_placeholder")}
 						multiline
 						numberOfLines={3}
+						maxLength={MAX_TEXT_LENGTH + 1}
+						error={
+							descriptionTooLong
+								? t("max_characters_error", { max: MAX_TEXT_LENGTH })
+								: ""
+						}
+						helperText={
+							descriptionTooLong
+								? undefined
+								: `${description.length}/${MAX_TEXT_LENGTH}`
+						}
 					/>
 
 					<View
@@ -1588,8 +1673,15 @@ const InlineCardForm = ({
 		? frontText.trim() !== editingCard.front_text ||
 			backText.trim() !== editingCard.back_text
 		: true;
+	const frontTooLong = frontText.length > MAX_TEXT_LENGTH;
+	const backTooLong = backText.length > MAX_TEXT_LENGTH;
 	const canSubmit =
-		frontText.trim() && backText.trim() && !saving && hasChanges;
+		frontText.trim() &&
+		backText.trim() &&
+		!saving &&
+		hasChanges &&
+		!frontTooLong &&
+		!backTooLong;
 	const accentColor = isEditing ? "#f59e0b" : "#22c55e";
 
 	return (
@@ -1614,6 +1706,17 @@ const InlineCardForm = ({
 						placeholder={t("enter_the_question_or_term") || "Question / Front"}
 						multiline
 						numberOfLines={2}
+						maxLength={MAX_TEXT_LENGTH + 1}
+						error={
+							frontTooLong
+								? t("max_characters_error", { max: MAX_TEXT_LENGTH })
+								: ""
+						}
+						helperText={
+							frontTooLong
+								? undefined
+								: `${frontText.length}/${MAX_TEXT_LENGTH}`
+						}
 					/>
 					<Input
 						value={backText}
@@ -1621,6 +1724,15 @@ const InlineCardForm = ({
 						placeholder={t("enter_the_answer_or_definition") || "Answer / Back"}
 						multiline
 						numberOfLines={2}
+						maxLength={MAX_TEXT_LENGTH + 1}
+						error={
+							backTooLong
+								? t("max_characters_error", { max: MAX_TEXT_LENGTH })
+								: ""
+						}
+						helperText={
+							backTooLong ? undefined : `${backText.length}/${MAX_TEXT_LENGTH}`
+						}
 					/>
 					<View
 						style={{
@@ -1681,6 +1793,7 @@ const FlashcardsModal = ({
 	deck,
 	theme,
 	t,
+	showAlert,
 	onUpdate,
 	canCreateFlashcard,
 	onLimitReached,
@@ -1761,12 +1874,22 @@ const FlashcardsModal = ({
 	};
 
 	const handleSubmitAdd = async (front, back) => {
+		if (front.length > MAX_TEXT_LENGTH || back.length > MAX_TEXT_LENGTH) {
+			showAlert?.(t("max_characters_error", { max: MAX_TEXT_LENGTH }));
+			return;
+		}
 		setAddSaving(true);
 		try {
 			await flashcardsAPI.create(deck.id, front, back);
 			await fetchFlashcards(true);
 		} catch (error) {
 			console.error("Error adding card:", error);
+			showAlert?.(
+				error?.response?.data?.message ||
+					error?.response?.data?.error ||
+					t("error") ||
+					"Error",
+			);
 		} finally {
 			setAddSaving(false);
 		}
@@ -1774,6 +1897,10 @@ const FlashcardsModal = ({
 
 	const handleSubmitEdit = async (front, back) => {
 		if (!editingCardId) return;
+		if (front.length > MAX_TEXT_LENGTH || back.length > MAX_TEXT_LENGTH) {
+			showAlert?.(t("max_characters_error", { max: MAX_TEXT_LENGTH }));
+			return;
+		}
 		setEditSaving(true);
 		try {
 			await flashcardsAPI.update(editingCardId, front, back);
@@ -1781,6 +1908,12 @@ const FlashcardsModal = ({
 			await fetchFlashcards(true);
 		} catch (error) {
 			console.error("Error updating card:", error);
+			showAlert?.(
+				error?.response?.data?.message ||
+					error?.response?.data?.error ||
+					t("error") ||
+					"Error",
+			);
 		} finally {
 			setEditSaving(false);
 		}

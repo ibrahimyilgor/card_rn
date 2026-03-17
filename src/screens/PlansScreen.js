@@ -169,7 +169,7 @@ const PlansScreen = ({ navigation }) => {
 				throw missingProductError;
 			}
 
-			await purchasePlanOnAndroid(targetPlanId);
+			await purchasePlanOnAndroid(targetPlanId, products);
 			const syncResults = await syncAndroidEntitlements();
 			const hasSuccess = syncResults.some((result) => result.ok);
 			if (!hasSuccess) {

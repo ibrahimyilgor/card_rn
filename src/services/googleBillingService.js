@@ -17,6 +17,28 @@ export const SUBSCRIPTION_PRODUCT_MAP = {
 
 const SUBSCRIPTION_SKUS = Object.values(SUBSCRIPTION_PRODUCT_MAP);
 
+const extractOfferToken = (product) => {
+	if (!product) return null;
+
+	const details =
+		product.subscriptionOfferDetailsAndroid ||
+		product.subscriptionOfferDetails ||
+		[];
+
+	if (!Array.isArray(details) || details.length === 0) {
+		return null;
+	}
+
+	const preferredOffer =
+		details.find((item) =>
+			String(item?.basePlanId || "")
+				.toLowerCase()
+				.includes("monthly"),
+		) || details[0];
+
+	return preferredOffer?.offerToken || null;
+};
+
 const resolveProductId = (purchase) => {
 	if (!purchase) return null;
 	if (purchase.productId) return purchase.productId;
@@ -59,7 +81,10 @@ export const getSubscriptionProducts = async () => {
 	return getSubscriptions({ skus: SUBSCRIPTION_SKUS });
 };
 
-export const purchasePlanOnAndroid = async (targetPlanCode) => {
+export const purchasePlanOnAndroid = async (
+	targetPlanCode,
+	availableProducts = [],
+) => {
 	if (Platform.OS !== "android") {
 		throw new Error("Subscriptions are only enabled on Android for now.");
 	}
@@ -69,8 +94,21 @@ export const purchasePlanOnAndroid = async (targetPlanCode) => {
 		throw new Error("Invalid subscription plan selected.");
 	}
 
+	const productFromList = Array.isArray(availableProducts)
+		? availableProducts.find((item) => item?.productId === sku)
+		: null;
+	const product = productFromList || (await getSubscriptions({ skus: [sku] }))?.[0];
+	const offerToken = extractOfferToken(product);
+
+	if (!offerToken) {
+		throw new Error(
+			"Google Play subscription offer bulunamadı (offerToken missing).",
+		);
+	}
+
 	return requestSubscription({
 		sku,
+		subscriptionOffers: [{ sku, offerToken }],
 		andDangerouslyFinishTransactionAutomaticallyIOS: false,
 	});
 };

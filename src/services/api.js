@@ -5,6 +5,8 @@ import { getIdToken, signOut as firebaseSignOut } from "./firebase";
 
 // Fallback to Render.com if env not loaded
 const BASE_URL = API_URL || "https://card-p33o.onrender.com";
+// const BASE_URL = API_URL || "http://10.0.2.2:5000";
+
 // Debug: Log the API URL being used
 console.log("[API] Using BASE_URL:", BASE_URL);
 console.log("[API] API_URL from env:", API_URL);
@@ -155,13 +157,14 @@ export const gamesAPI = {
 
 	getHardCards: (deckId) => api.get(`/games/${deckId}/hard`),
 
-	getMultipleChoice: (deckId) => api.get(`/games/${deckId}/options`),
+	getMultipleChoice: (deckId, direction = "normal") =>
+		api.get(`/games/${deckId}/options`, { params: { direction } }),
 
-	validateAnswer: (flashcardId, userAnswer, correctAnswer) =>
+	validateAnswer: (flashcardId, userAnswer, cardDirection = "normal") =>
 		api.post("/games/validate-answer", {
 			flashcardId,
 			userAnswer,
-			correctAnswer,
+			cardDirection,
 		}),
 
 	updateCardStats: (flashcardId, isCorrect) =>

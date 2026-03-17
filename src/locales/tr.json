@@ -292,6 +292,8 @@
 	"upgrade": "Planı Yükselt",
 	"card_direction": "Kart Yönü",
 	"card_direction_desc": "Önce hangi yüzün gösterileceğini seçin",
+	"card_count": "Kart Sayısı",
+	"card_count_desc": "Kaç rastgele kart çalışılacağını seçin",
 	"direction_normal": "Normal",
 	"direction_reverse": "Ters",
 	"hard_mode": "Zor Mod",
@@ -464,5 +466,6 @@
 	"deck_limit_reached_title": "Deste Limitine Ulaşıldı",
 	"deck_limit_reached": "Deste limitine ulaşıldı. Daha fazla oluşturmak için planınızı yükseltin.",
 	"card_limit_reached_title": "Kart Limitine Ulaşıldı",
-	"card_limit_reached": "Kart limitine ulaşıldı. Daha fazla eklemek için planınızı yükseltin."
+	"card_limit_reached": "Kart limitine ulaşıldı. Daha fazla eklemek için planınızı yükseltin.",
+	"max_characters_error": "En fazla {{max}} karakter girebilirsiniz"
 }

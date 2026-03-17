@@ -292,6 +292,8 @@
 	"upgrade": "Upgrade",
 	"card_direction": "Card Direction",
 	"card_direction_desc": "Choose which side to show first",
+	"card_count": "Card Count",
+	"card_count_desc": "Choose how many random cards to study in Standard mode",
 	"direction_normal": "Normal",
 	"direction_reverse": "Reverse",
 	"hard_mode": "Hard Mode",
@@ -464,5 +466,6 @@
 	"deck_limit_reached_title": "Deck Limit Reached",
 	"deck_limit_reached": "Deck limit reached. Upgrade your plan to create more.",
 	"card_limit_reached_title": "Card Limit Reached",
-	"card_limit_reached": "Card limit reached. Upgrade your plan to add more."
+	"card_limit_reached": "Card limit reached. Upgrade your plan to add more.",
+	"max_characters_error": "Maximum {{max}} characters allowed"
 }

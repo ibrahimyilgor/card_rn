@@ -16,6 +16,7 @@ const ConfirmDialog = ({
 	cancelLabel,
 	confirmVariant = "danger", // 'primary' | 'danger' | 'success'
 	loading = false,
+	verticalAlign = "center",
 }) => {
 	const { theme } = useTheme();
 	const { t } = useI18n();
@@ -43,6 +44,7 @@ const ConfirmDialog = ({
 			title={title}
 			footer={footer}
 			size="small"
+			verticalAlign={verticalAlign}
 		>
 			<Text style={[styles.message, { color: theme.text.secondary }]}>
 				{message}

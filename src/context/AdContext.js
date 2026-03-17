@@ -1,22 +1,14 @@
 import React, {
 	createContext,
 	useContext,
-	useEffect,
-	useState,
 	useCallback,
 	useRef,
+	useState,
 } from "react";
-import { Platform } from "react-native";
-import PlansAdModal from "../components/ads/PlansAdModal.js";
-import { usePlan } from "./PlanContext";
+import PlansAdModal from "../components/ads/PlansAdModal";
+import { navigateToPlans } from "../navigation/navigationService";
 
 const AdContext = createContext(null);
-
-// Test Ad Unit IDs - Development build hazır olunca gerçek implementasyona geçilecek
-const INTERSTITIAL_AD_UNIT_ID = Platform.select({
-	android: "ca-app-pub-3940256099942544/1033173712",
-	ios: "ca-app-pub-3940256099942544/4411468910",
-});
 
 export const useAds = () => {
 	const context = useContext(AdContext);
@@ -27,93 +19,61 @@ export const useAds = () => {
 };
 
 export const AdProvider = ({ children }) => {
-	const { hasAds } = usePlan();
-	const [isAdLoaded, setIsAdLoaded] = useState(false);
-	const [isAdLoading, setIsAdLoading] = useState(false);
+	const [isPlansAdVisible, setIsPlansAdVisible] = useState(false);
+	const resolverRef = useRef(null);
+	const upgradedFromAdRef = useRef(false);
 
-	// Mock implementation - Expo Go'da çalışır, development build'de gerçek reklam eklenecek
-	const loadInterstitial = useCallback(async () => {
-		if (!hasAds) {
-			console.log("[AdContext] Premium/Pro kullanıcı - reklam yüklenmeyecek");
-			return;
+	const closePlansAd = useCallback(() => {
+		setIsPlansAdVisible(false);
+		if (resolverRef.current) {
+			resolverRef.current({ upgraded: upgradedFromAdRef.current });
+			resolverRef.current = null;
 		}
-		console.log(
-			"[AdContext] Reklam yükleme simüle ediliyor (Expo Go - native modül yok)",
-		);
-		setIsAdLoading(true);
-		setTimeout(() => {
-			setIsAdLoaded(true);
-			setIsAdLoading(false);
-			console.log("[AdContext] Reklam yüklendi (simüle)");
-		}, 1000);
-	}, [hasAds]);
+		upgradedFromAdRef.current = false;
+	}, []);
+
+	const handleUpgradeFromAd = useCallback(() => {
+		upgradedFromAdRef.current = true;
+		navigateToPlans();
+	}, []);
 
 	const showInterstitial = useCallback(async () => {
-		if (!hasAds) {
-			console.log("[AdContext] Premium/Pro kullanıcı - reklam gösterilmeyecek");
-			return false;
-		}
-		console.log("[AdContext] Reklam gösterimi simüle ediliyor");
-		setIsAdLoaded(false);
-		// Yeni reklam yükle
-		setTimeout(() => loadInterstitial(), 500);
-		return true;
-	}, [hasAds, loadInterstitial]);
+		if (isPlansAdVisible) return { upgraded: false };
 
-	useEffect(() => {
-		if (hasAds) {
-			loadInterstitial();
-		}
-	}, [hasAds, loadInterstitial]);
+		upgradedFromAdRef.current = false;
 
-	// Plans promo ad modal state and controller
-	const [videoAdVisible, setVideoAdVisible] = useState(false);
-	const [videoAdOnUpgrade, setVideoAdOnUpgrade] = useState(null);
-	const videoAdResolveRef = useRef(null);
+		return new Promise((resolve) => {
+			resolverRef.current = resolve;
+			setIsPlansAdVisible(true);
+		});
+	}, [isPlansAdVisible]);
 
-	const showVideoAd = useCallback(
-		(onUpgrade) => {
-			if (!hasAds) {
-				console.log(
-					"[AdContext] Premium/Pro kullanıcı - reklam gösterilmeyecek",
-				);
-				return Promise.resolve();
-			}
-			return new Promise((resolve) => {
-				console.log("[AdContext] showVideoAd called");
-				videoAdResolveRef.current = resolve;
-				setVideoAdOnUpgrade(() => onUpgrade || null);
-				setVideoAdVisible(true);
-			});
-		},
-		[hasAds],
-	);
+	const showVideoAd = useCallback(() => {
+		if (isPlansAdVisible) return Promise.resolve({ upgraded: false });
 
-	const handleVideoAdClose = () => {
-		console.log("[AdContext] handleVideoAdClose called");
-		setVideoAdVisible(false);
-		setVideoAdOnUpgrade(null);
-		if (videoAdResolveRef.current) {
-			videoAdResolveRef.current();
-			videoAdResolveRef.current = null;
-		}
-	};
+		upgradedFromAdRef.current = false;
+
+		return new Promise((resolve) => {
+			resolverRef.current = resolve;
+			setIsPlansAdVisible(true);
+		});
+	}, [isPlansAdVisible]);
 
 	const value = {
-		isAdLoaded,
-		isAdLoading,
+		isAdLoaded: true,
+		isAdLoading: false,
 		showInterstitial,
 		showVideoAd,
-		hasAds,
+		hasAds: true,
 	};
 
 	return (
 		<AdContext.Provider value={value}>
 			{children}
 			<PlansAdModal
-				visible={videoAdVisible}
-				onClose={handleVideoAdClose}
-				onUpgrade={videoAdOnUpgrade}
+				visible={isPlansAdVisible}
+				onClose={closePlansAd}
+				onUpgrade={handleUpgradeFromAd}
 			/>
 		</AdContext.Provider>
 	);

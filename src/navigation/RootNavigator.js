@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { NavigationContainer } from "@react-navigation/native";
-import { View, ActivityIndicator, Platform } from "react-native";
+import { View, ActivityIndicator, Platform, AppState } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../context/ThemeContext";
@@ -11,8 +11,13 @@ import {
 	onAuthStateChanged,
 	signOut as firebaseSignOut,
 } from "../services/firebase";
+import {
+	initBilling,
+	syncAndroidEntitlements,
+} from "../services/googleBillingService";
 import AuthStack from "./AuthStack";
 import MainTabs from "./MainTabs";
+import { navigationRef } from "./navigationService";
 
 const RootNavigator = () => {
 	const {
@@ -24,6 +29,23 @@ const RootNavigator = () => {
 	const { refreshPlan } = usePlan();
 	const [user, setUser] = useState(null);
 	const [isLoading, setIsLoading] = useState(true);
+	const [lastEntitlementSyncAt, setLastEntitlementSyncAt] = useState(0);
+
+	const syncEntitlementsIfNeeded = useCallback(async () => {
+		if (Platform.OS !== "android" || !user) return;
+
+		const now = Date.now();
+		if (now - lastEntitlementSyncAt < 15000) return;
+
+		setLastEntitlementSyncAt(now);
+		try {
+			await initBilling();
+			await syncAndroidEntitlements();
+			await refreshPlan();
+		} catch (error) {
+			console.warn("[RootNavigator] Entitlement sync failed:", error?.message);
+		}
+	}, [lastEntitlementSyncAt, refreshPlan, user]);
 
 	// Sync preferences from database
 	const syncPreferencesFromDatabase = useCallback(async () => {
@@ -63,6 +85,9 @@ const RootNavigator = () => {
 					await syncPreferencesFromDatabase();
 					// Refresh plan data (for ad gating, limits, etc.)
 					await refreshPlan();
+					if (Platform.OS === "android") {
+						await syncEntitlementsIfNeeded();
+					}
 				} catch (error) {
 					console.error("Error syncing with backend:", error);
 				}
@@ -75,7 +100,17 @@ const RootNavigator = () => {
 		});
 
 		return () => unsubscribe();
-	}, [syncPreferencesFromDatabase]);
+	}, [syncPreferencesFromDatabase, syncEntitlementsIfNeeded, refreshPlan]);
+
+	useEffect(() => {
+		const appStateSub = AppState.addEventListener("change", (nextState) => {
+			if (nextState === "active") {
+				syncEntitlementsIfNeeded();
+			}
+		});
+
+		return () => appStateSub.remove();
+	}, [syncEntitlementsIfNeeded]);
 
 	const handleLogin = useCallback(async () => {
 		// Firebase auth state listener handles the state change
@@ -139,7 +174,7 @@ const RootNavigator = () => {
 	};
 
 	return (
-		<NavigationContainer theme={navigationTheme}>
+		<NavigationContainer ref={navigationRef} theme={navigationTheme}>
 			<StatusBar
 				style={theme.mode === "dark" ? "light" : "dark"}
 				// hidden={Platform.OS === "android"}

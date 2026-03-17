@@ -1,7 +1,15 @@
-import React, { useRef, useEffect } from "react";
-import { View, Text, StyleSheet, Pressable, Animated } from "react-native";
+import React, { useRef, useEffect, useMemo, useState } from "react";
+import {
+	View,
+	Text,
+	StyleSheet,
+	Pressable,
+	Animated,
+	ScrollView,
+} from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useTheme } from "../../context/ThemeContext";
+import { useI18n } from "../../context/I18nContext";
 import { borderRadius, spacing } from "../../styles/theme";
 
 const FRONT_ACCENT = "#8b5cf6"; // purple
@@ -17,11 +25,40 @@ const FlipCard = ({
 	cardKey,
 }) => {
 	const { theme, shadows } = useTheme();
+	const { t } = useI18n();
 	const flipAnim = useRef(new Animated.Value(0)).current;
+
+	// Refs for auto-scrolling long content
+	const frontScrollRef = useRef(null);
+	const backScrollRef = useRef(null);
+	const frontAutoScrollTimer = useRef(null);
+	const backAutoScrollTimer = useRef(null);
+	const frontResetTimeout = useRef(null);
+	const backResetTimeout = useRef(null);
+
+	const [frontViewportH, setFrontViewportH] = useState(0);
+	const [frontContentH, setFrontContentH] = useState(0);
+	const [backViewportH, setBackViewportH] = useState(0);
+	const [backContentH, setBackContentH] = useState(0);
+
+	const autoScrollEnabledFront = useMemo(
+		() => frontViewportH > 0 && frontContentH > frontViewportH + 8,
+		[frontViewportH, frontContentH],
+	);
+	const autoScrollEnabledBack = useMemo(
+		() => backViewportH > 0 && backContentH > backViewportH + 8,
+		[backViewportH, backContentH],
+	);
+
+	const isFrontVeryLong = (frontText || "").trim().length > 100;
+	const isBackVeryLong = (backText || "").trim().length > 100;
 
 	// Reset animation immediately when card changes (cardKey changes)
 	useEffect(() => {
 		flipAnim.setValue(0);
+		// Reset scroll positions when card changes
+		frontScrollRef.current?.scrollTo?.({ y: 0, animated: false });
+		backScrollRef.current?.scrollTo?.({ y: 0, animated: false });
 	}, [cardKey]);
 
 	useEffect(() => {
@@ -31,6 +68,102 @@ const FlipCard = ({
 			useNativeDriver: true,
 		}).start();
 	}, [isFlipped]);
+
+	// Stop any running auto-scroll timers
+	const stopAutoScroll = () => {
+		if (frontAutoScrollTimer.current) {
+			clearInterval(frontAutoScrollTimer.current);
+			frontAutoScrollTimer.current = null;
+		}
+		if (backAutoScrollTimer.current) {
+			clearInterval(backAutoScrollTimer.current);
+			backAutoScrollTimer.current = null;
+		}
+		if (frontResetTimeout.current) {
+			clearTimeout(frontResetTimeout.current);
+			frontResetTimeout.current = null;
+		}
+		if (backResetTimeout.current) {
+			clearTimeout(backResetTimeout.current);
+			backResetTimeout.current = null;
+		}
+	};
+
+	// Auto-scroll the visible side if content is long.
+	// Behavior: slowly scroll down; when reaching bottom, reset to top and repeat.
+	useEffect(() => {
+		stopAutoScroll();
+
+		const safeScrollTo = (ref, y) => {
+			// Ref can become null during unmount / flip transitions; guard to avoid crashes.
+			const node = ref.current;
+			if (!node || typeof node.scrollTo !== "function") return false;
+			node.scrollTo({ y, animated: false });
+			return true;
+		};
+
+		const start = ({ ref, viewportH, contentH, timerRef, resetTimeoutRef }) => {
+			if (!(viewportH > 0 && contentH > viewportH + 8)) return;
+
+			let y = 0;
+			const maxY = Math.max(0, contentH - viewportH);
+			const step = 1.2; // px per tick
+			const tickMs = 16; // ~60fps
+			const pauseAtEndsMs = 600;
+			let pausedUntil = 0;
+
+			timerRef.current = setInterval(() => {
+				const now = Date.now();
+				if (now < pausedUntil) return;
+
+				y += step;
+				if (y >= maxY) {
+					y = maxY;
+					if (!safeScrollTo(ref, y)) return;
+					pausedUntil = now + pauseAtEndsMs;
+					// Reset back to top after a short pause at bottom
+					resetTimeoutRef.current = setTimeout(() => {
+						safeScrollTo(ref, 0);
+					}, pauseAtEndsMs);
+					y = 0;
+					pausedUntil = now + pauseAtEndsMs * 2;
+					return;
+				}
+
+				safeScrollTo(ref, y);
+			}, tickMs);
+		};
+
+		if (!disabled) {
+			if (!isFlipped) {
+				start({
+					ref: frontScrollRef,
+					viewportH: frontViewportH,
+					contentH: frontContentH,
+					timerRef: frontAutoScrollTimer,
+					resetTimeoutRef: frontResetTimeout,
+				});
+			} else {
+				start({
+					ref: backScrollRef,
+					viewportH: backViewportH,
+					contentH: backContentH,
+					timerRef: backAutoScrollTimer,
+					resetTimeoutRef: backResetTimeout,
+				});
+			}
+		}
+
+		return () => stopAutoScroll();
+	}, [
+		isFlipped,
+		disabled,
+		frontViewportH,
+		frontContentH,
+		backViewportH,
+		backContentH,
+		cardKey,
+	]);
 
 	const frontRotate = flipAnim.interpolate({
 		inputRange: [0, 1],
@@ -51,8 +184,6 @@ const FlipCard = ({
 		inputRange: [0, 0.49, 0.5, 1],
 		outputRange: [0, 0, 1, 1],
 	});
-
-	const isBackTextLong = (backText || "").trim().length > 60;
 
 	return (
 		<Pressable
@@ -77,11 +208,26 @@ const FlipCard = ({
 				{/* Purple accent bar */}
 				<View style={[styles.accentBar, { backgroundColor: FRONT_ACCENT }]} />
 				{/* Content */}
-				<View style={styles.contentArea}>
-					<Text style={[styles.text, { color: theme.text.primary }]}>
+				<ScrollView
+					ref={frontScrollRef}
+					style={[styles.contentScroll]}
+					contentContainerStyle={styles.contentScrollContent}
+					showsVerticalScrollIndicator={false}
+					scrollEnabled={autoScrollEnabledFront}
+					onLayout={(e) => setFrontViewportH(e.nativeEvent.layout.height)}
+					onContentSizeChange={(_w, h) => setFrontContentH(h)}
+				>
+					<Text
+						style={[
+							styles.text,
+							styles.textBreathingRoom,
+							isFrontVeryLong && styles.textSmall,
+							{ color: theme.text.primary },
+						]}
+					>
 						{frontText}
 					</Text>
-				</View>
+				</ScrollView>
 				{/* Tap hint */}
 				<View style={styles.hintRow}>
 					<MaterialCommunityIcons
@@ -91,7 +237,7 @@ const FlipCard = ({
 						style={styles.hintIcon}
 					/>
 					<Text style={[styles.hint, { color: theme.text.disabled }]}>
-						Tap to flip
+						{t("tap_to_flip")}
 					</Text>
 				</View>
 			</Animated.View>
@@ -113,18 +259,29 @@ const FlipCard = ({
 			>
 				{/* Green accent bar */}
 				<View style={[styles.accentBar, { backgroundColor: BACK_ACCENT }]} />
-				{/* ANSWER label */}
-				<Text
-					style={[styles.answerLabel, isBackTextLong && styles.answerLabelLong]}
-				>
-					ANSWER
-				</Text>
+				{/* BACK label (kept at top, never overlaps content) */}
+				<Text style={styles.backLabel}>{t("flip_back_label")}</Text>
 				{/* Content */}
-				<View style={styles.contentArea}>
-					<Text style={[styles.text, { color: theme.text.primary }]}>
+				<ScrollView
+					ref={backScrollRef}
+					style={styles.contentScroll}
+					contentContainerStyle={styles.contentScrollContent}
+					showsVerticalScrollIndicator={false}
+					scrollEnabled={autoScrollEnabledBack}
+					onLayout={(e) => setBackViewportH(e.nativeEvent.layout.height)}
+					onContentSizeChange={(_w, h) => setBackContentH(h)}
+				>
+					<Text
+						style={[
+							styles.text,
+							styles.textBreathingRoom,
+							isBackVeryLong && styles.textSmall,
+							{ color: theme.text.primary },
+						]}
+					>
 						{backText}
 					</Text>
-				</View>
+				</ScrollView>
 				{/* Tap hint */}
 				<View style={styles.hintRow}>
 					<MaterialCommunityIcons
@@ -134,7 +291,7 @@ const FlipCard = ({
 						style={styles.hintIcon}
 					/>
 					<Text style={[styles.hint, { color: theme.text.disabled }]}>
-						Tap to flip back
+						{t("tap_to_flip_back")}
 					</Text>
 				</View>
 			</Animated.View>
@@ -168,23 +325,28 @@ const styles = StyleSheet.create({
 		borderTopLeftRadius: borderRadius.xl,
 		borderTopRightRadius: borderRadius.xl,
 	},
-	answerLabel: {
+	backLabel: {
 		position: "absolute",
-		top: "30%",
+		top: spacing.lg,
 		fontSize: 11,
 		fontWeight: "800",
 		letterSpacing: 2,
 		color: BACK_ACCENT,
 		textTransform: "uppercase",
 	},
-	answerLabelLong: {
-		top: "24%",
+	contentScroll: {
+		width: "100%",
+		alignSelf: "stretch",
+		marginVertical: 45,
+		// Horizontal padding so text never hugs edges
+		paddingHorizontal: spacing.lg,
 	},
-	contentArea: {
-		flex: 1,
+	contentScrollContent: {
+		// Fill available height so short text can be centered, but still keep
+		// guaranteed top/bottom breathing room via padding.
+		flexGrow: 1,
 		justifyContent: "center",
 		alignItems: "center",
-		paddingHorizontal: spacing.lg,
 		paddingTop: spacing.xl,
 		paddingBottom: spacing.xl,
 	},
@@ -193,6 +355,14 @@ const styles = StyleSheet.create({
 		fontWeight: "600",
 		textAlign: "center",
 		lineHeight: 32,
+	},
+	textSmall: {
+		fontSize: 20,
+		lineHeight: 28,
+	},
+	textBreathingRoom: {
+		// A bit of space so centered text doesn't feel cramped when wrapping
+		paddingVertical: spacing.sm,
 	},
 	hintRow: {
 		position: "absolute",

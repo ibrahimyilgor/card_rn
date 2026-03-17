@@ -102,6 +102,9 @@ export const accountAPI = {
 
 	getCurrentPlan: () => api.get("/account/my-plan"),
 
+	verifySubscription: (payload) =>
+		api.post("/account/subscriptions/verify", payload),
+
 	getLimitStatus: () => api.get("/account/limit-status"),
 
 	deleteAccount: () => api.delete("/account/delete"),

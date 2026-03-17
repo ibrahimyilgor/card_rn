@@ -116,10 +116,12 @@ const MainTabs = ({ onLogout }) => {
 					fontSize: 11,
 					fontWeight: "600",
 					marginTop: -2,
-					paddingBottom: 2,
+					marginBottom: 4,
+					paddingBottom: 0,
 				},
 				tabBarIconStyle: {
 					marginTop: 1,
+					marginBottom: 1,
 				},
 			}}
 		>

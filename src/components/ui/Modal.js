@@ -8,10 +8,12 @@ import {
 	ScrollView,
 	Platform,
 	Animated,
-	KeyboardAvoidingView,
+	Dimensions,
 } from "react-native";
 import { useTheme } from "../../context/ThemeContext";
 import { borderRadius, spacing } from "../../styles/theme";
+
+const WINDOW_HEIGHT = Dimensions.get("window").height;
 
 const Modal = ({
 	visible,
@@ -21,8 +23,10 @@ const Modal = ({
 	footer,
 	size = "medium", // 'small' | 'medium' | 'large' | 'full'
 	showCloseButton = true,
+	verticalAlign = "center", // 'auto' | 'top' | 'center'
 }) => {
 	const { theme, shadows } = useTheme();
+	const isIOS = Platform.OS === "ios";
 	const backdropAnim = useRef(new Animated.Value(0)).current;
 	const scaleAnim = useRef(new Animated.Value(0.9)).current;
 	const translateYAnim = useRef(new Animated.Value(30)).current;
@@ -78,6 +82,9 @@ const Modal = ({
 		}
 	};
 
+	const resolvedVerticalAlign =
+		verticalAlign === "auto" ? "center" : verticalAlign;
+
 	return (
 		<RNModal
 			visible={visible}
@@ -86,21 +93,23 @@ const Modal = ({
 			statusBarTranslucent
 			onRequestClose={onClose}
 		>
-			<KeyboardAvoidingView
-				style={{ flex: 1 }}
-				behavior={Platform.OS === "ios" ? "padding" : undefined}
-				enabled={Platform.OS === "ios"}
-			>
-				<View style={styles.overlay}>
-					<Animated.View style={[styles.backdrop, { opacity: backdropAnim }]}>
-						<Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-					</Animated.View>
+			<View style={styles.root}>
+				<Animated.View style={[styles.backdrop, { opacity: backdropAnim }]}>
+					<Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+				</Animated.View>
 
+				<View
+					style={[
+						styles.overlay,
+						resolvedVerticalAlign === "top" ? styles.overlayTop : null,
+					]}
+				>
 					<Animated.View
 						style={[
 							styles.container,
 							{
 								width: getWidth(),
+								maxHeight: isIOS ? "85%" : WINDOW_HEIGHT * 0.85,
 								backgroundColor: theme.background.elevated,
 								borderColor: theme.border.main,
 								opacity: contentOpacity,
@@ -144,8 +153,10 @@ const Modal = ({
 							style={styles.content}
 							contentContainerStyle={styles.contentContainer}
 							showsVerticalScrollIndicator={false}
-							keyboardShouldPersistTaps="handled"
-							automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+							keyboardShouldPersistTaps="always"
+							keyboardDismissMode="none"
+							automaticallyAdjustContentInsets={false}
+							automaticallyAdjustKeyboardInsets={false}
 						>
 							{children}
 						</ScrollView>
@@ -160,23 +171,32 @@ const Modal = ({
 						)}
 					</Animated.View>
 				</View>
-			</KeyboardAvoidingView>
+			</View>
 		</RNModal>
 	);
 };
 
 const styles = StyleSheet.create({
-	overlay: {
+	root: {
 		flex: 1,
+	},
+	overlay: {
+		...StyleSheet.absoluteFillObject,
+		width: "100%",
 		justifyContent: "center",
 		alignItems: "center",
+		paddingHorizontal: spacing.md,
+	},
+	overlayTop: {
+		justifyContent: "flex-start",
+		paddingTop: spacing.xl,
+		paddingBottom: spacing.md,
 	},
 	backdrop: {
 		...StyleSheet.absoluteFillObject,
 		backgroundColor: "rgba(0, 0, 0, 0.6)",
 	},
 	container: {
-		maxHeight: "85%",
 		borderRadius: borderRadius.xl,
 		borderWidth: 1,
 		overflow: "hidden",

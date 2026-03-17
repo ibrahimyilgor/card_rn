@@ -17,6 +17,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../context/ThemeContext";
 import { useI18n } from "../context/I18nContext";
 import { useAchievement } from "../context/AchievementContext";
+import { usePlan } from "../context/PlanContext";
 import { useAds } from "../context/AdContext";
 import { gamesAPI, statsAPI, achievementsAPI, decksAPI } from "../services/api";
 import {
@@ -100,6 +101,7 @@ const GameScreen = ({ route, navigation }) => {
 	const { theme, shadows } = useTheme();
 	const { t } = useI18n();
 	const { showAchievements } = useAchievement();
+	const { planCode, hasAds } = usePlan();
 	const { showInterstitial, showVideoAd } = useAds();
 
 	// Game state
@@ -578,12 +580,12 @@ const GameScreen = ({ route, navigation }) => {
 			if (mode === "multiple_choice") {
 				response = await gamesAPI.getMultipleChoice(deck.id);
 				let flashcards = response.data?.flashcards || response.data || [];
-				setCards(flashcards);
-				progressAnim.setValue(
-					flashcards.length > 0 ? 1 / flashcards.length : 0,
-				);
-				if (flashcards.length > 0) {
-					setMcOptions(flashcards[0].options || []);
+				// Shuffle questions so Test mode doesn't always start with the same card
+				const shuffled = [...flashcards].sort(() => Math.random() - 0.5);
+				setCards(shuffled);
+				progressAnim.setValue(shuffled.length > 0 ? 1 / shuffled.length : 0);
+				if (shuffled.length > 0) {
+					setMcOptions(shuffled[0].options || []);
 				}
 			} else {
 				// Use hard cards if hard mode enabled
@@ -1158,13 +1160,16 @@ const GameScreen = ({ route, navigation }) => {
 		// Ads are handled by AdContext which checks the user's plan via PlanContext.
 		// Free plan users see ads; premium and pro users skip ads entirely.
 		try {
-			if (showVideoAd) {
-				await showVideoAd(() => {
-					suppressAchievementPopup = true;
-					navigation.navigate("Settings", { screen: "Plans" });
-				});
-			} else {
-				await showInterstitial();
+			const shouldShowAd = hasAds || planCode === "free";
+			let adResult = null;
+			if (shouldShowAd && showVideoAd) {
+				adResult = await showVideoAd();
+			} else if (shouldShowAd && showInterstitial) {
+				adResult = await showInterstitial();
+			}
+
+			if (adResult?.upgraded) {
+				suppressAchievementPopup = true;
 			}
 		} catch (e) {
 			console.error("Ad display failed:", e);
@@ -2135,12 +2140,20 @@ const GameScreen = ({ route, navigation }) => {
 
 	// Render Write Mode
 	const renderWriteMode = () => (
-		<View style={styles.writeMode}>
-			<Card variant="elevated" style={styles.questionCard}>
-				<ThemedText style={styles.questionText}>
-					{getFrontText(currentCard)}
-				</ThemedText>
-			</Card>
+		<ScrollView
+			style={styles.writeModeScroll}
+			contentContainerStyle={styles.writeModeContent}
+			showsVerticalScrollIndicator={false}
+			keyboardShouldPersistTaps="handled"
+			keyboardDismissMode="on-drag"
+			nestedScrollEnabled
+		>
+			<View style={styles.writeMode}>
+				<Card variant="elevated" style={styles.questionCard}>
+					<ThemedText style={styles.questionText}>
+						{getFrontText(currentCard)}
+					</ThemedText>
+				</Card>
 
 			<TextInput
 				style={[
@@ -2198,77 +2211,78 @@ const GameScreen = ({ route, navigation }) => {
 				</View>
 			)}
 
-			{answerResult && (
-				<View
-					style={[
-						styles.answerFeedback,
-						{
-							backgroundColor:
-								answerResult === "correct"
-									? "#22c55e20"
-									: answerResult === "almost"
-										? "#f59e0b20"
-										: "#ef444420",
-							borderColor:
-								answerResult === "correct"
-									? "#22c55e40"
-									: answerResult === "almost"
-										? "#f59e0b40"
-										: "#ef444440",
-						},
-					]}
-				>
-					<View style={styles.feedbackHeader}>
-						<MaterialCommunityIcons
-							name={answerResult === "wrong" ? "close-circle" : "check-circle"}
-							size={24}
-							color={
-								answerResult === "correct"
-									? "#22c55e"
-									: answerResult === "almost"
-										? "#f59e0b"
-										: "#ef4444"
-							}
-						/>
-						<Text
-							style={{
-								color:
+				{answerResult && (
+					<View
+						style={[
+							styles.answerFeedback,
+							{
+								backgroundColor:
+									answerResult === "correct"
+										? "#22c55e20"
+										: answerResult === "almost"
+											? "#f59e0b20"
+											: "#ef444420",
+								borderColor:
+									answerResult === "correct"
+										? "#22c55e40"
+										: answerResult === "almost"
+											? "#f59e0b40"
+											: "#ef444440",
+							},
+						]}
+					>
+						<View style={styles.feedbackHeader}>
+							<MaterialCommunityIcons
+								name={answerResult === "wrong" ? "close-circle" : "check-circle"}
+								size={24}
+								color={
 									answerResult === "correct"
 										? "#22c55e"
 										: answerResult === "almost"
 											? "#f59e0b"
-											: "#ef4444",
-								fontSize: 18,
-								fontWeight: "600",
-								marginLeft: spacing.sm,
-							}}
-						>
-							{answerResult === "correct"
-								? t("correct_answer")
-								: answerResult === "almost"
-									? t("almost_correct")
-									: t("wrong_answer")}
-						</Text>
+											: "#ef4444"
+								}
+							/>
+							<Text
+								style={{
+									color:
+										answerResult === "correct"
+											? "#22c55e"
+											: answerResult === "almost"
+												? "#f59e0b"
+												: "#ef4444",
+									fontSize: 18,
+									fontWeight: "600",
+									marginLeft: spacing.sm,
+								}}
+							>
+								{answerResult === "correct"
+									? t("correct_answer")
+									: answerResult === "almost"
+										? t("almost_correct")
+										: t("wrong_answer")}
+							</Text>
+						</View>
+						{answerResult === "almost" && (
+							<ThemedText color="secondary" style={{ marginTop: spacing.sm }}>
+								{t("correct_was")}{" "}
+								<Text style={{ fontWeight: "600" }}>
+									{getBackText(currentCard)}
+								</Text>
+							</ThemedText>
+						)}
+						{answerResult === "wrong" && (
+							<ThemedText color="secondary" style={{ marginTop: spacing.sm }}>
+								{t("correct_was")}{" "}
+								<Text style={{ fontWeight: "600" }}>
+									{getBackText(currentCard)}
+								</Text>
+							</ThemedText>
+						)}
 					</View>
-					{answerResult === "almost" && (
-						<ThemedText color="secondary" style={{ marginTop: spacing.sm }}>
-							{t("correct_was")}{" "}
-							<Text style={{ fontWeight: "600" }}>
-								{getBackText(currentCard)}
-							</Text>
-						</ThemedText>
-					)}
-					{answerResult === "wrong" && (
-						<ThemedText color="secondary" style={{ marginTop: spacing.sm }}>
-							{t("correct_was")}{" "}
-							<Text style={{ fontWeight: "600" }}>
-								{getBackText(currentCard)}
-							</Text>
-						</ThemedText>
-					)}
-				</View>
-			)}
-		</View>
+				)}
+			</View>
+		</ScrollView>
 	);
 
 	// Option labels for multiple choice
@@ -2284,7 +2298,12 @@ const GameScreen = ({ route, navigation }) => {
 					</ThemedText>
 				</Card>
 
-				<View style={styles.mcOptions}>
+				<ScrollView
+					style={styles.mcOptionsScroll}
+					contentContainerStyle={styles.mcOptions}
+					showsVerticalScrollIndicator={false}
+					nestedScrollEnabled
+				>
 					{mcOptions.map((option, index) => {
 						const isSelected = selectedOption === index;
 						// Options come as objects with {text, isCorrect} from backend
@@ -2374,7 +2393,7 @@ const GameScreen = ({ route, navigation }) => {
 							</Pressable>
 						);
 					})}
-				</View>
+				</ScrollView>
 			</View>
 		);
 	};
@@ -3305,8 +3324,15 @@ const styles = StyleSheet.create({
 	},
 	// Write Mode
 	writeMode: {
-		flex: 1,
 		paddingTop: spacing.lg,
+	},
+	writeModeScroll: {
+		flex: 1,
+		minHeight: 0,
+	},
+	writeModeContent: {
+		flexGrow: 1,
+		paddingBottom: spacing.lg,
 	},
 	questionCard: {
 		padding: spacing.lg,
@@ -3371,9 +3397,15 @@ const styles = StyleSheet.create({
 	// Multiple Choice
 	mcMode: {
 		flex: 1,
+		// Allow children ScrollView to shrink/expand correctly inside a flex column layout
+		minHeight: 0,
 	},
 	mcOptions: {
 		gap: spacing.sm,
+	},
+	mcOptionsScroll: {
+		flex: 1,
+		minHeight: 0,
 	},
 	mcOption: {
 		flexDirection: "row",

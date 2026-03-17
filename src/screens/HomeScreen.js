@@ -13,7 +13,6 @@ import {
 	Pressable,
 	RefreshControl,
 	TextInput,
-	Keyboard,
 	Share,
 	Platform,
 	Animated,
@@ -82,7 +81,6 @@ const HomeScreen = ({ navigation, onLogout }) => {
 	const [importLoading, setImportLoading] = useState(false);
 	// Sort modal
 	const [sortModalVisible, setSortModalVisible] = useState(false);
-	const [keyboardInset, setKeyboardInset] = useState(0);
 
 	// Alert modal
 	const [alertMessage, setAlertMessage] = useState("");
@@ -128,26 +126,6 @@ const HomeScreen = ({ navigation, onLogout }) => {
 			loadAccountAndDecks();
 		}, []),
 	);
-
-	useEffect(() => {
-		const showEvent =
-			Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-		const hideEvent =
-			Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-
-		const showSub = Keyboard.addListener(showEvent, (event) => {
-			setKeyboardInset(event?.endCoordinates?.height || 0);
-		});
-
-		const hideSub = Keyboard.addListener(hideEvent, () => {
-			setKeyboardInset(0);
-		});
-
-		return () => {
-			showSub.remove();
-			hideSub.remove();
-		};
-	}, []);
 
 	const loadAccountAndDecks = async () => {
 		try {
@@ -1052,11 +1030,11 @@ const HomeScreen = ({ navigation, onLogout }) => {
 						}
 						contentContainerStyle={[
 							styles.listContent,
-							{ paddingBottom: spacing.xxl + keyboardInset + spacing.lg },
+							{ paddingBottom: spacing.xxl + spacing.lg },
 						]}
 						keyboardShouldPersistTaps="always"
-						keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "none"}
-						automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+						keyboardDismissMode="on-drag"
+						automaticallyAdjustKeyboardInsets={false}
 						removeClippedSubviews={false}
 						refreshControl={
 							<RefreshControl
@@ -1171,6 +1149,7 @@ const HomeScreen = ({ navigation, onLogout }) => {
 						setImportDescription("");
 					}}
 					title={t("import_deck") || "Import Deck"}
+					verticalAlign="center"
 					footer={
 						<View style={styles.modalFooter}>
 							<Button
@@ -1785,7 +1764,6 @@ const FlashcardsModal = ({
 		setAddSaving(true);
 		try {
 			await flashcardsAPI.create(deck.id, front, back);
-			setIsInlineAdding(false);
 			await fetchFlashcards(true);
 		} catch (error) {
 			console.error("Error adding card:", error);
@@ -1823,6 +1801,9 @@ const FlashcardsModal = ({
 			onClose={onClose}
 			title={displayTitle}
 			size="large"
+			verticalAlign="center"
+			avoidKeyboard={false} // eğer Modal bileşenin bu prop'u destekliyorsa
+			propagateSwipe={true}
 			footer={
 				<View style={styles.modalFooter}>
 					<Button
@@ -1912,6 +1893,9 @@ const FlashcardsModal = ({
 					{/* Inline add form */}
 					{isInlineAdding && (
 						<InlineCardForm
+							// Remount after a successful add (flashcards length increases)
+							// so inputs reset without closing the form.
+							key={`add-form-${flashcards.length}`}
 							editingCard={null}
 							onSubmit={handleSubmitAdd}
 							onCancel={() => setIsInlineAdding(false)}
@@ -2158,6 +2142,7 @@ const styles = StyleSheet.create({
 	},
 	deckTitle: {
 		marginBottom: spacing.xs,
+		paddingRight: spacing.md,
 	},
 	deckDescription: {
 		fontSize: 14,

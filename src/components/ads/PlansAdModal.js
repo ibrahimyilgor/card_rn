@@ -314,8 +314,8 @@ const PlansAdModal = ({ visible, onClose, onUpgrade }) => {
 							<TouchableOpacity
 								style={[styles.ctaButton, { backgroundColor: "#8b5cf6" }]}
 								onPress={() => {
-									onClose && onClose();
 									onUpgrade && onUpgrade();
+									onClose && onClose();
 								}}
 							>
 								<Text style={styles.ctaText}>{t("upgrade_plan")}</Text>

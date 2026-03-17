@@ -444,7 +444,7 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 								resizeMode="contain"
 							/>
 							<ThemedText variant="h3" style={styles.aboutAppName}>
-								MemoDeck v1.0.6
+								MemoDeck v1.0.10
 							</ThemedText>
 							{/* <ThemedText color="secondary" style={styles.aboutVersion}>
 								{t("version")} 1.0.0
@@ -500,6 +500,7 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 				onConfirm={confirmLogout}
 				onClose={() => setShowLogoutDialog(false)}
 				confirmVariant="danger"
+				verticalAlign="center"
 			/>
 		</ThemedView>
 	);

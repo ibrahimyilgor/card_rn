@@ -3,7 +3,7 @@
 		"name": "MemoDeck",
 		"slug": "card_rn",
 		"scheme": "memodeck",
-		"version": "1.0.0",
+		"version": "1.0.10",
 		"orientation": "portrait",
 		"icon": "./assets/icon.png",
 		"userInterfaceStyle": "light",
@@ -20,6 +20,9 @@
 		},
 		"android": {
 			"softwareKeyboardLayoutMode": "pan",
+			"blockedPermissions": [
+				"com.google.android.gms.permission.AD_ID"
+			],
 			"adaptiveIcon": {
 				"foregroundImage": "./assets/adaptive-icon.png",
 				"backgroundColor": "#ffffff"

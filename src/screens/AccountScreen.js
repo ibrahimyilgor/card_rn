@@ -33,7 +33,11 @@ let _accountAnimated = false;
 
 const AccountScreen = ({ navigation, onLogout }) => {
 	const { theme } = useTheme();
-	const { t } = useI18n();
+	const { t, language } = useI18n();
+
+	const locale = language === "tr" ? "tr-TR" : "en-US";
+	const subscriptionDividerColor =
+		theme.mode === "dark" ? theme.border.main : theme.border.subtle;
 
 	const [loading, setLoading] = useState(true);
 	const [account, setAccount] = useState(null);
@@ -135,6 +139,8 @@ const AccountScreen = ({ navigation, onLogout }) => {
 				created_at: firebaseUser?.metadata?.creationTime,
 				plan: userPlan?.code || "free",
 				planName: userPlan?.name || "Free",
+				currentPeriodEnd: userPlan?.currentPeriodEnd || null,
+				autoRenewing: Boolean(userPlan?.autoRenewing),
 				...profileResponse.data?.profile,
 			});
 		} catch (error) {
@@ -147,13 +153,28 @@ const AccountScreen = ({ navigation, onLogout }) => {
 	const formatDate = (dateStr) => {
 		if (!dateStr) return "";
 		try {
-			return new Date(dateStr).toLocaleDateString(undefined, {
+			return new Date(dateStr).toLocaleDateString(locale, {
 				year: "numeric",
 				month: "long",
 				day: "numeric",
 			});
 		} catch (e) {
-			return new Date(dateStr).toLocaleDateString();
+			return new Date(dateStr).toLocaleDateString(locale);
+		}
+	};
+
+	const formatDateTime = (dateStr) => {
+		if (!dateStr) return t("no_expiration");
+		try {
+			return new Date(dateStr).toLocaleString(locale, {
+				year: "numeric",
+				month: "long",
+				day: "numeric",
+				hour: "2-digit",
+				minute: "2-digit",
+			});
+		} catch (e) {
+			return new Date(dateStr).toLocaleString(locale);
 		}
 	};
 
@@ -401,6 +422,49 @@ const AccountScreen = ({ navigation, onLogout }) => {
 												color={theme.text.secondary}
 											/>
 										</View>
+										<View
+											style={[
+												styles.subscriptionMetaRow,
+												{ borderTopColor: subscriptionDividerColor },
+											]}
+										>
+											<ThemedText
+												color="secondary"
+												style={styles.subscriptionMetaLabel}
+											>
+												{t("plan_end_time")}
+											</ThemedText>
+											<ThemedText style={styles.subscriptionMetaValue}>
+												{formatDateTime(account?.currentPeriodEnd)}
+											</ThemedText>
+										</View>
+										<View
+											style={[
+												styles.subscriptionMetaRow,
+												{ borderTopColor: subscriptionDividerColor },
+											]}
+										>
+											<ThemedText
+												color="secondary"
+												style={styles.subscriptionMetaLabel}
+											>
+												{t("auto_renewal")}
+											</ThemedText>
+											<ThemedText
+												style={[
+													styles.subscriptionMetaValue,
+													{
+														color: account?.autoRenewing
+															? "#22c55e"
+															: "#ef4444",
+													},
+												]}
+											>
+												{account?.autoRenewing
+													? t("renews_automatically")
+													: t("will_not_renew")}
+											</ThemedText>
+										</View>
 									</Card>
 								);
 							}}
@@ -604,6 +668,24 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "space-between",
+	},
+	subscriptionMetaRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		marginTop: spacing.sm,
+		paddingTop: spacing.sm,
+		borderTopWidth: 1,
+	},
+	subscriptionMetaLabel: {
+		fontSize: 12,
+		flex: 1,
+	},
+	subscriptionMetaValue: {
+		fontSize: 12,
+		fontWeight: "600",
+		textAlign: "right",
+		flex: 1,
 	},
 	subscriptionHeader: {
 		flexDirection: "row",

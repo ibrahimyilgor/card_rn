@@ -5,32 +5,197 @@ import {
 	ScrollView,
 	Dimensions,
 	Animated,
+	Platform,
+	Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "../context/ThemeContext";
 import { useI18n } from "../context/I18nContext";
+import { usePlan } from "../context/PlanContext";
 import { accountAPI } from "../services/api";
+import {
+	initBilling,
+	closeBilling,
+	purchasePlanOnAndroid,
+	syncAndroidEntitlements,
+	getSubscriptionProducts,
+	SUBSCRIPTION_PRODUCT_MAP,
+} from "../services/googleBillingService";
 import {
 	ThemedView,
 	ThemedText,
 	Card,
 	Button,
 	LoadingState,
+	Modal,
 } from "../components/ui";
 import { spacing, borderRadius } from "../styles/theme";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { get } from "react-native/Libraries/TurboModule/TurboModuleRegistry";
 
 const { width } = Dimensions.get("window");
 
 const PlansScreen = ({ navigation }) => {
 	const { theme } = useTheme();
 	const { t } = useI18n();
+	const { refreshPlan } = usePlan();
 
 	const [loading, setLoading] = useState(true);
 	const [currentPlan, setCurrentPlan] = useState("free");
 	const [plans, setPlans] = useState([]);
+	const [processingPlanId, setProcessingPlanId] = useState(null);
+	const [dialog, setDialog] = useState({
+		visible: false,
+		title: "",
+		message: "",
+		confirmLabel: null,
+		cancelLabel: null,
+		onConfirm: null,
+		confirmVariant: "primary",
+	});
+
+	const closeDialog = () => {
+		setDialog((prev) => ({
+			...prev,
+			visible: false,
+			onConfirm: null,
+		}));
+	};
+
+	const showInfoDialog = (title, message) => {
+		setDialog({
+			visible: true,
+			title,
+			message,
+			confirmLabel: t("ok") || "OK",
+			cancelLabel: null,
+			onConfirm: null,
+			confirmVariant: "primary",
+		});
+	};
+
+	const showActionDialog = ({
+		title,
+		message,
+		confirmLabel,
+		cancelLabel,
+		onConfirm,
+		confirmVariant = "primary",
+	}) => {
+		setDialog({
+			visible: true,
+			title,
+			message,
+			confirmLabel,
+			cancelLabel,
+			onConfirm,
+			confirmVariant,
+		});
+	};
+
+	const getBillingErrorMessage = (error) => {
+		const code = error?.code || error?.response?.data?.code;
+		if (code === "E_IAP_NOT_AVAILABLE") {
+			return (
+				t("iap_not_available_desc") ||
+				"Google Play Billing şu anda kullanılamıyor. Cihazda Play Store olmalı ve uygulama Play uyumlu bir Android build ile açılmalı."
+			);
+		}
+		if (code === "E_USER_CANCELLED") {
+			return t("purchase_cancelled") || "Satın alma işlemi iptal edildi.";
+		}
+		return (
+			error?.response?.data?.error ||
+			error?.message ||
+			t("error_changing_plan") ||
+			"Failed to change plan"
+		);
+	};
+
+	const handlePlanChange = async (targetPlanId) => {
+		if (!targetPlanId || targetPlanId === currentPlan) return;
+
+		const order = ["free", "pro", "premium"];
+		const currentIndex = order.indexOf(currentPlan);
+		const targetIndex = order.indexOf(targetPlanId);
+		if (currentIndex === -1 || targetIndex === -1) return;
+
+		if (targetIndex < currentIndex) {
+			showActionDialog({
+				title: t("manage_subscription") || "Manage Subscription",
+				message:
+					t("downgrade_in_play_store") ||
+					"Plan downgrade/cancel işlemleri Google Play abonelik ekranından yapılır.",
+				confirmLabel: t("open") || "Open",
+				cancelLabel: t("cancel") || "Cancel",
+				onConfirm: () =>
+					Linking.openURL(
+						"https://play.google.com/store/account/subscriptions",
+					),
+				confirmVariant: "primary",
+			});
+			return;
+		}
+
+		if (Platform.OS !== "android") {
+			showInfoDialog(
+				t("not_supported") || "Not supported",
+				t("android_only_subscription") ||
+					"Bu sürümde abonelik satın alma yalnızca Android için aktif.",
+			);
+			return;
+		}
+
+		setProcessingPlanId(targetPlanId);
+
+		try {
+			const isBillingReady = await initBilling();
+			if (!isBillingReady) {
+				const notAvailableError = new Error("Billing service unavailable");
+				notAvailableError.code = "E_IAP_NOT_AVAILABLE";
+				throw notAvailableError;
+			}
+
+			const products = await getSubscriptionProducts();
+			const targetProductId = SUBSCRIPTION_PRODUCT_MAP[targetPlanId];
+			const productExists = products.some(
+				(product) => product.productId === targetProductId,
+			);
+			if (!productExists) {
+				const missingProductError = new Error(
+					"Subscription product not available",
+				);
+				missingProductError.code = "E_IAP_NOT_AVAILABLE";
+				throw missingProductError;
+			}
+
+			await purchasePlanOnAndroid(targetPlanId);
+			const syncResults = await syncAndroidEntitlements();
+			const hasSuccess = syncResults.some((result) => result.ok);
+			if (!hasSuccess) {
+				throw new Error(
+					t("purchase_verified_but_sync_failed") ||
+						"Satın alma tamamlandı ancak abonelik doğrulaması başarısız oldu.",
+				);
+			}
+
+			const response = await accountAPI.getCurrentPlan();
+			const nextPlanCode = response?.data?.plan?.code || targetPlanId;
+			setCurrentPlan(nextPlanCode);
+			await refreshPlan();
+
+			showInfoDialog(
+				t("success") || "Success",
+				`${t("current_plan")}: ${t(nextPlanCode + "_plan") || nextPlanCode}`,
+			);
+		} catch (error) {
+			console.error("Error changing plan:", error);
+			showInfoDialog(t("error") || "Error", getBillingErrorMessage(error));
+		} finally {
+			setProcessingPlanId(null);
+			fetchPlansData();
+		}
+	};
 
 	const getPlanColor = (code) => {
 		switch (code) {
@@ -89,6 +254,12 @@ const PlansScreen = ({ navigation }) => {
 
 	useEffect(() => {
 		fetchPlansData();
+
+		return () => {
+			if (Platform.OS === "android") {
+				closeBilling();
+			}
+		};
 	}, []);
 
 	const fetchPlansData = async () => {
@@ -382,11 +553,9 @@ const PlansScreen = ({ navigation }) => {
 											return (
 												<Button
 													variant={plan.recommended ? "contained" : "outlined"}
-													onPress={() => {
-														// Handle subscription - would integrate with in-app purchases
-														// For now, just show an alert
-														alert(t("coming_soon"));
-													}}
+													onPress={() => handlePlanChange(plan.id)}
+													disabled={!!processingPlanId}
+													loading={processingPlanId === plan.id}
 													style={styles.ctaButton}
 												>
 													{label}
@@ -428,6 +597,45 @@ const PlansScreen = ({ navigation }) => {
 					</Animated.View>
 				</ScrollView>
 			</SafeAreaView>
+
+			<Modal
+				visible={dialog.visible}
+				onClose={closeDialog}
+				title={dialog.title}
+				verticalAlign="center"
+				footer={
+					<View style={styles.dialogFooter}>
+						{dialog.cancelLabel ? (
+							<Button variant="ghost" onPress={closeDialog}>
+								{dialog.cancelLabel}
+							</Button>
+						) : null}
+						<Button
+							variant={dialog.confirmVariant}
+							onPress={async () => {
+								const action = dialog.onConfirm;
+								closeDialog();
+								if (action) {
+									try {
+										await action();
+									} catch (error) {
+										showInfoDialog(
+											t("error") || "Error",
+											getBillingErrorMessage(error),
+										);
+									}
+								}
+							}}
+						>
+							{dialog.confirmLabel || t("ok") || "OK"}
+						</Button>
+					</View>
+				}
+			>
+				<ThemedText color="secondary" style={styles.dialogMessage}>
+					{dialog.message}
+				</ThemedText>
+			</Modal>
 		</ThemedView>
 	);
 };
@@ -563,6 +771,14 @@ const styles = StyleSheet.create({
 	infoContent: {
 		flex: 1,
 		marginLeft: spacing.sm,
+	},
+	dialogFooter: {
+		flexDirection: "row",
+		justifyContent: "flex-end",
+		gap: spacing.sm,
+	},
+	dialogMessage: {
+		lineHeight: 22,
 	},
 });
 

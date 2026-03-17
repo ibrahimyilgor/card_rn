@@ -24,20 +24,23 @@ export default function App() {
 			return;
 		}
 
-		const applyNavigationBarHidden = async () => {
+		// Keep Android system navigation buttons (triangle/circle/square) always visible.
+		// Our bottom tab bar already accounts for safe-area insets.
+		const applyNavigationBarVisible = async () => {
 			try {
-				await NavigationBar.setBehaviorAsync("overlay-swipe");
-				await NavigationBar.setVisibilityAsync("hidden");
+				// 'inset-swipe' avoids overlaying app content and keeps the system bar visible.
+				await NavigationBar.setBehaviorAsync("inset-swipe");
+				await NavigationBar.setVisibilityAsync("visible");
 			} catch (error) {
-				console.log("Navigation bar hide failed:", error);
+				console.log("Navigation bar visibility update failed:", error);
 			}
 		};
 
-		applyNavigationBarHidden();
+		applyNavigationBarVisible();
 
 		const appStateSub = AppState.addEventListener("change", (state) => {
 			if (state === "active") {
-				applyNavigationBarHidden();
+				applyNavigationBarVisible();
 			}
 		});
 

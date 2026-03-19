@@ -43,6 +43,7 @@ import {
 } from "../components/ui";
 import { spacing, borderRadius } from "../styles/theme";
 import LimitWarningModal from "../components/LimitWarningModal";
+import FlashcardsModal from "../components/FlashcardsModal";
 
 const MAX_TEXT_LENGTH = 512;
 const MAX_DECK_TITLE_LENGTH = 255;
@@ -1129,49 +1130,97 @@ const HomeScreen = ({ navigation, onLogout }) => {
 					onClose={() => setSortModalVisible(false)}
 					title={t("sort_options") || "Sort"}
 				>
-					<View style={{ gap: spacing.sm }}>
+					<View style={styles.sortModalBody}>
 						{[
-							{ value: "newest", label: t("sort_newest") || "Newest" },
-							{ value: "oldest", label: t("sort_oldest") || "Oldest" },
-							{ value: "name_asc", label: t("sort_name_asc") || "Name (A-Z)" },
+							{
+								value: "newest",
+								label: t("sort_newest") || "Newest",
+								icon: "time-outline",
+							},
+							{
+								value: "oldest",
+								label: t("sort_oldest") || "Oldest",
+								icon: "hourglass-outline",
+							},
+							{
+								value: "name_asc",
+								label: t("sort_name_asc") || "Name (A-Z)",
+								icon: "text-outline",
+							},
 							{
 								value: "name_desc",
 								label: t("sort_name_desc") || "Name (Z-A)",
+								icon: "text",
 							},
 							{
 								value: "cards_desc",
 								label: t("sort_most_cards") || "Most cards",
+								icon: "layers-outline",
 							},
 							{
 								value: "cards_asc",
 								label: t("sort_fewest_cards") || "Fewest cards",
+								icon: "layers",
 							},
-						].map((option) => (
-							<Pressable
-								key={option.value}
-								onPress={() => {
-									setSortBy(option.value);
-									setSortModalVisible(false);
-								}}
-								style={styles.sortOptionRow}
-							>
-								<Text
+						].map((option) => {
+							const isSelected = sortBy === option.value;
+							return (
+								<Pressable
+									key={option.value}
+									onPress={() => {
+										setSortBy(option.value);
+										setSortModalVisible(false);
+									}}
 									style={[
-										{ color: theme.text.primary, flex: 1 },
-										styles.modeOptionText,
+										styles.sortOptionRow,
+										{
+											backgroundColor: isSelected
+												? theme.primary.main + "12"
+												: theme.background.paper,
+											borderColor: isSelected
+												? theme.primary.main
+												: theme.border.main,
+										},
 									]}
 								>
-									{option.label}
-								</Text>
-								{sortBy === option.value && (
-									<Ionicons
-										name="checkmark"
-										size={18}
-										color={theme.success.main}
-									/>
-								)}
-							</Pressable>
-						))}
+									<View
+										style={[
+											styles.sortOptionIconWrap,
+											{
+												backgroundColor: isSelected
+													? theme.primary.main + "20"
+													: "transparent",
+											},
+										]}
+									>
+										<Ionicons
+											name={option.icon}
+											size={16}
+											color={
+												isSelected ? theme.primary.main : theme.text.secondary
+											}
+										/>
+									</View>
+									<ThemedText style={styles.sortOptionText}>
+										{option.label}
+									</ThemedText>
+									{isSelected ? (
+										<View
+											style={[
+												styles.sortSelectedBadge,
+												{ backgroundColor: theme.success.main + "20" },
+											]}
+										>
+											<Ionicons
+												name="checkmark"
+												size={14}
+												color={theme.success.main}
+											/>
+										</View>
+									) : null}
+								</Pressable>
+							);
+						})}
 					</View>
 				</Modal>
 
@@ -1652,536 +1701,6 @@ const InlineDeckForm = ({
 	);
 };
 
-// ── Inline card form (add / edit) ────────────────────────────────────────────
-const InlineCardForm = ({
-	editingCard,
-	onSubmit,
-	onCancel,
-	saving,
-	t,
-	theme,
-}) => {
-	const [frontText, setFrontText] = useState(
-		editingCard ? editingCard.front_text : "",
-	);
-	const [backText, setBackText] = useState(
-		editingCard ? editingCard.back_text : "",
-	);
-
-	const isEditing = !!editingCard;
-	const hasChanges = isEditing
-		? frontText.trim() !== editingCard.front_text ||
-			backText.trim() !== editingCard.back_text
-		: true;
-	const frontTooLong = frontText.length > MAX_TEXT_LENGTH;
-	const backTooLong = backText.length > MAX_TEXT_LENGTH;
-	const canSubmit =
-		frontText.trim() &&
-		backText.trim() &&
-		!saving &&
-		hasChanges &&
-		!frontTooLong &&
-		!backTooLong;
-	const accentColor = isEditing ? "#f59e0b" : "#22c55e";
-
-	return (
-		<View
-			style={{
-				backgroundColor: theme.background.paper,
-				borderRadius: borderRadius.lg,
-				borderWidth: 1,
-				borderColor: isEditing
-					? "rgba(245, 158, 11, 0.4)"
-					: "rgba(34, 197, 94, 0.4)",
-				overflow: "hidden",
-				marginBottom: spacing.sm,
-			}}
-		>
-			<View style={{ flexDirection: "row" }}>
-				<View style={{ width: 4, backgroundColor: accentColor }} />
-				<View style={{ flex: 1, padding: spacing.md, gap: spacing.sm }}>
-					<Input
-						value={frontText}
-						onChangeText={setFrontText}
-						placeholder={t("enter_the_question_or_term") || "Question / Front"}
-						multiline
-						numberOfLines={2}
-						maxLength={MAX_TEXT_LENGTH + 1}
-						error={
-							frontTooLong
-								? t("max_characters_error", { max: MAX_TEXT_LENGTH })
-								: ""
-						}
-						helperText={
-							frontTooLong
-								? undefined
-								: `${frontText.length}/${MAX_TEXT_LENGTH}`
-						}
-					/>
-					<Input
-						value={backText}
-						onChangeText={setBackText}
-						placeholder={t("enter_the_answer_or_definition") || "Answer / Back"}
-						multiline
-						numberOfLines={2}
-						maxLength={MAX_TEXT_LENGTH + 1}
-						error={
-							backTooLong
-								? t("max_characters_error", { max: MAX_TEXT_LENGTH })
-								: ""
-						}
-						helperText={
-							backTooLong ? undefined : `${backText.length}/${MAX_TEXT_LENGTH}`
-						}
-					/>
-					<View
-						style={{
-							flexDirection: "row",
-							justifyContent: "flex-end",
-							gap: spacing.sm,
-						}}
-					>
-						<Pressable
-							onPress={onCancel}
-							style={{
-								width: 36,
-								height: 36,
-								borderRadius: 18,
-								backgroundColor: "rgba(239, 68, 68, 0.12)",
-								alignItems: "center",
-								justifyContent: "center",
-							}}
-						>
-							<Ionicons name="close" size={18} color="#ef4444" />
-						</Pressable>
-						<Pressable
-							onPress={() =>
-								canSubmit && onSubmit(frontText.trim(), backText.trim())
-							}
-							style={{
-								width: 36,
-								height: 36,
-								borderRadius: 18,
-								backgroundColor: canSubmit
-									? accentColor + "22"
-									: "rgba(150,150,150,0.1)",
-								alignItems: "center",
-								justifyContent: "center",
-							}}
-						>
-							{saving ? (
-								<ActivityIndicator size="small" color={accentColor} />
-							) : (
-								<Ionicons
-									name="checkmark"
-									size={18}
-									color={canSubmit ? accentColor : theme.text.disabled}
-								/>
-							)}
-						</Pressable>
-					</View>
-				</View>
-			</View>
-		</View>
-	);
-};
-
-// Flashcards Modal Component
-const FlashcardsModal = ({
-	visible,
-	onClose,
-	deck,
-	theme,
-	t,
-	showAlert,
-	onUpdate,
-	canCreateFlashcard,
-	onLimitReached,
-}) => {
-	const [flashcards, setFlashcards] = useState([]);
-	const [loading, setLoading] = useState(false);
-	const [isInlineAdding, setIsInlineAdding] = useState(false);
-	const [editingCardId, setEditingCardId] = useState(null);
-	const [addSaving, setAddSaving] = useState(false);
-	const [editSaving, setEditSaving] = useState(false);
-	const [searchQuery, setSearchQuery] = useState("");
-
-	// Filter flashcards based on search query
-	const filteredFlashcards = flashcards.filter((card) => {
-		if (!searchQuery.trim()) return true;
-		const query = searchQuery.toLowerCase();
-		return (
-			card.front_text.toLowerCase().includes(query) ||
-			card.back_text.toLowerCase().includes(query)
-		);
-	});
-
-	// Truncate text helper
-	const truncateText = (text, maxLength = 40) => {
-		if (!text) return "";
-		return text.length > maxLength
-			? text.substring(0, maxLength) + "..."
-			: text;
-	};
-
-	// Truncate deck title
-	const displayTitle = deck?.title
-		? deck.title.length > 25
-			? deck.title.substring(0, 25) + "..."
-			: deck.title
-		: t("flashcards");
-
-	useEffect(() => {
-		if (visible && deck) {
-			fetchFlashcards();
-			setSearchQuery("");
-			setIsInlineAdding(false);
-			setEditingCardId(null);
-		}
-	}, [visible, deck]);
-
-	const fetchFlashcards = async (silent = false) => {
-		if (!deck) return;
-		if (!silent) setLoading(true);
-		try {
-			const response = await flashcardsAPI.getByDeck(deck.id);
-			// Backend returns { decks: [...] } for flashcards (naming quirk)
-			const flashcardsData = response.data?.decks || response.data || [];
-			const nextFlashcards = Array.isArray(flashcardsData)
-				? flashcardsData
-				: [];
-			setFlashcards(nextFlashcards);
-			if (onUpdate) onUpdate(deck.id, nextFlashcards.length);
-		} catch (error) {
-			console.error("Error fetching flashcards:", error);
-		} finally {
-			if (!silent) setLoading(false);
-		}
-	};
-
-	const handleAddCard = () => {
-		if (canCreateFlashcard === false) {
-			if (onLimitReached) onLimitReached();
-			return;
-		}
-		setEditingCardId(null);
-		setIsInlineAdding(true);
-	};
-
-	const handleEditCard = (card) => {
-		setIsInlineAdding(false);
-		setEditingCardId(card.id);
-	};
-
-	const handleSubmitAdd = async (front, back) => {
-		if (front.length > MAX_TEXT_LENGTH || back.length > MAX_TEXT_LENGTH) {
-			showAlert?.(t("max_characters_error", { max: MAX_TEXT_LENGTH }));
-			return;
-		}
-		setAddSaving(true);
-		try {
-			await flashcardsAPI.create(deck.id, front, back);
-			await fetchFlashcards(true);
-		} catch (error) {
-			console.error("Error adding card:", error);
-			showAlert?.(
-				error?.response?.data?.message ||
-					error?.response?.data?.error ||
-					t("error") ||
-					"Error",
-			);
-		} finally {
-			setAddSaving(false);
-		}
-	};
-
-	const handleSubmitEdit = async (front, back) => {
-		if (!editingCardId) return;
-		if (front.length > MAX_TEXT_LENGTH || back.length > MAX_TEXT_LENGTH) {
-			showAlert?.(t("max_characters_error", { max: MAX_TEXT_LENGTH }));
-			return;
-		}
-		setEditSaving(true);
-		try {
-			await flashcardsAPI.update(editingCardId, front, back);
-			setEditingCardId(null);
-			await fetchFlashcards(true);
-		} catch (error) {
-			console.error("Error updating card:", error);
-			showAlert?.(
-				error?.response?.data?.message ||
-					error?.response?.data?.error ||
-					t("error") ||
-					"Error",
-			);
-		} finally {
-			setEditSaving(false);
-		}
-	};
-
-	const handleDeleteCard = async (cardId) => {
-		try {
-			await flashcardsAPI.delete(cardId);
-			await fetchFlashcards(true);
-		} catch (error) {
-			console.error("Error deleting card:", error);
-		}
-	};
-
-	return (
-		<Modal
-			visible={visible}
-			onClose={onClose}
-			title={displayTitle}
-			size="large"
-			verticalAlign="center"
-			avoidKeyboard={false} // eğer Modal bileşenin bu prop'u destekliyorsa
-			propagateSwipe={true}
-			footer={
-				<View style={styles.modalFooter}>
-					<Button
-						variant="ghost"
-						onPress={onClose}
-						textStyle={{ color: theme.text.secondary }}
-					>
-						{t("close") || "Close"}
-					</Button>
-					<Button
-						variant="success"
-						onPress={handleAddCard}
-						disabled={isInlineAdding}
-					>
-						{t("add_flashcard") || "Add Flashcard"}
-					</Button>
-				</View>
-			}
-		>
-			{loading ? (
-				<LoadingState message={t("loading_cards")} />
-			) : (
-				<View>
-					{/* Search Bar (only if flashcards exist) */}
-					{flashcards.length > 0 && (
-						<View
-							style={[
-								styles.flashcardSearchContainer,
-								{
-									backgroundColor: theme.background.paper,
-									borderColor: theme.border.main,
-								},
-							]}
-						>
-							<Ionicons
-								name="search-outline"
-								size={18}
-								color={theme.text.disabled}
-								style={{ marginRight: spacing.sm }}
-							/>
-							<TextInput
-								style={[
-									styles.flashcardSearchInput,
-									{ color: theme.text.primary },
-								]}
-								placeholder={t("search_flashcards") || "Search flashcards..."}
-								placeholderTextColor={theme.text.disabled}
-								value={searchQuery}
-								onChangeText={setSearchQuery}
-								autoCorrect={false}
-								autoCapitalize="none"
-							/>
-							{searchQuery ? (
-								<Pressable onPress={() => setSearchQuery("")}>
-									<Ionicons
-										name="close-circle"
-										size={18}
-										color={theme.primary.main}
-									/>
-								</Pressable>
-							) : null}
-						</View>
-					)}
-
-					{/* Card count badge */}
-					{flashcards.length > 0 && (
-						<View
-							style={[
-								styles.cardCountBadgeModal,
-								{ backgroundColor: theme.primary.main + "15" },
-							]}
-						>
-							<Text
-								style={[
-									styles.cardCountTextModal,
-									{ color: theme.primary.main },
-								]}
-							>
-								{searchQuery
-									? `${filteredFlashcards.length} / ${flashcards.length}`
-									: flashcards.length}{" "}
-								{(flashcards.length > 0 && t("cards")) || "cards"}
-							</Text>
-						</View>
-					)}
-
-					{/* Inline add form */}
-					{isInlineAdding && (
-						<InlineCardForm
-							// Remount after a successful add (flashcards length increases)
-							// so inputs reset without closing the form.
-							key={`add-form-${flashcards.length}`}
-							editingCard={null}
-							onSubmit={handleSubmitAdd}
-							onCancel={() => setIsInlineAdding(false)}
-							saving={addSaving}
-							t={t}
-							theme={theme}
-						/>
-					)}
-
-					{/* Empty states */}
-					{flashcards.length === 0 && !isInlineAdding ? (
-						<View
-							style={{
-								alignItems: "center",
-								paddingVertical: spacing.xxl,
-							}}
-						>
-							<MaterialCommunityIcons
-								name="cards-outline"
-								size={48}
-								color={theme.primary.main}
-							/>
-							<ThemedText
-								variant="h3"
-								style={{ marginTop: spacing.md, textAlign: "center" }}
-							>
-								{t("no_flashcards")}
-							</ThemedText>
-							<ThemedText
-								color="secondary"
-								style={{
-									marginTop: spacing.sm,
-									textAlign: "center",
-									fontSize: 14,
-								}}
-							>
-								{t("no_flashcards_desc")}
-							</ThemedText>
-						</View>
-					) : filteredFlashcards.length === 0 && flashcards.length > 0 ? (
-						<View
-							style={{
-								alignItems: "center",
-								paddingVertical: spacing.xl,
-							}}
-						>
-							<Ionicons
-								name="search-outline"
-								size={36}
-								color={theme.text.secondary}
-							/>
-							<ThemedText
-								color="secondary"
-								style={{ marginTop: spacing.sm, textAlign: "center" }}
-							>
-								{t("no_results") || "No results found"}
-							</ThemedText>
-						</View>
-					) : (
-						/* Flashcard list */
-						filteredFlashcards.map((card) =>
-							editingCardId === card.id ? (
-								/* Inline edit form replaces the card */
-								<InlineCardForm
-									key={`edit-${card.id}`}
-									editingCard={card}
-									onSubmit={handleSubmitEdit}
-									onCancel={() => setEditingCardId(null)}
-									saving={editSaving}
-									t={t}
-									theme={theme}
-								/>
-							) : (
-								/* Regular card item */
-								<View
-									key={card.id}
-									style={{
-										backgroundColor: theme.background.paper,
-										borderRadius: borderRadius.lg,
-										borderWidth: 1,
-										borderColor: theme.border.main,
-										overflow: "hidden",
-										marginBottom: spacing.sm,
-									}}
-								>
-									<View style={{ flexDirection: "row" }}>
-										{/* Blue-to-purple left indicator */}
-										<View
-											style={{
-												width: 4,
-												backgroundColor: "#3b82f6",
-											}}
-										/>
-										<View
-											style={{
-												flex: 1,
-												padding: spacing.md,
-												flexDirection: "row",
-												alignItems: "center",
-												gap: spacing.sm,
-											}}
-										>
-											<View style={{ flex: 1 }}>
-												<ThemedText
-													style={styles.flashcardFront}
-													numberOfLines={1}
-												>
-													{card.front_text}
-												</ThemedText>
-												<ThemedText
-													color="secondary"
-													style={styles.flashcardBack}
-													numberOfLines={1}
-												>
-													{card.back_text}
-												</ThemedText>
-											</View>
-											<View style={{ flexDirection: "row", gap: spacing.xs }}>
-												<Pressable
-													onPress={() => handleEditCard(card)}
-													style={[
-														styles.flashcardActionBtn,
-														{ backgroundColor: "rgba(251, 191, 36, 0.1)" },
-													]}
-												>
-													<MaterialCommunityIcons
-														name="pencil"
-														size={16}
-														color="#fbbf24"
-													/>
-												</Pressable>
-												<Pressable
-													onPress={() => handleDeleteCard(card.id)}
-													style={[
-														styles.flashcardActionBtn,
-														{ backgroundColor: "rgba(239, 68, 68, 0.1)" },
-													]}
-												>
-													<Ionicons name="trash" size={16} color="#ef4444" />
-												</Pressable>
-											</View>
-										</View>
-									</View>
-								</View>
-							),
-						)
-					)}
-				</View>
-			)}
-		</Modal>
-	);
-};
-
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
@@ -2194,7 +1713,7 @@ const styles = StyleSheet.create({
 		paddingBottom: spacing.xxl,
 	},
 	header: {
-		marginBottom: spacing.md,
+		marginBottom: spacing.sm,
 	},
 	titleRow: {
 		flexDirection: "row",
@@ -2239,14 +1758,41 @@ const styles = StyleSheet.create({
 		marginLeft: spacing.xs,
 		borderRadius: 8,
 	},
+	sortModalBody: {
+		gap: spacing.sm,
+	},
+	sortModalHint: {
+		fontSize: 13,
+		marginBottom: spacing.xs,
+	},
 	sortOptionRow: {
 		flexDirection: "row",
 		alignItems: "center",
+		gap: spacing.sm,
 		paddingVertical: spacing.sm,
 		paddingHorizontal: spacing.sm,
 		borderRadius: borderRadius.md,
 		borderWidth: 1,
-		borderColor: "transparent",
+		minHeight: 46,
+	},
+	sortOptionIconWrap: {
+		width: 28,
+		height: 28,
+		borderRadius: borderRadius.sm,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	sortOptionText: {
+		flex: 1,
+		fontSize: 14,
+		fontWeight: "500",
+	},
+	sortSelectedBadge: {
+		width: 24,
+		height: 24,
+		borderRadius: 12,
+		alignItems: "center",
+		justifyContent: "center",
 	},
 	sortButton: {
 		paddingHorizontal: spacing.sm,
@@ -2388,80 +1934,6 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		justifyContent: "flex-end",
 		gap: spacing.sm,
-	},
-	flashcardItem: {
-		flexDirection: "row",
-		alignItems: "center",
-		paddingVertical: spacing.md,
-		paddingHorizontal: spacing.sm,
-		borderBottomWidth: 1,
-		marginBottom: spacing.xs,
-	},
-	flashcardColorIndicator: {
-		width: 4,
-		height: "100%",
-		minHeight: 40,
-		borderRadius: 2,
-		backgroundColor: "#3b82f6",
-		marginRight: spacing.sm,
-	},
-	flashcardContent: {
-		flex: 1,
-	},
-	flashcardFront: {
-		fontWeight: "600",
-		marginBottom: 4,
-	},
-	flashcardBack: {
-		fontSize: 13,
-	},
-	flashcardActions: {
-		flexDirection: "row",
-		gap: spacing.sm,
-	},
-	flashcardActionBtn: {
-		padding: spacing.xs,
-		borderRadius: 8,
-	},
-	addFlashcardButton: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "center",
-		paddingVertical: spacing.sm,
-		paddingHorizontal: spacing.md,
-		borderRadius: 10,
-		marginBottom: spacing.md,
-		gap: spacing.xs,
-	},
-	addFlashcardButtonText: {
-		color: "#ffffff",
-		fontWeight: "600",
-		fontSize: 15,
-	},
-	flashcardSearchContainer: {
-		flexDirection: "row",
-		alignItems: "center",
-		paddingHorizontal: spacing.sm,
-		paddingVertical: spacing.sm,
-		borderRadius: 10,
-		borderWidth: 1,
-		marginBottom: spacing.md,
-	},
-	flashcardSearchInput: {
-		flex: 1,
-		fontSize: 15,
-		paddingVertical: 0,
-	},
-	cardCountBadgeModal: {
-		alignSelf: "flex-start",
-		paddingHorizontal: spacing.sm,
-		paddingVertical: spacing.xs,
-		borderRadius: 8,
-		marginBottom: spacing.md,
-	},
-	cardCountTextModal: {
-		fontSize: 12,
-		fontWeight: "600",
 	},
 	emptyContainer: {
 		alignItems: "center",

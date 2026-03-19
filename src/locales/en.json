@@ -467,5 +467,11 @@
 	"deck_limit_reached": "Deck limit reached. Upgrade your plan to create more.",
 	"card_limit_reached_title": "Card Limit Reached",
 	"card_limit_reached": "Card limit reached. Upgrade your plan to add more.",
-	"max_characters_error": "Maximum {{max}} characters allowed"
+	"max_characters_error": "Maximum {{max}} characters allowed",
+	"enabled": "Enabled",
+	"disabled": "Disabled",
+	"enable_all": "Enable all",
+	"disable_all": "Disable all",
+	"all_cards_already_enabled": "Selected cards are already enabled",
+	"all_cards_already_disabled": "Selected cards are already disabled"
 }

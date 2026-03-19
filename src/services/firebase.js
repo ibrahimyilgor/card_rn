@@ -11,6 +11,52 @@ GoogleSignin.configure({
 	webClientId: WEB_CLIENT_ID, // From Firebase Console
 });
 
+const parseJwtPayload = (token) => {
+	try {
+		if (!token || typeof token !== "string") return null;
+		const base64Url = token.split(".")[1];
+		if (!base64Url) return null;
+		const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+		const normalized = base64.padEnd(
+			base64.length + ((4 - (base64.length % 4)) % 4),
+			"=",
+		);
+		const json = global.atob ? global.atob(normalized) : null;
+		return json ? JSON.parse(json) : null;
+	} catch (error) {
+		return null;
+	}
+};
+
+const isGoogleIdTokenStale = (token) => {
+	const payload = parseJwtPayload(token);
+	if (!payload) return false;
+
+	const nowSec = Math.floor(Date.now() / 1000);
+	const expSec = Number(payload.exp || 0);
+	const iatSec = Number(payload.iat || 0);
+
+	if (expSec && expSec <= nowSec + 30) return true;
+	if (iatSec && nowSec - iatSec > 3600) return true;
+
+	return false;
+};
+
+const performGoogleSignInAndGetToken = async () => {
+	const signInResult = await GoogleSignin.signIn();
+	const tokenResult = await GoogleSignin.getTokens().catch(() => null);
+
+	const idToken =
+		tokenResult?.idToken ??
+		signInResult?.data?.idToken ??
+		signInResult?.idToken;
+
+	return {
+		idToken,
+		accessToken: tokenResult?.accessToken,
+	};
+};
+
 /**
  * Firebase Authentication Service for React Native
  */
@@ -40,13 +86,53 @@ export const signInWithGoogle = async () => {
 	// Check if device supports Google Play Services
 	await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
 
-	// Get the user's ID token
-	const signInResult = await GoogleSignin.signIn();
+	try {
+		const isSignedIn = await GoogleSignin.isSignedIn();
+		if (isSignedIn) {
+			await GoogleSignin.revokeAccess();
+			await GoogleSignin.signOut();
+		}
+	} catch (error) {
+		// Ignore cleanup errors and continue with fresh sign in attempt
+	}
+
+	let { idToken, accessToken } = await performGoogleSignInAndGetToken();
+
+	if (idToken && isGoogleIdTokenStale(idToken)) {
+		try {
+			if (accessToken) {
+				await GoogleSignin.clearCachedAccessToken(accessToken);
+			}
+		} catch (error) {
+			// clearCachedAccessToken is best effort
+		}
+
+		try {
+			await GoogleSignin.revokeAccess();
+			await GoogleSignin.signOut();
+		} catch (error) {
+			// Ignore cleanup errors and retry once
+		}
+
+		const retryResult = await performGoogleSignInAndGetToken();
+		idToken = retryResult.idToken;
+		accessToken = retryResult.accessToken;
+	}
+
+	if (!idToken) {
+		const tokenError = new Error("Google ID token not found");
+		tokenError.code = "auth/invalid-credential";
+		throw tokenError;
+	}
+
+	if (isGoogleIdTokenStale(idToken)) {
+		const staleError = new Error("Google ID token is stale");
+		staleError.code = "auth/stale-google-id-token";
+		throw staleError;
+	}
 
 	// Create a Google credential with the token
-	const googleCredential = auth.GoogleAuthProvider.credential(
-		signInResult.data?.idToken,
-	);
+	const googleCredential = auth.GoogleAuthProvider.credential(idToken);
 
 	// Sign in with the credential
 	const userCredential = await auth().signInWithCredential(googleCredential);
@@ -135,6 +221,8 @@ export const getErrorMessage = (error) => {
 			return "invalid_credentials";
 		case "auth/too-many-requests":
 			return "too_many_requests";
+		case "auth/stale-google-id-token":
+			return "network_error";
 		case statusCodes.SIGN_IN_CANCELLED:
 			return "sign_in_cancelled";
 		case statusCodes.IN_PROGRESS:

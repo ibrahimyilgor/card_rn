@@ -43,7 +43,7 @@ import { useNavigation } from "@react-navigation/native";
 import { spacing, borderRadius } from "../styles/theme";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const CHART_WIDTH = SCREEN_WIDTH - spacing.lg * 2;
+const CHART_WIDTH = SCREEN_WIDTH - spacing.lg * 2 - spacing.md * 2;
 
 // Load logo as base64 for PDF
 const getLogoBase64 = async () => {
@@ -2367,7 +2367,6 @@ const styles = StyleSheet.create({
 	},
 	chart: {
 		borderRadius: borderRadius.md,
-		marginLeft: -spacing.md,
 	},
 	legendContainer: {
 		flexDirection: "row",

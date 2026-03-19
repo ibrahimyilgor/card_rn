@@ -159,7 +159,12 @@ const GoogleLoginScreen = ({ onLogin }) => {
 					showsVerticalScrollIndicator={false}
 				>
 					{/* Logo & Title */}
-					<Animated.View style={[styles.header, { opacity: logoOpacity, transform: [{ scale: logoScale }] }]}>
+					<Animated.View
+						style={[
+							styles.header,
+							{ opacity: logoOpacity, transform: [{ scale: logoScale }] },
+						]}
+					>
 						<Image
 							source={require("../../assets/memodeck.png")}
 							style={styles.logo}
@@ -174,65 +179,78 @@ const GoogleLoginScreen = ({ onLogin }) => {
 					</Animated.View>
 
 					{/* Login Card */}
-					<Animated.View style={{ opacity: cardOpacity, transform: [{ translateY: cardTranslateY }] }}>
-					<Card variant="elevated" style={styles.card}>
-						<ThemedText variant="h3" style={styles.cardTitle}>
-							{t("welcome_back")}
-						</ThemedText>
-						<ThemedText color="secondary" style={styles.cardSubtitle}>
-							{t("login_subtitle")}
-						</ThemedText>
+					<Animated.View
+						style={{
+							opacity: cardOpacity,
+							transform: [{ translateY: cardTranslateY }],
+						}}
+					>
+						<Card variant="elevated" style={styles.card}>
+							<ThemedText variant="h3" style={styles.cardTitle}>
+								{t("welcome_back")}
+							</ThemedText>
+							<ThemedText color="secondary" style={styles.cardSubtitle}>
+								{t("login_subtitle")}
+							</ThemedText>
 
-						{error ? (
-							<View
+							{error ? (
+								<View
+									style={[
+										styles.errorContainer,
+										{ backgroundColor: theme.error.main + "15" },
+									]}
+								>
+									<Ionicons
+										name="alert-circle"
+										size={18}
+										color={theme.error.main}
+									/>
+									<Text style={[styles.errorText, { color: theme.error.main }]}>
+										{error}
+									</Text>
+								</View>
+							) : null}
+
+							{/* Google Sign In Button */}
+							<Pressable
+								onPress={handleGoogleLogin}
+								disabled={googleLoading}
 								style={[
-									styles.errorContainer,
-									{ backgroundColor: theme.error.main + "15" },
+									styles.googleButton,
+									{
+										backgroundColor: theme.background.paper,
+										borderColor: theme.border.main,
+									},
 								]}
 							>
-								<Ionicons
-									name="alert-circle"
-									size={18}
-									color={theme.error.main}
-								/>
-								<Text style={[styles.errorText, { color: theme.error.main }]}>
-									{error}
-								</Text>
-							</View>
-						) : null}
-
-						{/* Google Sign In Button */}
-						<Pressable
-							onPress={handleGoogleLogin}
-							disabled={googleLoading}
-							style={[
-								styles.googleButton,
-								{
-									backgroundColor: theme.background.paper,
-									borderColor: theme.border.main,
-								},
-							]}
-						>
-							{googleLoading ? (
-								<View style={styles.googleLoading}>
-									<ThemedText color="secondary">
-										{t("signing_in") || "Signing in..."}
-									</ThemedText>
-								</View>
-							) : (
-								<View style={styles.googleButtonContent}>
-									<Ionicons name="logo-google" size={20} color="#4285F4" />
-									<ThemedText style={styles.googleButtonText}>
-										{t("continue_with_google") || "Continue with Google"}
-									</ThemedText>
-								</View>
-							)}
-						</Pressable>
-					</Card>
+								{googleLoading ? (
+									<View style={styles.googleLoading}>
+										<ThemedText color="secondary">
+											{t("signing_in") || "Signing in..."}
+										</ThemedText>
+									</View>
+								) : (
+									<View style={styles.googleButtonContent}>
+										<Ionicons name="logo-google" size={20} color="#4285F4" />
+										<ThemedText style={styles.googleButtonText}>
+											{t("continue_with_google") || "Continue with Google"}
+										</ThemedText>
+									</View>
+								)}
+							</Pressable>
+						</Card>
 					</Animated.View>
 
 					{/* Features */}
-					<Animated.View style={[styles.features, { opacity: featuresOpacity, transform: [{ translateY: featuresTranslateY }] }]}>
+					<Animated.View
+						style={[
+							styles.features,
+							{
+								opacity: featuresOpacity,
+								transform: [{ translateY: featuresTranslateY }],
+							},
+						]}
+					>
 						{features.map((feature, index) => (
 							<FeatureItem
 								key={index}

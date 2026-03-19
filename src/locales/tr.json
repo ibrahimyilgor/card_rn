@@ -467,5 +467,11 @@
 	"deck_limit_reached": "Deste limitine ulaşıldı. Daha fazla oluşturmak için planınızı yükseltin.",
 	"card_limit_reached_title": "Kart Limitine Ulaşıldı",
 	"card_limit_reached": "Kart limitine ulaşıldı. Daha fazla eklemek için planınızı yükseltin.",
-	"max_characters_error": "En fazla {{max}} karakter girebilirsiniz"
+	"max_characters_error": "En fazla {{max}} karakter girebilirsiniz",
+	"enabled": "Etkin",
+	"disabled": "Devre dışı",
+	"enable_all": "Hepsini etkinleştir",
+	"disable_all": "Hepsini devre dışı bırak",
+	"all_cards_already_enabled": "Seçili kartlar zaten etkin",
+	"all_cards_already_disabled": "Seçili kartlar zaten devre dışı"
 }

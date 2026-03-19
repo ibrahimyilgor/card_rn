@@ -3,6 +3,7 @@ import { ActivityIndicator, AppState, Platform, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useFonts } from "expo-font";
+import { NativeModulesProxy } from "expo-modules-core";
 import { ThemeProvider } from "./src/context/ThemeContext";
 import { I18nProvider } from "./src/context/I18nContext";
 import { AchievementProvider } from "./src/context/AchievementContext";
@@ -15,6 +16,12 @@ export default function App() {
 
 	useEffect(() => {
 		if (Platform.OS !== "android") return;
+		if (!NativeModulesProxy?.ExpoNavigationBar) {
+			console.log(
+				"ExpoNavigationBar native module not available in this build.",
+			);
+			return;
+		}
 
 		let NavigationBar;
 		try {

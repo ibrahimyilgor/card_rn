@@ -153,8 +153,18 @@ export const flashcardsAPI = {
 	create: (deckId, frontText, backText) =>
 		api.post("/flashcards/create", { deckId, frontText, backText }),
 
-	update: (flashcardId, frontText, backText) =>
-		api.put(`/flashcards/${flashcardId}`, { frontText, backText }),
+	update: async (flashcardId, dataOrFront, backText) => {
+		console.log("Updating flashcard", flashcardId, dataOrFront, backText);
+		// Desteklenen 2 format:
+		// 1. flashcardsAPI.update(id, { frontText, backText, enabled })
+		// 2. flashcardsAPI.update(id, frontText, backText)
+		const payload =
+			typeof dataOrFront === "object" && dataOrFront !== null
+				? dataOrFront
+				: { frontText: dataOrFront, backText };
+		console.log("Payload for update:", payload);
+		return await api.put(`/flashcards/${flashcardId}`, payload);
+	},
 
 	delete: (flashcardId) => api.delete(`/flashcards/${flashcardId}`),
 
@@ -200,7 +210,10 @@ const getClientTimezone = () => {
 
 const appendClientTimeContext = (params) => {
 	params.append("timezone", getClientTimezone());
-	params.append("timezoneOffsetMinutes", String(-new Date().getTimezoneOffset()));
+	params.append(
+		"timezoneOffsetMinutes",
+		String(-new Date().getTimezoneOffset()),
+	);
 };
 
 export const statsAPI = {

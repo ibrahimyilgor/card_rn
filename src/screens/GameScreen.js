@@ -1230,6 +1230,7 @@ const GameScreen = ({ route, navigation }) => {
 		// Calculate accuracy (not applicable for match mode)
 		const total = correct + wrong;
 		const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
+		const endedAt = new Date().toISOString();
 
 		console.log("Game ended - Stats:", {
 			correct,
@@ -1250,6 +1251,7 @@ const GameScreen = ({ route, navigation }) => {
 					gameMode: gameMode,
 					challengeType: challengeType,
 					cardsStudied: cardsStudied,
+					endedAt,
 					// Match mode: don't track correct/wrong (memory game, not knowledge test)
 					correctAnswers: isMatchMode ? 0 : correct,
 					wrongAnswers: isMatchMode ? 0 : wrong,

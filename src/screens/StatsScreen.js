@@ -471,14 +471,10 @@ const StatsScreen = () => {
 		if (/^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
 			return new Date(dateInput + "T00:00:00");
 		}
-		// For ISO strings (with time or Z), parse and take the UTC Y/M/D, then create local midnight
+		// For ISO strings (with time or Z), parse and take LOCAL Y/M/D, then create local midnight
 		const parsed = new Date(dateInput);
 		if (isNaN(parsed.getTime())) return null;
-		return new Date(
-			parsed.getUTCFullYear(),
-			parsed.getUTCMonth(),
-			parsed.getUTCDate(),
-		);
+		return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
 	};
 
 	// Use a memoized formatter similar to the web app's dayjs-based logic.

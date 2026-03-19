@@ -104,6 +104,23 @@ const PlansScreen = ({ navigation }) => {
 		if (code === "E_USER_CANCELLED") {
 			return t("purchase_cancelled") || "Satın alma işlemi iptal edildi.";
 		}
+		if (code === "EMPTY_PURCHASES") {
+			return (
+				t("purchase_sync_retrying") ||
+				"Satın alma kaydı henüz senkronize olmadı. Lütfen birkaç saniye sonra tekrar deneyin."
+			);
+		}
+
+		const backendCode = error?.backendCode || error?.response?.data?.code;
+		if (backendCode) {
+			return `${
+				error?.response?.data?.error ||
+				error?.message ||
+				t("error_changing_plan") ||
+				"Failed to change plan"
+			} (${backendCode})`;
+		}
+
 		return (
 			error?.response?.data?.error ||
 			error?.message ||
@@ -149,6 +166,16 @@ const PlansScreen = ({ navigation }) => {
 		setProcessingPlanId(targetPlanId);
 
 		try {
+			let firstSuccessfulPlanRefresh = false;
+			const refreshPlanAfterFirstVerify = async () => {
+				if (firstSuccessfulPlanRefresh) return;
+				firstSuccessfulPlanRefresh = true;
+				const response = await accountAPI.getCurrentPlan();
+				const nextPlanCode = response?.data?.plan?.code || targetPlanId;
+				setCurrentPlan(nextPlanCode);
+				await refreshPlan();
+			};
+
 			const isBillingReady = await initBilling();
 			if (!isBillingReady) {
 				const notAvailableError = new Error("Billing service unavailable");
@@ -170,19 +197,33 @@ const PlansScreen = ({ navigation }) => {
 			}
 
 			await purchasePlanOnAndroid(targetPlanId, products);
-			const syncResults = await syncAndroidEntitlements();
-			const hasSuccess = syncResults.some((result) => result.ok);
+			const syncSummary = await syncAndroidEntitlements({
+				maxRetries: 3,
+				verifyRetries: 3,
+				onFirstSuccess: () => {
+					refreshPlanAfterFirstVerify().catch((refreshErr) => {
+						console.warn(
+							"Plan refresh after first verify failed:",
+							refreshErr?.message,
+						);
+					});
+				},
+			});
+
+			const hasSuccess = Boolean(syncSummary?.hasSuccess);
 			if (!hasSuccess) {
-				throw new Error(
+				const firstFailure =
+					(syncSummary?.results || []).find((r) => !r.ok) || {};
+				const syncError = new Error(
 					t("purchase_verified_but_sync_failed") ||
 						"Satın alma tamamlandı ancak abonelik doğrulaması başarısız oldu.",
 				);
+				syncError.code = firstFailure.code || "ENTITLEMENT_SYNC_FAILED";
+				syncError.backendCode = firstFailure.backendCode || null;
+				throw syncError;
 			}
 
-			const response = await accountAPI.getCurrentPlan();
-			const nextPlanCode = response?.data?.plan?.code || targetPlanId;
-			setCurrentPlan(nextPlanCode);
-			await refreshPlan();
+			await refreshPlanAfterFirstVerify();
 
 			showInfoDialog(
 				t("success") || "Success",

@@ -58,6 +58,35 @@ const resolvePurchaseToken = (purchase) => {
 	);
 };
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const retryWithBackoff = async (
+	action,
+	{
+		retries = 3,
+		initialDelayMs = 500,
+		maxDelayMs = 3000,
+		shouldRetry = () => true,
+	} = {},
+) => {
+	let lastError;
+
+	for (let attempt = 1; attempt <= retries; attempt++) {
+		try {
+			return await action(attempt);
+		} catch (error) {
+			lastError = error;
+			const canRetry = attempt < retries && shouldRetry(error);
+			if (!canRetry) break;
+
+			const delay = Math.min(initialDelayMs * 2 ** (attempt - 1), maxDelayMs);
+			await sleep(delay);
+		}
+	}
+
+	throw lastError;
+};
+
 export const initBilling = async () => {
 	if (Platform.OS !== "android") return false;
 	const connected = await initConnection();
@@ -97,7 +126,8 @@ export const purchasePlanOnAndroid = async (
 	const productFromList = Array.isArray(availableProducts)
 		? availableProducts.find((item) => item?.productId === sku)
 		: null;
-	const product = productFromList || (await getSubscriptions({ skus: [sku] }))?.[0];
+	const product =
+		productFromList || (await getSubscriptions({ skus: [sku] }))?.[0];
 	const offerToken = extractOfferToken(product);
 
 	if (!offerToken) {
@@ -136,7 +166,19 @@ export const verifyPurchaseWithBackend = async (purchase) => {
 		},
 	};
 
-	const response = await accountAPI.verifySubscription(payload);
+	let response;
+	try {
+		response = await accountAPI.verifySubscription(payload);
+	} catch (error) {
+		const backendCode = error?.response?.data?.code;
+		const backendMessage = error?.response?.data?.error;
+		const err = new Error(
+			backendMessage || error?.message || "subscription_verify_failed",
+		);
+		err.code = backendCode || error?.code || "SUBSCRIPTION_VERIFY_FAILED";
+		err.backendCode = backendCode || null;
+		throw err;
+	}
 
 	try {
 		await finishTransaction({
@@ -150,24 +192,92 @@ export const verifyPurchaseWithBackend = async (purchase) => {
 	return response;
 };
 
-export const syncAndroidEntitlements = async () => {
-	if (Platform.OS !== "android") return [];
+export const syncAndroidEntitlements = async ({
+	maxRetries = 3,
+	verifyRetries = 2,
+	onFirstSuccess,
+} = {}) => {
+	if (Platform.OS !== "android") {
+		return { hasSuccess: false, results: [] };
+	}
 
-	const purchases = await getAvailablePurchases();
-	const relevantPurchases = purchases.filter((purchase) => {
-		const productId = resolveProductId(purchase);
-		return productId && SUBSCRIPTION_SKUS.includes(productId);
-	});
+	const fetchRelevantPurchases = async () => {
+		const purchases = await getAvailablePurchases();
+		const relevantPurchases = purchases.filter((purchase) => {
+			const productId = resolveProductId(purchase);
+			return productId && SUBSCRIPTION_SKUS.includes(productId);
+		});
+
+		if (relevantPurchases.length === 0) {
+			const err = new Error("No subscription purchases available");
+			err.code = "EMPTY_PURCHASES";
+			throw err;
+		}
+
+		return relevantPurchases;
+	};
+
+	let relevantPurchases = [];
+	let fetchErrorCode = null;
+	try {
+		relevantPurchases = await retryWithBackoff(fetchRelevantPurchases, {
+			retries: Math.max(1, maxRetries),
+			initialDelayMs: 600,
+			maxDelayMs: 3500,
+		});
+	} catch (error) {
+		fetchErrorCode = error?.code || "ENTITLEMENT_SYNC_FETCH_FAILED";
+		return {
+			hasSuccess: false,
+			results: [
+				{
+					ok: false,
+					error: error?.message || "sync_failed",
+					code: fetchErrorCode,
+					backendCode: null,
+				},
+			],
+		};
+	}
 
 	const results = [];
+	let hasSuccess = false;
+	let firstSuccessHandled = false;
+
 	for (const purchase of relevantPurchases) {
 		try {
-			const result = await verifyPurchaseWithBackend(purchase);
-			results.push({ ok: true, result });
+			const result = await retryWithBackoff(
+				() => verifyPurchaseWithBackend(purchase),
+				{
+					retries: Math.max(1, verifyRetries),
+					initialDelayMs: 500,
+					maxDelayMs: 2500,
+				},
+			);
+
+			hasSuccess = true;
+			results.push({ ok: true, result, code: null, backendCode: null });
+
+			if (!firstSuccessHandled && typeof onFirstSuccess === "function") {
+				firstSuccessHandled = true;
+				try {
+					onFirstSuccess(result);
+				} catch {
+					// UI callback errors must not break sync flow
+				}
+			}
 		} catch (error) {
-			results.push({ ok: false, error: error?.message || "sync_failed" });
+			results.push({
+				ok: false,
+				error: error?.message || "sync_failed",
+				code: error?.code || "ENTITLEMENT_VERIFY_FAILED",
+				backendCode: error?.backendCode || null,
+			});
 		}
 	}
 
-	return results;
+	return {
+		hasSuccess,
+		results,
+	};
 };

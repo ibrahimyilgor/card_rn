@@ -24,6 +24,18 @@ const api = axios.create({
 api.interceptors.request.use(
 	async (config) => {
 		try {
+			config.headers = config.headers || {};
+			const timeZone =
+				typeof Intl !== "undefined" && typeof Intl.DateTimeFormat === "function"
+					? Intl.DateTimeFormat().resolvedOptions().timeZone
+					: null;
+			if (timeZone) {
+				config.headers["X-Client-Timezone"] = timeZone;
+			}
+			config.headers["X-Client-Timezone-Offset-Minutes"] = String(
+				-new Date().getTimezoneOffset(),
+			);
+
 			const token = await getIdToken();
 			if (token) {
 				config.headers.Authorization = `Bearer ${token}`;
@@ -172,10 +184,38 @@ export const gamesAPI = {
 };
 
 // Stats API
-export const statsAPI = {
-	getOverview: () => api.get("/stats/overview"),
+const getClientTimezone = () => {
+	try {
+		if (
+			typeof Intl !== "undefined" &&
+			typeof Intl.DateTimeFormat === "function"
+		) {
+			return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+		}
+		return "UTC";
+	} catch {
+		return "UTC";
+	}
+};
 
-	getDailyActivity: (days = 30) => api.get(`/stats/daily?days=${days}`),
+const appendClientTimeContext = (params) => {
+	params.append("timezone", getClientTimezone());
+	params.append("timezoneOffsetMinutes", String(-new Date().getTimezoneOffset()));
+};
+
+export const statsAPI = {
+	getOverview: () => {
+		const params = new URLSearchParams();
+		appendClientTimeContext(params);
+		return api.get(`/stats/overview?${params.toString()}`);
+	},
+
+	getDailyActivity: (days = 30) => {
+		const params = new URLSearchParams();
+		params.append("days", days);
+		appendClientTimeContext(params);
+		return api.get(`/stats/daily?${params.toString()}`);
+	},
 
 	getAllDecks: () => api.get("/stats/decks"),
 
@@ -184,11 +224,23 @@ export const statsAPI = {
 	getCardStats: (deckId, sortBy = "error_rate") =>
 		api.get(`/stats/cards/${deckId}?sort=${sortBy}`),
 
-	recordSession: (sessionData) => api.post("/stats/session", sessionData),
+	recordSession: (sessionData) => {
+		const params = new URLSearchParams();
+		appendClientTimeContext(params);
+		return api.post(`/stats/session?${params.toString()}`, sessionData);
+	},
 
-	getHeatmap: () => api.get("/stats/heatmap"),
+	getHeatmap: () => {
+		const params = new URLSearchParams();
+		appendClientTimeContext(params);
+		return api.get(`/stats/heatmap?${params.toString()}`);
+	},
 
-	getInsights: () => api.get("/stats/insights"),
+	getInsights: () => {
+		const params = new URLSearchParams();
+		appendClientTimeContext(params);
+		return api.get(`/stats/insights?${params.toString()}`);
+	},
 
 	// New endpoints matching web version
 	getFilteredStats: (deckId, startDate, endDate) => {
@@ -196,6 +248,7 @@ export const statsAPI = {
 		if (deckId && deckId !== "all") params.append("deckId", deckId);
 		if (startDate) params.append("startDate", startDate);
 		if (endDate) params.append("endDate", endDate);
+		appendClientTimeContext(params);
 		return api.get(`/stats/filtered?${params.toString()}`);
 	},
 
@@ -204,6 +257,7 @@ export const statsAPI = {
 		if (deckId && deckId !== "all") params.append("deckId", deckId);
 		if (startDate) params.append("startDate", startDate);
 		if (endDate) params.append("endDate", endDate);
+		appendClientTimeContext(params);
 		return api.get(`/stats/chart-data?${params.toString()}`);
 	},
 

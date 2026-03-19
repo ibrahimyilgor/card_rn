@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { View, ActivityIndicator, Platform, AppState } from "react-native";
 import { StatusBar } from "expo-status-bar";
@@ -30,20 +30,30 @@ const RootNavigator = () => {
 	const [user, setUser] = useState(null);
 	const [isLoading, setIsLoading] = useState(true);
 	const [lastEntitlementSyncAt, setLastEntitlementSyncAt] = useState(0);
+	const entitlementSyncInFlightRef = useRef(false);
 
 	const syncEntitlementsIfNeeded = useCallback(async () => {
 		if (Platform.OS !== "android" || !user) return;
+		if (entitlementSyncInFlightRef.current) return;
 
 		const now = Date.now();
 		if (now - lastEntitlementSyncAt < 15000) return;
 
+		entitlementSyncInFlightRef.current = true;
 		setLastEntitlementSyncAt(now);
 		try {
 			await initBilling();
-			await syncAndroidEntitlements();
-			await refreshPlan();
+			const syncSummary = await syncAndroidEntitlements({
+				maxRetries: 3,
+				verifyRetries: 2,
+			});
+			if (syncSummary?.hasSuccess) {
+				await refreshPlan();
+			}
 		} catch (error) {
 			console.warn("[RootNavigator] Entitlement sync failed:", error?.message);
+		} finally {
+			entitlementSyncInFlightRef.current = false;
 		}
 	}, [lastEntitlementSyncAt, refreshPlan, user]);
 

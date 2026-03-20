@@ -30,7 +30,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "../context/ThemeContext";
 import { useI18n } from "../context/I18nContext";
 import { usePlan } from "../context/PlanContext";
-import { decksAPI, flashcardsAPI } from "../services/api";
+import { decksAPI, flashcardsAPI, statsAPI } from "../services/api";
 import {
 	ThemedView,
 	ThemedText,
@@ -47,6 +47,15 @@ import FlashcardsModal from "../components/FlashcardsModal";
 
 const MAX_TEXT_LENGTH = 512;
 const MAX_DECK_TITLE_LENGTH = 255;
+const DECK_SORT_STORAGE_KEY = "deckSortPreference";
+const ALLOWED_DECK_SORTS = [
+	"newest",
+	"oldest",
+	"name_asc",
+	"name_desc",
+	"cards_desc",
+	"cards_asc",
+];
 
 const HomeScreen = ({ navigation, onLogout }) => {
 	const { theme, shadows } = useTheme();
@@ -61,6 +70,8 @@ const HomeScreen = ({ navigation, onLogout }) => {
 	const [searchQuery, setSearchQuery] = useState("");
 	const [sortBy, setSortBy] = useState("newest");
 	const [accountId, setAccountId] = useState(null);
+	const [streakCount, setStreakCount] = useState(0);
+	const [playedToday, setPlayedToday] = useState(false);
 
 	// Modal states
 	const [selectedDeck, setSelectedDeck] = useState(null);
@@ -136,10 +147,17 @@ const HomeScreen = ({ navigation, onLogout }) => {
 
 	const loadAccountAndDecks = async () => {
 		try {
+			const savedSort = await AsyncStorage.getItem(DECK_SORT_STORAGE_KEY);
+			if (savedSort && ALLOWED_DECK_SORTS.includes(savedSort)) {
+				setSortBy(savedSort);
+			} else {
+				setSortBy("newest");
+			}
+
 			const id = await AsyncStorage.getItem("accountId");
 			setAccountId(id);
 			if (id) {
-				await fetchDecks(id);
+				await Promise.allSettled([fetchDecks(id), fetchStreak()]);
 			}
 		} catch (error) {
 			console.error("Error loading data:", error);
@@ -167,10 +185,27 @@ const HomeScreen = ({ navigation, onLogout }) => {
 		}
 	};
 
-	const onRefresh = () => {
+	const fetchStreak = async () => {
+		try {
+			const response = await statsAPI.getCurrentStreak();
+			const data = response?.data || {};
+			setStreakCount(
+				Number.isFinite(Number(data.currentStreak))
+					? Number(data.currentStreak)
+					: 0,
+			);
+			setPlayedToday(Boolean(data.playedToday));
+		} catch (error) {
+			console.error("Error fetching streak:", error);
+			setStreakCount(0);
+			setPlayedToday(false);
+		}
+	};
+
+	const onRefresh = async () => {
 		setRefreshing(true);
 		if (accountId) {
-			fetchDecks(accountId);
+			await Promise.allSettled([fetchDecks(accountId), fetchStreak()]);
 		}
 	};
 
@@ -825,6 +860,10 @@ const HomeScreen = ({ navigation, onLogout }) => {
 	}, []);
 
 	// Search bar component - extracted to prevent FlatList re-render issues
+	const streakBadgeColors = playedToday
+		? ["#ef4444", "#dc2626"]
+		: ["#9ca3af", "#6b7280"];
+
 	const SearchBar = (
 		<View style={styles.searchRow}>
 			<View
@@ -881,6 +920,17 @@ const HomeScreen = ({ navigation, onLogout }) => {
 					</Pressable>
 				) : null}
 			</View>
+
+			<LinearGradient colors={streakBadgeColors} style={styles.streakBadge}>
+				<View style={styles.streakBadgeContent}>
+					<MaterialCommunityIcons
+						name="fire"
+						size={18}
+						color={playedToday ? "#fbbf24" : "#d1d5db"}
+					/>
+					<Text style={styles.streakValue}>{streakCount}</Text>
+				</View>
+			</LinearGradient>
 		</View>
 	);
 
@@ -1167,8 +1217,16 @@ const HomeScreen = ({ navigation, onLogout }) => {
 							return (
 								<Pressable
 									key={option.value}
-									onPress={() => {
+									onPress={async () => {
 										setSortBy(option.value);
+										try {
+											await AsyncStorage.setItem(
+												DECK_SORT_STORAGE_KEY,
+												option.value,
+											);
+										} catch {
+											// keep in-memory sort as fallback
+										}
 										setSortModalVisible(false);
 									}}
 									style={[
@@ -1727,13 +1785,34 @@ const styles = StyleSheet.create({
 	},
 	searchRow: {
 		marginBottom: spacing.xs,
+		flexDirection: "row",
+		alignItems: "center",
+		gap: spacing.sm,
 	},
 	searchContainer: {
+		flex: 1,
 		flexDirection: "row",
 		alignItems: "center",
 		borderRadius: borderRadius.md,
 		borderWidth: 1,
 		paddingHorizontal: spacing.md,
+	},
+	streakBadge: {
+		borderRadius: borderRadius.md,
+		paddingHorizontal: spacing.sm,
+		paddingVertical: spacing.sm,
+		minWidth: 64,
+	},
+	streakBadgeContent: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "center",
+		gap: spacing.xs,
+	},
+	streakValue: {
+		color: "#ffffff",
+		fontWeight: "700",
+		fontSize: 14,
 	},
 	searchIcon: {
 		marginRight: spacing.sm,

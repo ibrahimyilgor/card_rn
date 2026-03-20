@@ -223,6 +223,12 @@ export const statsAPI = {
 		return api.get(`/stats/overview?${params.toString()}`);
 	},
 
+	getCurrentStreak: () => {
+		const params = new URLSearchParams();
+		appendClientTimeContext(params);
+		return api.get(`/stats/streak?${params.toString()}`);
+	},
+
 	getDailyActivity: (days = 30) => {
 		const params = new URLSearchParams();
 		params.append("days", days);

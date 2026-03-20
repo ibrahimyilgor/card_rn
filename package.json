@@ -1,6 +1,6 @@
 {
 	"name": "memodeck",
-	"version": "1.0.13",
+	"version": "1.0.14",
 	"main": "expo/AppEntry.js",
 	"scripts": {
 		"start": "expo start",

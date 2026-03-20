@@ -7,12 +7,15 @@ import {
 	TextInput,
 	View,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { flashcardsAPI } from "../services/api";
 import { borderRadius, spacing } from "../styles/theme";
 import { Button, Input, LoadingState, Modal, ThemedText } from "./ui";
 
 const MAX_TEXT_LENGTH = 512;
+const FLASHCARD_SORT_STORAGE_KEY_PREFIX = "flashcardSortPreference";
+const ALLOWED_FLASHCARD_SORTS = ["newest", "oldest", "name_asc", "name_desc"];
 
 const InlineCardForm = ({
 	editingCard,
@@ -82,9 +85,7 @@ const InlineCardForm = ({
 					<Input
 						value={backText}
 						onChangeText={setBackText}
-						placeholder={
-							t("enter_the_answer_or_definition") || "Answer / Back"
-						}
+						placeholder={t("enter_the_answer_or_definition") || "Answer / Back"}
 						multiline
 						numberOfLines={2}
 						maxLength={MAX_TEXT_LENGTH + 1}
@@ -94,9 +95,7 @@ const InlineCardForm = ({
 								: ""
 						}
 						helperText={
-							backTooLong
-								? undefined
-								: `${backText.length}/${MAX_TEXT_LENGTH}`
+							backTooLong ? undefined : `${backText.length}/${MAX_TEXT_LENGTH}`
 						}
 					/>
 					<View
@@ -173,6 +172,8 @@ const FlashcardsModal = ({
 	const [editSaving, setEditSaving] = useState(false);
 	const [bulkSaving, setBulkSaving] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
+	const [sortBy, setSortBy] = useState("newest");
+	const [sortModalVisible, setSortModalVisible] = useState(false);
 
 	const filteredFlashcards = flashcards.filter((card) => {
 		if (!searchQuery.trim()) return true;
@@ -182,6 +183,19 @@ const FlashcardsModal = ({
 			card.back_text.toLowerCase().includes(query)
 		);
 	});
+	const sortedFlashcards = [...filteredFlashcards].sort((a, b) => {
+		switch (sortBy) {
+			case "oldest":
+				return new Date(a.created_at) - new Date(b.created_at);
+			case "name_asc":
+				return (a.front_text || "").localeCompare(b.front_text || "");
+			case "name_desc":
+				return (b.front_text || "").localeCompare(a.front_text || "");
+			case "newest":
+			default:
+				return new Date(b.created_at) - new Date(a.created_at);
+		}
+	});
 	const enabledCount = flashcards.filter((card) =>
 		normalizeEnabledValue(card.enabled),
 	).length;
@@ -189,7 +203,8 @@ const FlashcardsModal = ({
 	const filteredEnabledCount = filteredFlashcards.filter((card) =>
 		normalizeEnabledValue(card.enabled),
 	).length;
-	const filteredDisabledCount = filteredFlashcards.length - filteredEnabledCount;
+	const filteredDisabledCount =
+		filteredFlashcards.length - filteredEnabledCount;
 	const isSearching = Boolean(searchQuery.trim());
 
 	const displayTitle = deck?.title
@@ -204,8 +219,42 @@ const FlashcardsModal = ({
 			setSearchQuery("");
 			setIsInlineAdding(false);
 			setEditingCardId(null);
+			setSortModalVisible(false);
 		}
 	}, [visible, deck]);
+
+	useEffect(() => {
+		const loadSortPreference = async () => {
+			if (!visible || !deck?.id) return;
+			try {
+				const key = `${FLASHCARD_SORT_STORAGE_KEY_PREFIX}_${deck.id}`;
+				const savedSort = await AsyncStorage.getItem(key);
+				if (savedSort && ALLOWED_FLASHCARD_SORTS.includes(savedSort)) {
+					setSortBy(savedSort);
+				} else {
+					setSortBy("newest");
+				}
+			} catch {
+				setSortBy("newest");
+			}
+		};
+
+		loadSortPreference();
+	}, [visible, deck?.id]);
+
+	useEffect(() => {
+		const saveSortPreference = async () => {
+			if (!deck?.id || !ALLOWED_FLASHCARD_SORTS.includes(sortBy)) return;
+			try {
+				const key = `${FLASHCARD_SORT_STORAGE_KEY_PREFIX}_${deck.id}`;
+				await AsyncStorage.setItem(key, sortBy);
+			} catch {
+				// ignore storage errors and keep in-memory selection
+			}
+		};
+
+		saveSortPreference();
+	}, [deck?.id, sortBy]);
 
 	const fetchFlashcards = async (silent = false) => {
 		if (!deck) return;
@@ -217,7 +266,7 @@ const FlashcardsModal = ({
 				? flashcardsData.map((card) => ({
 						...card,
 						enabled: normalizeEnabledValue(card.enabled),
-				  }))
+					}))
 				: [];
 			setFlashcards(nextFlashcards);
 			if (onUpdate) onUpdate(deck.id, nextFlashcards.length);
@@ -395,7 +444,7 @@ const FlashcardsModal = ({
 										normalizeEnabledValue(card.enabled) !== nextEnabled
 											? !nextEnabled
 											: card.enabled,
-							  }
+								}
 							: card,
 					),
 				);
@@ -424,358 +473,460 @@ const FlashcardsModal = ({
 	};
 
 	return (
-		<Modal
-			visible={visible}
-			onClose={onClose}
-			title={displayTitle}
-			size="large"
-			verticalAlign="center"
-			avoidKeyboard={false}
-			propagateSwipe={true}
-			footer={
-				<View style={styles.modalFooter}>
-					<Button
-						variant="ghost"
-						onPress={onClose}
-						textStyle={{ color: theme.text.secondary }}
-					>
-						{t("close") || "Close"}
-					</Button>
-					<Button
-						variant="success"
-						onPress={handleAddCard}
-						disabled={isInlineAdding}
-					>
-						{t("add_flashcard") || "Add Flashcard"}
-					</Button>
-				</View>
-			}
-		>
-			{loading ? (
-				<LoadingState message={t("loading_cards")} />
-			) : (
-				<View>
-					{flashcards.length > 0 && (
-						<View
-							style={[
-								styles.flashcardSearchContainer,
-								{
-									backgroundColor: theme.background.paper,
-									borderColor: theme.border.main,
-								},
-							]}
+		<>
+			<Modal
+				visible={visible}
+				onClose={onClose}
+				title={displayTitle}
+				size="large"
+				verticalAlign="center"
+				avoidKeyboard={false}
+				propagateSwipe={true}
+				footer={
+					<View style={styles.modalFooter}>
+						<Button
+							variant="ghost"
+							onPress={onClose}
+							textStyle={{ color: theme.text.secondary }}
 						>
-							<Ionicons
-								name="search-outline"
-								size={18}
-								color={theme.text.disabled}
-								style={{ marginRight: spacing.sm }}
-							/>
-							<TextInput
+							{t("close") || "Close"}
+						</Button>
+						<Button
+							variant="success"
+							onPress={handleAddCard}
+							disabled={isInlineAdding}
+						>
+							{t("add_flashcard") || "Add Flashcard"}
+						</Button>
+					</View>
+				}
+			>
+				{loading ? (
+					<LoadingState message={t("loading_cards")} />
+				) : (
+					<View>
+						{flashcards.length > 0 && (
+							<View
 								style={[
-									styles.flashcardSearchInput,
-									{ color: theme.text.primary },
+									styles.flashcardSearchContainer,
+									{
+										backgroundColor: theme.background.paper,
+										borderColor: theme.border.main,
+									},
 								]}
-								placeholder={t("search_flashcards") || "Search flashcards..."}
-								placeholderTextColor={theme.text.disabled}
-								value={searchQuery}
-								onChangeText={setSearchQuery}
-								autoCorrect={false}
-								autoCapitalize="none"
-							/>
-							{searchQuery ? (
-								<Pressable onPress={() => setSearchQuery("")}>
+							>
+								<Ionicons
+									name="search-outline"
+									size={18}
+									color={theme.text.disabled}
+									style={{ marginRight: spacing.sm }}
+								/>
+								<TextInput
+									style={[
+										styles.flashcardSearchInput,
+										{ color: theme.text.primary },
+									]}
+									placeholder={t("search_flashcards") || "Search flashcards..."}
+									placeholderTextColor={theme.text.disabled}
+									value={searchQuery}
+									onChangeText={setSearchQuery}
+									autoCorrect={false}
+									autoCapitalize="none"
+								/>
+								<Pressable
+									onPress={() => setSortModalVisible(true)}
+									style={styles.flashcardSortIconButton}
+									hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+								>
 									<Ionicons
-										name="close-circle"
+										name="filter-outline"
 										size={18}
-										color={theme.primary.main}
+										color={theme.text.secondary}
 									/>
 								</Pressable>
-							) : null}
-						</View>
-					)}
+								{searchQuery ? (
+									<Pressable onPress={() => setSearchQuery("")}>
+										<Ionicons
+											name="close-circle"
+											size={18}
+											color={theme.primary.main}
+										/>
+									</Pressable>
+								) : null}
+							</View>
+						)}
 
-					{flashcards.length > 0 && (
-						<View style={styles.flashcardStatsAndActionsRow}>
-							<View style={styles.flashcardStatsBadgesRow}>
-								<View
-									style={[
-										styles.cardCountBadgeModal,
-										{ backgroundColor: theme.primary.main + "15" },
-									]}
-								>
-									<Text
+						{flashcards.length > 0 && (
+							<View style={styles.flashcardStatsAndActionsRow}>
+								<View style={styles.flashcardStatsBadgesRow}>
+									<View
 										style={[
-											styles.cardCountTextModal,
-											{ color: theme.primary.main },
+											styles.cardCountBadgeModal,
+											{ backgroundColor: theme.primary.main + "15" },
 										]}
 									>
-										{isSearching
-											? `${filteredFlashcards.length}/${flashcards.length}`
-											: flashcards.length}{" "}
-										{(flashcards.length > 0 && t("cards")) || "cards"}
-									</Text>
+										<Text
+											style={[
+												styles.cardCountTextModal,
+												{ color: theme.primary.main },
+											]}
+										>
+											{isSearching
+												? `${filteredFlashcards.length}/${flashcards.length}`
+												: flashcards.length}{" "}
+											{(flashcards.length > 0 && t("cards")) || "cards"}
+										</Text>
+									</View>
+
+									<View
+										style={[
+											styles.cardCountBadgeModal,
+											{
+												backgroundColor: "rgba(34, 197, 94, 0.15)",
+												borderColor: "rgba(34, 197, 94, 0.4)",
+											},
+										]}
+									>
+										<Text
+											style={[styles.cardCountTextModal, { color: "#22c55e" }]}
+										>
+											{isSearching
+												? `${filteredEnabledCount}/${filteredFlashcards.length}`
+												: enabledCount}{" "}
+											{t("enabled") || "enabled"}
+										</Text>
+									</View>
+
+									<View
+										style={[
+											styles.cardCountBadgeModal,
+											{
+												backgroundColor: "rgba(239, 68, 68, 0.15)",
+												borderColor: "rgba(239, 68, 68, 0.4)",
+											},
+										]}
+									>
+										<Text
+											style={[styles.cardCountTextModal, { color: "#ef4444" }]}
+										>
+											{isSearching
+												? `${filteredDisabledCount}/${filteredFlashcards.length}`
+												: disabledCount}{" "}
+											{t("disabled") || "disabled"}
+										</Text>
+									</View>
 								</View>
 
-								<View
-									style={[
-										styles.cardCountBadgeModal,
-										{
-											backgroundColor: "rgba(34, 197, 94, 0.15)",
-											borderColor: "rgba(34, 197, 94, 0.4)",
-										},
-									]}
-								>
-									<Text
-										style={[styles.cardCountTextModal, { color: "#22c55e" }]}
+								<View style={styles.flashcardBulkActionRow}>
+									<Pressable
+										onPress={() => handleBulkSetEnabled(true)}
+										hitSlop={8}
+										disabled={bulkSaving || filteredFlashcards.length === 0}
+										style={[
+											styles.flashcardBulkButton,
+											{ backgroundColor: "rgba(34, 197, 94, 0.18)" },
+											bulkSaving ? { opacity: 0.6 } : null,
+										]}
 									>
-										{isSearching
-											? `${filteredEnabledCount}/${filteredFlashcards.length}`
-											: enabledCount}{" "}
-										{t("enabled") || "enabled"}
-									</Text>
-								</View>
-
-								<View
-									style={[
-										styles.cardCountBadgeModal,
-										{
-											backgroundColor: "rgba(239, 68, 68, 0.15)",
-											borderColor: "rgba(239, 68, 68, 0.4)",
-										},
-									]}
-								>
-									<Text
-										style={[styles.cardCountTextModal, { color: "#ef4444" }]}
+										<Text
+											style={[
+												styles.flashcardBulkButtonText,
+												{ color: "#22c55e" },
+											]}
+										>
+											{t("enable_all") || "Enable all"}
+										</Text>
+									</Pressable>
+									<Pressable
+										onPress={() => handleBulkSetEnabled(false)}
+										hitSlop={8}
+										disabled={bulkSaving || filteredFlashcards.length === 0}
+										style={[
+											styles.flashcardBulkButton,
+											{ backgroundColor: "rgba(239, 68, 68, 0.18)" },
+											bulkSaving ? { opacity: 0.6 } : null,
+										]}
 									>
-										{isSearching
-											? `${filteredDisabledCount}/${filteredFlashcards.length}`
-											: disabledCount}{" "}
-										{t("disabled") || "disabled"}
-									</Text>
+										<Text
+											style={[
+												styles.flashcardBulkButtonText,
+												{ color: "#ef4444" },
+											]}
+										>
+											{t("disable_all") || "Disable all"}
+										</Text>
+									</Pressable>
 								</View>
 							</View>
+						)}
 
-							<View style={styles.flashcardBulkActionRow}>
-								<Pressable
-									onPress={() => handleBulkSetEnabled(true)}
-									hitSlop={8}
-									disabled={bulkSaving || filteredFlashcards.length === 0}
-									style={[
-										styles.flashcardBulkButton,
-										{ backgroundColor: "rgba(34, 197, 94, 0.18)" },
-										bulkSaving ? { opacity: 0.6 } : null,
-									]}
-								>
-									<Text
-										style={[
-											styles.flashcardBulkButtonText,
-											{ color: "#22c55e" },
-										]}
-									>
-										{t("enable_all") || "Enable all"}
-									</Text>
-								</Pressable>
-								<Pressable
-									onPress={() => handleBulkSetEnabled(false)}
-									hitSlop={8}
-									disabled={bulkSaving || filteredFlashcards.length === 0}
-									style={[
-										styles.flashcardBulkButton,
-										{ backgroundColor: "rgba(239, 68, 68, 0.18)" },
-										bulkSaving ? { opacity: 0.6 } : null,
-									]}
-								>
-									<Text
-										style={[
-											styles.flashcardBulkButtonText,
-											{ color: "#ef4444" },
-										]}
-									>
-										{t("disable_all") || "Disable all"}
-									</Text>
-								</Pressable>
-							</View>
-						</View>
-					)}
-
-					{isInlineAdding && (
-						<InlineCardForm
-							key={`add-form-${flashcards.length}`}
-							editingCard={null}
-							onSubmit={handleSubmitAdd}
-							onCancel={() => setIsInlineAdding(false)}
-							saving={addSaving}
-							t={t}
-							theme={theme}
-						/>
-					)}
-
-					{flashcards.length === 0 && !isInlineAdding ? (
-						<View
-							style={{
-								alignItems: "center",
-								paddingVertical: spacing.xxl,
-							}}
-						>
-							<MaterialCommunityIcons
-								name="cards-outline"
-								size={48}
-								color={theme.primary.main}
+						{isInlineAdding && (
+							<InlineCardForm
+								key={`add-form-${flashcards.length}`}
+								editingCard={null}
+								onSubmit={handleSubmitAdd}
+								onCancel={() => setIsInlineAdding(false)}
+								saving={addSaving}
+								t={t}
+								theme={theme}
 							/>
-							<ThemedText
-								variant="h3"
-								style={{ marginTop: spacing.md, textAlign: "center" }}
-							>
-								{t("no_flashcards")}
-							</ThemedText>
-							<ThemedText
-								color="secondary"
+						)}
+
+						{flashcards.length === 0 && !isInlineAdding ? (
+							<View
 								style={{
-									marginTop: spacing.sm,
-									textAlign: "center",
-									fontSize: 14,
+									alignItems: "center",
+									paddingVertical: spacing.xxl,
 								}}
 							>
-								{t("no_flashcards_desc")}
-							</ThemedText>
-						</View>
-					) : filteredFlashcards.length === 0 && flashcards.length > 0 ? (
-						<View
-							style={{
-								alignItems: "center",
-								paddingVertical: spacing.xl,
-							}}
-						>
-							<Ionicons
-								name="search-outline"
-								size={36}
-								color={theme.text.secondary}
-							/>
-							<ThemedText
-								color="secondary"
-								style={{ marginTop: spacing.sm, textAlign: "center" }}
-							>
-								{t("no_results") || "No results found"}
-							</ThemedText>
-						</View>
-					) : (
-						filteredFlashcards.map((card) =>
-							editingCardId === card.id ? (
-								<InlineCardForm
-									key={`edit-${card.id}`}
-									editingCard={card}
-									onSubmit={handleSubmitEdit}
-									onCancel={() => setEditingCardId(null)}
-									saving={editSaving}
-									t={t}
-									theme={theme}
+								<MaterialCommunityIcons
+									name="cards-outline"
+									size={48}
+									color={theme.primary.main}
 								/>
-							) : (
-								<View
-									key={card.id}
+								<ThemedText
+									variant="h3"
+									style={{ marginTop: spacing.md, textAlign: "center" }}
+								>
+									{t("no_flashcards")}
+								</ThemedText>
+								<ThemedText
+									color="secondary"
 									style={{
-										backgroundColor: theme.background.paper,
-										borderRadius: borderRadius.lg,
-										borderWidth: 1,
-										borderColor: theme.border.main,
-										overflow: "hidden",
-										marginBottom: spacing.sm,
+										marginTop: spacing.sm,
+										textAlign: "center",
+										fontSize: 14,
 									}}
 								>
-									<View style={{ flexDirection: "row" }}>
-										<View
-											style={{
-												width: 4,
-												backgroundColor: "#3b82f6",
-											}}
-										/>
-										<View
-											style={{
-												flex: 1,
-												padding: spacing.md,
-												flexDirection: "row",
-												alignItems: "center",
-												gap: spacing.sm,
-											}}
-										>
-											<View style={{ flex: 1 }}>
-												<ThemedText
-													style={styles.flashcardFront}
-													numberOfLines={1}
-												>
-													{card.front_text}
-												</ThemedText>
-												<ThemedText
-													color="secondary"
-													style={styles.flashcardBack}
-													numberOfLines={1}
-												>
-													{card.back_text}
-												</ThemedText>
-											</View>
-											<View style={{ flexDirection: "row", gap: spacing.xs }}>
-												<Pressable
-													onPress={() => handleToggleEnabled(card)}
-													hitSlop={8}
-													style={[
-														styles.flashcardActionBtn,
-														{
-															backgroundColor: normalizeEnabledValue(
-																card.enabled,
-															)
-																? "rgba(59, 130, 246, 0.12)"
-																: "rgba(107, 114, 128, 0.12)",
-															opacity: bulkSaving ? 0.6 : 1,
-														},
-													]}
-												>
-													<Ionicons
-														name={
-															normalizeEnabledValue(card.enabled)
-																? "eye"
-																: "eye-off"
-														}
-														size={16}
-														color={
-															normalizeEnabledValue(card.enabled)
-																? "#3b82f6"
-																: theme.text.disabled
-														}
-													/>
-												</Pressable>
-												<Pressable
-													onPress={() => handleEditCard(card)}
-													style={[
-														styles.flashcardActionBtn,
-														{ backgroundColor: "rgba(251, 191, 36, 0.1)" },
-													]}
-												>
-													<MaterialCommunityIcons
-														name="pencil"
-														size={16}
-														color="#fbbf24"
-													/>
-												</Pressable>
-												<Pressable
-													onPress={() => handleDeleteCard(card.id)}
-													style={[
-														styles.flashcardActionBtn,
-														{ backgroundColor: "rgba(239, 68, 68, 0.1)" },
-													]}
-												>
-													<Ionicons name="trash" size={16} color="#ef4444" />
-												</Pressable>
+									{t("no_flashcards_desc")}
+								</ThemedText>
+							</View>
+						) : filteredFlashcards.length === 0 && flashcards.length > 0 ? (
+							<View
+								style={{
+									alignItems: "center",
+									paddingVertical: spacing.xl,
+								}}
+							>
+								<Ionicons
+									name="search-outline"
+									size={36}
+									color={theme.text.secondary}
+								/>
+								<ThemedText
+									color="secondary"
+									style={{ marginTop: spacing.sm, textAlign: "center" }}
+								>
+									{t("no_results") || "No results found"}
+								</ThemedText>
+							</View>
+						) : (
+							sortedFlashcards.map((card) =>
+								editingCardId === card.id ? (
+									<InlineCardForm
+										key={`edit-${card.id}`}
+										editingCard={card}
+										onSubmit={handleSubmitEdit}
+										onCancel={() => setEditingCardId(null)}
+										saving={editSaving}
+										t={t}
+										theme={theme}
+									/>
+								) : (
+									<View
+										key={card.id}
+										style={{
+											backgroundColor: theme.background.paper,
+											borderRadius: borderRadius.lg,
+											borderWidth: 1,
+											borderColor: theme.border.main,
+											overflow: "hidden",
+											marginBottom: spacing.sm,
+										}}
+									>
+										<View style={{ flexDirection: "row" }}>
+											<View
+												style={{
+													width: 4,
+													backgroundColor: "#3b82f6",
+												}}
+											/>
+											<View
+												style={{
+													flex: 1,
+													padding: spacing.md,
+													flexDirection: "row",
+													alignItems: "center",
+													gap: spacing.sm,
+												}}
+											>
+												<View style={{ flex: 1 }}>
+													<ThemedText
+														style={styles.flashcardFront}
+														numberOfLines={1}
+													>
+														{card.front_text}
+													</ThemedText>
+													<ThemedText
+														color="secondary"
+														style={styles.flashcardBack}
+														numberOfLines={1}
+													>
+														{card.back_text}
+													</ThemedText>
+												</View>
+												<View style={{ flexDirection: "row", gap: spacing.xs }}>
+													<Pressable
+														onPress={() => handleToggleEnabled(card)}
+														hitSlop={8}
+														style={[
+															styles.flashcardActionBtn,
+															{
+																backgroundColor: normalizeEnabledValue(
+																	card.enabled,
+																)
+																	? "rgba(59, 130, 246, 0.12)"
+																	: "rgba(107, 114, 128, 0.12)",
+																opacity: bulkSaving ? 0.6 : 1,
+															},
+														]}
+													>
+														<Ionicons
+															name={
+																normalizeEnabledValue(card.enabled)
+																	? "eye"
+																	: "eye-off"
+															}
+															size={16}
+															color={
+																normalizeEnabledValue(card.enabled)
+																	? "#3b82f6"
+																	: theme.text.disabled
+															}
+														/>
+													</Pressable>
+													<Pressable
+														onPress={() => handleEditCard(card)}
+														style={[
+															styles.flashcardActionBtn,
+															{ backgroundColor: "rgba(251, 191, 36, 0.1)" },
+														]}
+													>
+														<MaterialCommunityIcons
+															name="pencil"
+															size={16}
+															color="#fbbf24"
+														/>
+													</Pressable>
+													<Pressable
+														onPress={() => handleDeleteCard(card.id)}
+														style={[
+															styles.flashcardActionBtn,
+															{ backgroundColor: "rgba(239, 68, 68, 0.1)" },
+														]}
+													>
+														<Ionicons name="trash" size={16} color="#ef4444" />
+													</Pressable>
+												</View>
 											</View>
 										</View>
 									</View>
+								),
+							)
+						)}
+					</View>
+				)}
+			</Modal>
+
+			<Modal
+				visible={sortModalVisible}
+				onClose={() => setSortModalVisible(false)}
+				title={t("sort_options") || "Sort"}
+			>
+				<View style={styles.sortModalBody}>
+					{[
+						{
+							value: "newest",
+							label: t("sort_newest") || "Newest",
+							icon: "time-outline",
+						},
+						{
+							value: "oldest",
+							label: t("sort_oldest") || "Oldest",
+							icon: "hourglass-outline",
+						},
+						{
+							value: "name_asc",
+							label: t("sort_name_asc") || "Name (A-Z)",
+							icon: "text-outline",
+						},
+						{
+							value: "name_desc",
+							label: t("sort_name_desc") || "Name (Z-A)",
+							icon: "text",
+						},
+					].map((option) => {
+						const isSelected = sortBy === option.value;
+						return (
+							<Pressable
+								key={option.value}
+								onPress={() => {
+									setSortBy(option.value);
+									setSortModalVisible(false);
+								}}
+								style={[
+									styles.sortOptionRow,
+									{
+										backgroundColor: isSelected
+											? theme.primary.main + "12"
+											: theme.background.paper,
+										borderColor: isSelected
+											? theme.primary.main
+											: theme.border.main,
+									},
+								]}
+							>
+								<View
+									style={[
+										styles.sortOptionIconWrap,
+										{
+											backgroundColor: isSelected
+												? theme.primary.main + "20"
+												: "transparent",
+										},
+									]}
+								>
+									<Ionicons
+										name={option.icon}
+										size={16}
+										color={
+											isSelected ? theme.primary.main : theme.text.secondary
+										}
+									/>
 								</View>
-							),
-						)
-					)}
+								<ThemedText style={styles.sortOptionText}>
+									{option.label}
+								</ThemedText>
+								{isSelected ? (
+									<View
+										style={[
+											styles.sortSelectedBadge,
+											{ backgroundColor: theme.success.main + "20" },
+										]}
+									>
+										<Ionicons
+											name="checkmark"
+											size={14}
+											color={theme.success.main}
+										/>
+									</View>
+								) : null}
+							</Pressable>
+						);
+					})}
 				</View>
-			)}
-		</Modal>
+			</Modal>
+		</>
 	);
 };
 
@@ -809,6 +960,10 @@ const styles = StyleSheet.create({
 		flex: 1,
 		fontSize: 15,
 		paddingVertical: 0,
+	},
+	flashcardSortIconButton: {
+		marginRight: spacing.xs,
+		padding: 2,
 	},
 	flashcardStatsAndActionsRow: {
 		flexDirection: "column",
@@ -850,6 +1005,36 @@ const styles = StyleSheet.create({
 	cardCountTextModal: {
 		fontSize: 12,
 		fontWeight: "600",
+	},
+	sortModalBody: {
+		gap: spacing.sm,
+	},
+	sortOptionRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		borderWidth: 1,
+		borderRadius: borderRadius.md,
+		paddingHorizontal: spacing.md,
+		paddingVertical: spacing.sm,
+		gap: spacing.sm,
+	},
+	sortOptionIconWrap: {
+		width: 24,
+		height: 24,
+		borderRadius: 12,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	sortOptionText: {
+		flex: 1,
+		fontWeight: "500",
+	},
+	sortSelectedBadge: {
+		width: 22,
+		height: 22,
+		borderRadius: 11,
+		alignItems: "center",
+		justifyContent: "center",
 	},
 });
 

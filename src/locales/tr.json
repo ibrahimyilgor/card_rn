@@ -473,5 +473,8 @@
 	"enable_all": "Hepsini etkinleştir",
 	"disable_all": "Hepsini devre dışı bırak",
 	"all_cards_already_enabled": "Seçili kartlar zaten etkin",
-	"all_cards_already_disabled": "Seçili kartlar zaten devre dışı"
+	"all_cards_already_disabled": "Seçili kartlar zaten devre dışı",
+	"open": "Aç",
+	"manage_subscription": "Aboneliği Yönet",
+	"downgrade_in_play_store": "Planı düşür"
 }

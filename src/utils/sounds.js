@@ -29,6 +29,10 @@ const isSoundEnabled = async () => {
 	}
 };
 
+export const refreshSoundEnabled = async () => {
+	return isSoundEnabled();
+};
+
 // Initialize audio settings
 export const initAudio = async () => {
 	try {
@@ -46,11 +50,8 @@ export const initAudio = async () => {
 // Play a sound
 export const playSound = async (soundName) => {
 	try {
-		// Check if sound is enabled
-		if (!soundEnabledCache) {
-			const enabled = await isSoundEnabled();
-			if (!enabled) return;
-		}
+		const enabled = await isSoundEnabled();
+		if (!enabled) return;
 
 		const soundFile = SOUND_FILES[soundName];
 		if (!soundFile) {

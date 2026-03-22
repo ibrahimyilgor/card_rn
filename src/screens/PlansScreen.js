@@ -166,12 +166,13 @@ const PlansScreen = ({ navigation }) => {
 		setProcessingPlanId(targetPlanId);
 
 		try {
+			let nextPlanCode = targetPlanId;
 			let firstSuccessfulPlanRefresh = false;
 			const refreshPlanAfterFirstVerify = async () => {
 				if (firstSuccessfulPlanRefresh) return;
 				firstSuccessfulPlanRefresh = true;
 				const response = await accountAPI.getCurrentPlan();
-				const nextPlanCode = response?.data?.plan?.code || targetPlanId;
+				nextPlanCode = response?.data?.plan?.code || targetPlanId;
 				setCurrentPlan(nextPlanCode);
 				await refreshPlan();
 			};

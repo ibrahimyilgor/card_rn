@@ -17,6 +17,8 @@ import {
 	Platform,
 	Animated,
 	ActivityIndicator,
+	LayoutAnimation,
+	UIManager,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
@@ -113,6 +115,32 @@ const HomeScreen = ({ navigation, onLogout }) => {
 	const headerAnim = useRef(new Animated.Value(0)).current;
 	const listAnim = useRef(new Animated.Value(0)).current;
 
+	useEffect(() => {
+		if (
+			Platform.OS === "android" &&
+			UIManager.setLayoutAnimationEnabledExperimental
+		) {
+			UIManager.setLayoutAnimationEnabledExperimental(true);
+		}
+	}, []);
+
+	const animateDeckLayout = useCallback((duration = 220) => {
+		LayoutAnimation.configureNext({
+			duration,
+			create: {
+				type: LayoutAnimation.Types.easeInEaseOut,
+				property: LayoutAnimation.Properties.opacity,
+			},
+			update: {
+				type: LayoutAnimation.Types.easeInEaseOut,
+			},
+			delete: {
+				type: LayoutAnimation.Types.easeInEaseOut,
+				property: LayoutAnimation.Properties.opacity,
+			},
+		});
+	}, []);
+
 	const startAnimations = useCallback(() => {
 		searchBarAnim.setValue(0);
 		headerAnim.setValue(0);
@@ -172,6 +200,9 @@ const HomeScreen = ({ navigation, onLogout }) => {
 			const decksData = Array.isArray(response.data)
 				? response.data
 				: response.data?.decks || [];
+			if (silent) {
+				animateDeckLayout(220);
+			}
 			setDecks(decksData);
 		} catch (error) {
 			console.error("Error fetching decks:", error);
@@ -253,6 +284,7 @@ const HomeScreen = ({ navigation, onLogout }) => {
 			setLimitModalVisible(true);
 			return;
 		}
+		animateDeckLayout(180);
 		setInlineDeck({
 			mode: "create",
 			deckId: null,
@@ -263,6 +295,7 @@ const HomeScreen = ({ navigation, onLogout }) => {
 	};
 
 	const handleEditDeck = (deck) => {
+		animateDeckLayout(180);
 		setInlineDeck({
 			mode: "edit",
 			deckId: deck.id,
@@ -301,6 +334,7 @@ const HomeScreen = ({ navigation, onLogout }) => {
 					inlineDeck.description.trim(),
 				);
 			}
+			animateDeckLayout(220);
 			setInlineDeck({ mode: null, deckId: null, title: "", description: "" });
 			await fetchDecks(accountId, true);
 			refreshPlan();
@@ -318,6 +352,7 @@ const HomeScreen = ({ navigation, onLogout }) => {
 	};
 
 	const handleCancelInlineDeck = () => {
+		animateDeckLayout(180);
 		setInlineDeck({ mode: null, deckId: null, title: "", description: "" });
 	};
 
@@ -327,6 +362,7 @@ const HomeScreen = ({ navigation, onLogout }) => {
 		setSaving(true);
 		try {
 			await decksAPI.delete(deckId);
+			animateDeckLayout(220);
 			setInlineDeleteDeckId(null);
 			setDecks((prev) => prev.filter((deck) => deck.id !== deckId));
 			await fetchDecks(accountId, true);
@@ -886,6 +922,8 @@ const HomeScreen = ({ navigation, onLogout }) => {
 					style={[styles.searchInput, { color: theme.text.primary }]}
 					placeholder={t("search_decks")}
 					placeholderTextColor={theme.text.disabled}
+					cursorColor={theme.primary.main}
+					selectionColor={theme.primary.main}
 					value={searchQuery}
 					onChangeText={handleSearchChange}
 					autoCorrect={false}
@@ -1505,7 +1543,9 @@ const HomeScreen = ({ navigation, onLogout }) => {
 								label={t("deck_title") || "Deck Title"}
 								value={importTitle}
 								onChangeText={setImportTitle}
+								style={{ marginBottom: spacing.xs }}
 								maxLength={MAX_DECK_TITLE_LENGTH + 1}
+								helperTextStyle={{ textAlign: "right", marginLeft: 0 }}
 								error={
 									importTitleTooLong
 										? t("max_characters_error", { max: MAX_DECK_TITLE_LENGTH })
@@ -1516,9 +1556,7 @@ const HomeScreen = ({ navigation, onLogout }) => {
 										? undefined
 										: `${importTitle.length}/${MAX_DECK_TITLE_LENGTH}`
 								}
-								placeholder={
-									t("deck_title_placeholder") || "e.g., Spanish Vocabulary"
-								}
+								placeholder={t("deck_title") || "Deck title"}
 							/>
 						)}
 
@@ -1529,6 +1567,7 @@ const HomeScreen = ({ navigation, onLogout }) => {
 								value={importDescription}
 								onChangeText={setImportDescription}
 								maxLength={MAX_TEXT_LENGTH + 1}
+								helperTextStyle={{ textAlign: "right", marginLeft: 0 }}
 								error={
 									importDescriptionTooLong
 										? t("max_characters_error", { max: MAX_TEXT_LENGTH })
@@ -1539,10 +1578,7 @@ const HomeScreen = ({ navigation, onLogout }) => {
 										? undefined
 										: `${importDescription.length}/${MAX_TEXT_LENGTH}`
 								}
-								placeholder={
-									t("deck_description_placeholder") ||
-									"Optional description for your deck..."
-								}
+								placeholder={t("deck_description") || "Deck description"}
 								multiline
 								numberOfLines={2}
 							/>
@@ -1653,14 +1689,14 @@ const InlineDeckForm = ({
 		!!title.trim() && !saving && !titleTooLong && !descriptionTooLong;
 
 	return (
-		<Card style={styles.deckCard}>
+		<Card style={[styles.deckCard, styles.inlineCreateDeckCard]}>
 			<LinearGradient
 				colors={["#3b82f6", "#8b5cf6"]}
 				start={{ x: 0, y: 0 }}
 				end={{ x: 0, y: 0 }}
 				style={styles.deckAccentBar}
 			/>
-			<View style={styles.deckContent}>
+			<View style={[styles.deckContent, styles.inlineCreateDeckContent]}>
 				<View
 				// style={{
 				// 	backgroundColor: theme.background.paper,
@@ -1675,7 +1711,10 @@ const InlineDeckForm = ({
 						label={t("deck_title")}
 						value={title}
 						onChangeText={onChangeTitle}
-						placeholder={t("deck_title_placeholder")}
+						placeholder={t("deck_title")}
+						style={styles.inlineCompactInput}
+						inputStyle={styles.inlineCompactInputText}
+						helperTextStyle={{ textAlign: "right", marginLeft: 0 }}
 						maxLength={MAX_DECK_TITLE_LENGTH + 1}
 						error={
 							titleTooLong
@@ -1692,9 +1731,12 @@ const InlineDeckForm = ({
 						label={t("deck_description")}
 						value={description}
 						onChangeText={onChangeDescription}
-						placeholder={t("deck_description_placeholder")}
+						placeholder={t("deck_description")}
 						multiline
-						numberOfLines={3}
+						numberOfLines={2}
+						style={styles.inlineCompactInput}
+						inputStyle={styles.inlineCompactInputText}
+						helperTextStyle={{ textAlign: "right", marginLeft: 0 }}
 						maxLength={MAX_TEXT_LENGTH + 1}
 						error={
 							descriptionTooLong
@@ -1718,8 +1760,8 @@ const InlineDeckForm = ({
 						<Pressable
 							onPress={onCancel}
 							style={{
-								width: 36,
-								height: 36,
+								width: 34,
+								height: 34,
 								borderRadius: borderRadius.md,
 								backgroundColor: "rgba(239, 68, 68, 0.12)",
 								alignItems: "center",
@@ -1732,8 +1774,8 @@ const InlineDeckForm = ({
 						<Pressable
 							onPress={() => canSubmit && onSave()}
 							style={{
-								width: 36,
-								height: 36,
+								width: 34,
+								height: 34,
 								borderRadius: borderRadius.md,
 								backgroundColor: canSubmit
 									? accentColor + "22"
@@ -1771,20 +1813,20 @@ const styles = StyleSheet.create({
 		paddingBottom: spacing.xxl,
 	},
 	header: {
-		marginBottom: spacing.sm,
+		marginBottom: spacing.xs,
 	},
 	titleRow: {
 		flexDirection: "row",
 		justifyContent: "space-between",
 		alignItems: "center",
-		marginBottom: spacing.md,
+		marginBottom: spacing.sm,
 	},
 	searchWrapper: {
 		paddingHorizontal: spacing.md,
 		paddingTop: spacing.sm,
 	},
 	searchRow: {
-		marginBottom: spacing.xs,
+		marginBottom: 2,
 		flexDirection: "row",
 		alignItems: "center",
 		gap: spacing.sm,
@@ -1793,6 +1835,7 @@ const styles = StyleSheet.create({
 		flex: 1,
 		flexDirection: "row",
 		alignItems: "center",
+		height: 40,
 		borderRadius: borderRadius.md,
 		borderWidth: 1,
 		paddingHorizontal: spacing.md,
@@ -1800,8 +1843,9 @@ const styles = StyleSheet.create({
 	streakBadge: {
 		borderRadius: borderRadius.md,
 		paddingHorizontal: spacing.sm,
-		paddingVertical: spacing.sm,
+		height: 40,
 		minWidth: 64,
+		justifyContent: "center",
 	},
 	streakBadgeContent: {
 		flexDirection: "row",
@@ -1819,7 +1863,7 @@ const styles = StyleSheet.create({
 	},
 	searchInput: {
 		flex: 1,
-		paddingVertical: spacing.sm,
+		paddingVertical: 0,
 		fontSize: 16,
 	},
 	clearButton: {
@@ -1883,7 +1927,7 @@ const styles = StyleSheet.create({
 		marginBottom: spacing.sm,
 	},
 	deckCard: {
-		marginBottom: spacing.md,
+		marginBottom: spacing.sm,
 		overflow: "hidden",
 	},
 	deckAccentBar: {
@@ -1899,18 +1943,19 @@ const styles = StyleSheet.create({
 		flex: 1,
 	},
 	deckTitle: {
-		marginBottom: spacing.xs,
+		marginBottom: 2,
 		paddingRight: spacing.md,
 	},
 	deckDescription: {
-		fontSize: 14,
-		marginBottom: spacing.sm,
+		fontSize: 13,
+		marginBottom: 8,
+		marginTop: -8,
 	},
 	deckMeta: {
 		flexDirection: "row",
 		alignItems: "center",
 		gap: spacing.xs,
-		marginBottom: spacing.sm,
+		marginBottom: spacing.xs,
 		flexWrap: "wrap",
 	},
 	cardCount: {
@@ -1918,18 +1963,18 @@ const styles = StyleSheet.create({
 		fontWeight: "600",
 	},
 	deckContent: {
-		padding: spacing.sm,
-		paddingTop: 20,
+		padding: spacing.xs,
+		paddingTop: 16,
 	},
 	deckTitleRow: {
 		flexDirection: "row",
 		alignItems: "flex-start",
 		justifyContent: "space-between",
-		marginBottom: spacing.xs,
+		marginBottom: 2,
 	},
 	playButton: {
-		width: 36,
-		height: 36,
+		width: 32,
+		height: 32,
 		borderRadius: borderRadius.md,
 		alignItems: "center",
 		justifyContent: "center",
@@ -1956,8 +2001,8 @@ const styles = StyleSheet.create({
 		fontWeight: "600",
 	},
 	actionIconButton: {
-		width: 34,
-		height: 34,
+		width: 30,
+		height: 30,
 		borderRadius: borderRadius.sm,
 		alignItems: "center",
 		justifyContent: "center",
@@ -1965,10 +2010,23 @@ const styles = StyleSheet.create({
 	deckActions: {
 		flexDirection: "row",
 		alignItems: "center",
-		gap: spacing.sm,
+		gap: spacing.xs,
 		borderTopWidth: 1,
 		paddingTop: spacing.sm,
 		marginTop: spacing.xs,
+	},
+	inlineCreateDeckCard: {
+		marginBottom: spacing.xs,
+	},
+	inlineCreateDeckContent: {
+		paddingTop: 12,
+	},
+	inlineCompactInput: {
+		marginBottom: spacing.xs,
+	},
+	inlineCompactInputText: {
+		fontSize: 14,
+		paddingVertical: spacing.xs,
 	},
 	inlineDeleteConfirm: {
 		borderTopWidth: 1,

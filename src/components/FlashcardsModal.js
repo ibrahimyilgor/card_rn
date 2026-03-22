@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from "react";
 import {
 	ActivityIndicator,
+	LayoutAnimation,
+	Platform,
 	Pressable,
 	StyleSheet,
 	Text,
 	TextInput,
+	UIManager,
 	View,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -174,6 +177,7 @@ const FlashcardsModal = ({
 	const [searchQuery, setSearchQuery] = useState("");
 	const [sortBy, setSortBy] = useState("newest");
 	const [sortModalVisible, setSortModalVisible] = useState(false);
+	const [expandedCardId, setExpandedCardId] = useState(null);
 
 	const filteredFlashcards = flashcards.filter((card) => {
 		if (!searchQuery.trim()) return true;
@@ -214,12 +218,39 @@ const FlashcardsModal = ({
 		: t("flashcards");
 
 	useEffect(() => {
+		if (
+			Platform.OS === "android" &&
+			UIManager.setLayoutAnimationEnabledExperimental
+		) {
+			UIManager.setLayoutAnimationEnabledExperimental(true);
+		}
+	}, []);
+
+	const animateFlashcardLayout = (duration = 200) => {
+		LayoutAnimation.configureNext({
+			duration,
+			create: {
+				type: LayoutAnimation.Types.easeInEaseOut,
+				property: LayoutAnimation.Properties.opacity,
+			},
+			update: {
+				type: LayoutAnimation.Types.easeInEaseOut,
+			},
+			delete: {
+				type: LayoutAnimation.Types.easeInEaseOut,
+				property: LayoutAnimation.Properties.opacity,
+			},
+		});
+	};
+
+	useEffect(() => {
 		if (visible && deck) {
 			fetchFlashcards();
 			setSearchQuery("");
 			setIsInlineAdding(false);
 			setEditingCardId(null);
 			setSortModalVisible(false);
+			setExpandedCardId(null);
 		}
 	}, [visible, deck]);
 
@@ -268,6 +299,9 @@ const FlashcardsModal = ({
 						enabled: normalizeEnabledValue(card.enabled),
 					}))
 				: [];
+			if (silent) {
+				animateFlashcardLayout(220);
+			}
 			setFlashcards(nextFlashcards);
 			if (onUpdate) onUpdate(deck.id, nextFlashcards.length);
 		} catch (error) {
@@ -282,11 +316,13 @@ const FlashcardsModal = ({
 			if (onLimitReached) onLimitReached();
 			return;
 		}
+		animateFlashcardLayout(180);
 		setEditingCardId(null);
 		setIsInlineAdding(true);
 	};
 
 	const handleEditCard = (card) => {
+		animateFlashcardLayout(180);
 		setIsInlineAdding(false);
 		setEditingCardId(card.id);
 	};
@@ -299,6 +335,7 @@ const FlashcardsModal = ({
 		setAddSaving(true);
 		try {
 			await flashcardsAPI.create(deck.id, front, back);
+			animateFlashcardLayout(220);
 			await fetchFlashcards(true);
 		} catch (error) {
 			console.error("Error adding card:", error);
@@ -322,6 +359,7 @@ const FlashcardsModal = ({
 		setEditSaving(true);
 		try {
 			await flashcardsAPI.update(editingCardId, front, back);
+			animateFlashcardLayout(180);
 			setEditingCardId(null);
 			await fetchFlashcards(true);
 		} catch (error) {
@@ -340,6 +378,7 @@ const FlashcardsModal = ({
 	const handleDeleteCard = async (cardId) => {
 		try {
 			await flashcardsAPI.delete(cardId);
+			animateFlashcardLayout(220);
 			await fetchFlashcards(true);
 		} catch (error) {
 			console.error("Error deleting card:", error);
@@ -393,6 +432,11 @@ const FlashcardsModal = ({
 					"Error",
 			);
 		}
+	};
+
+	const handleToggleExpandedCard = (cardId) => {
+		animateFlashcardLayout(180);
+		setExpandedCardId((prev) => (prev === cardId ? null : cardId));
 	};
 
 	const handleBulkSetEnabled = async (nextEnabled) => {
@@ -528,6 +572,8 @@ const FlashcardsModal = ({
 									]}
 									placeholder={t("search_flashcards") || "Search flashcards..."}
 									placeholderTextColor={theme.text.disabled}
+									cursorColor={theme.primary.main}
+									selectionColor={theme.primary.main}
 									value={searchQuery}
 									onChangeText={setSearchQuery}
 									autoCorrect={false}
@@ -742,6 +788,7 @@ const FlashcardsModal = ({
 											borderColor: theme.border.main,
 											overflow: "hidden",
 											marginBottom: spacing.sm,
+											opacity: normalizeEnabledValue(card.enabled) ? 1 : 0.6,
 										}}
 									>
 										<View style={{ flexDirection: "row" }}>
@@ -756,25 +803,35 @@ const FlashcardsModal = ({
 													flex: 1,
 													padding: spacing.md,
 													flexDirection: "row",
-													alignItems: "center",
+													alignItems:
+														expandedCardId === card.id
+															? "flex-start"
+															: "center",
 													gap: spacing.sm,
 												}}
 											>
-												<View style={{ flex: 1 }}>
+												<Pressable
+													onPress={() => handleToggleExpandedCard(card.id)}
+													style={{ flex: 1 }}
+												>
 													<ThemedText
 														style={styles.flashcardFront}
-														numberOfLines={1}
+														numberOfLines={
+															expandedCardId === card.id ? undefined : 1
+														}
 													>
 														{card.front_text}
 													</ThemedText>
 													<ThemedText
 														color="secondary"
 														style={styles.flashcardBack}
-														numberOfLines={1}
+														numberOfLines={
+															expandedCardId === card.id ? undefined : 1
+														}
 													>
 														{card.back_text}
 													</ThemedText>
-												</View>
+												</Pressable>
 												<View style={{ flexDirection: "row", gap: spacing.xs }}>
 													<Pressable
 														onPress={() => handleToggleEnabled(card)}

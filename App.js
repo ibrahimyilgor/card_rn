@@ -1,5 +1,5 @@
-import React, { useEffect } from "react";
-import { ActivityIndicator, AppState, Platform, View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { Animated, AppState, Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useFonts } from "expo-font";
@@ -10,9 +10,33 @@ import { AchievementProvider } from "./src/context/AchievementContext";
 import { AdProvider } from "./src/context/AdContext";
 import { PlanProvider } from "./src/context/PlanContext";
 import RootNavigator from "./src/navigation/RootNavigator";
+import AppSplashScreen from "./src/components/ui/AppSplashScreen";
 
 export default function App() {
 	const [fontsLoaded] = useFonts({});
+	const [minSplashElapsed, setMinSplashElapsed] = useState(false);
+	const [showSplash, setShowSplash] = useState(true);
+	const splashOpacity = useRef(new Animated.Value(1)).current;
+
+	useEffect(() => {
+		const timeoutId = setTimeout(() => {
+			setMinSplashElapsed(true);
+		}, 1400);
+
+		return () => clearTimeout(timeoutId);
+	}, []);
+
+	useEffect(() => {
+		if (!fontsLoaded || !minSplashElapsed || !showSplash) return;
+
+		Animated.timing(splashOpacity, {
+			toValue: 0,
+			duration: 260,
+			useNativeDriver: true,
+		}).start(() => {
+			setShowSplash(false);
+		});
+	}, [fontsLoaded, minSplashElapsed, showSplash, splashOpacity]);
 
 	useEffect(() => {
 		if (Platform.OS !== "android") return;
@@ -56,19 +80,8 @@ export default function App() {
 		};
 	}, []);
 
-	if (!fontsLoaded) {
-		return (
-			<View
-				style={{
-					flex: 1,
-					justifyContent: "center",
-					alignItems: "center",
-					backgroundColor: "#0a0e14",
-				}}
-			>
-				<ActivityIndicator size="large" color="#3b82f6" />
-			</View>
-		);
+	if (showSplash || !fontsLoaded) {
+		return <AppSplashScreen />;
 	}
 
 	return (

@@ -473,5 +473,8 @@
 	"enable_all": "Enable all",
 	"disable_all": "Disable all",
 	"all_cards_already_enabled": "Selected cards are already enabled",
-	"all_cards_already_disabled": "Selected cards are already disabled"
+	"all_cards_already_disabled": "Selected cards are already disabled",
+	"open": "Open",
+	"manage_subscription": "Manage Subscription",
+	"downgrade_in_play_store": "Downgrade in Play Store"
 }

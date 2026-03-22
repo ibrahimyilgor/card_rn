@@ -32,7 +32,7 @@ import {
 } from "../components/ui";
 import FlipCard from "../components/game/FlipCard";
 import { useTimer, useLives } from "../hooks";
-import sounds from "../utils/sounds";
+import sounds, { refreshSoundEnabled } from "../utils/sounds";
 import { spacing, borderRadius } from "../styles/theme";
 
 // Mode colors matching web version
@@ -137,10 +137,10 @@ const GameScreen = ({ route, navigation }) => {
 
 	// Time options for timed mode (in seconds)
 	const TIME_OPTIONS = [
-		{ value: 60, label: "1 " + t("min") },
-		{ value: 180, label: "3 " + t("min") },
-		{ value: 300, label: "5 " + t("min") },
-		{ value: 600, label: "10 " + t("min") },
+		{ value: 60, label: `1 ${t("minutes_short") || "min"}` },
+		{ value: 180, label: `3 ${t("minutes_short") || "min"}` },
+		{ value: 300, label: `5 ${t("minutes_short") || "min"}` },
+		{ value: 600, label: `10 ${t("minutes_short") || "min"}` },
 	];
 
 	// Lives options for survival mode
@@ -507,6 +507,7 @@ const GameScreen = ({ route, navigation }) => {
 		const loadSettings = async () => {
 			const id = await AsyncStorage.getItem("accountId");
 			setAccountId(id);
+			await refreshSoundEnabled();
 
 			try {
 				const res = await decksAPI.getSettings(deck.id);
@@ -1356,139 +1357,130 @@ const GameScreen = ({ route, navigation }) => {
 
 		return (
 			<ScrollView contentContainerStyle={styles.modeSelectContainer}>
-				<Animated.View
-					style={{
-						opacity: modeHeaderAnim,
-						transform: [
-							{
-								translateY: modeHeaderAnim.interpolate({
-									inputRange: [0, 1],
-									outputRange: [-20, 0],
-								}),
-							},
-						],
-					}}
-				>
-					<View style={styles.modeHeaderRow}>
-						<Pressable
-							onPress={() => navigation.goBack()}
-							style={styles.modeBackButton}
-						>
-							<MaterialCommunityIcons
-								name="arrow-left"
-								size={24}
-								color={theme.text.secondary}
-							/>
-						</Pressable>
-						<ThemedText variant="h2" style={styles.modeTitle}>
-							{t("select_game_mode")}
-						</ThemedText>
-						<View style={styles.modeHeaderRightSpacer} />
-					</View>
-					<ThemedText color="secondary" style={styles.deckName}>
-						{deck.title}
-					</ThemedText>
-				</Animated.View>
-
 				{/* Game Modes Grid */}
-				<View style={styles.modesGrid}>
-					{GAME_MODES.map((mode, index) => {
-						const color = MODE_COLORS[mode.id];
-						const isSelected = selectedMode === mode.id;
-
-						return (
-							<Animated.View
-								key={mode.id}
-								style={[
-									styles.modeCardWrapper,
-									{
-										opacity: modeCardsAnim[index],
-										transform: [
-											{
-												translateY: modeCardsAnim[index].interpolate({
-													inputRange: [0, 1],
-													outputRange: [28, 0],
-												}),
-											},
-											{
-												scale: modeCardsAnim[index].interpolate({
-													inputRange: [0, 1],
-													outputRange: [0.88, 1],
-												}),
-											},
-										],
-									},
-								]}
-							>
-								<Pressable
-									onPress={() => setSelectedMode(mode.id)}
-									style={({ pressed }) => [
-										styles.modeCard,
-										{
-											backgroundColor: isSelected
-												? `${color}15`
-												: theme.background.card,
-											borderColor: isSelected ? color : theme.border.main,
-											borderWidth: isSelected ? 2 : 1,
-											opacity: pressed ? 0.8 : 1,
-											width: "100%",
-										},
-									]}
-								>
-									<View
-										style={[
-											styles.modeIconContainer,
-											{
-												backgroundColor: isSelected ? color : `${color}20`,
-												shadowColor: isSelected ? color : "transparent",
-												shadowOffset: { width: 0, height: 4 },
-												shadowOpacity: isSelected ? 0.4 : 0,
-												shadowRadius: 8,
-												elevation: isSelected ? 4 : 0,
-											},
-										]}
-									>
-										<MaterialCommunityIcons
-											name={mode.icon}
-											size={22}
-											color={isSelected ? "#fff" : color}
-										/>
-									</View>
-									<ThemedText
-										style={[
-											styles.modeLabel,
-											{ color: isSelected ? color : theme.text.primary },
-										]}
-									>
-										{t(mode.labelKey)}
-									</ThemedText>
-								</Pressable>
-							</Animated.View>
-						);
-					})}
-				</View>
-
-				{/* Mode Description */}
 				<Animated.View
 					style={[
-						styles.modeDescription,
+						styles.sectionGroup,
 						{
-							backgroundColor: `${modeColor}12`,
-							borderColor: `${modeColor}30`,
-							transform: [{ scale: modeDescScaleAnim }],
+							backgroundColor: theme.background.card,
+							borderColor: theme.border.main,
+							opacity: modeHeaderAnim,
+							transform: [
+								{
+									translateY: modeHeaderAnim.interpolate({
+										inputRange: [0, 1],
+										outputRange: [-20, 0],
+									}),
+								},
+							],
 						},
 					]}
 				>
-					<ThemedText style={[styles.modeDescText, { color: modeColor }]}>
-						{t(currentMode?.descKey || "mode_standard_desc")}
+					<ThemedText style={styles.sectionTitle}>
+						{t("select_game_mode")}
 					</ThemedText>
+					<View style={styles.modesGrid}>
+						{GAME_MODES.map((mode, index) => {
+							const color = MODE_COLORS[mode.id];
+							const isSelected = selectedMode === mode.id;
+
+							return (
+								<Animated.View
+									key={mode.id}
+									style={[
+										styles.modeCardWrapper,
+										{
+											opacity: modeCardsAnim[index],
+											transform: [
+												{
+													translateY: modeCardsAnim[index].interpolate({
+														inputRange: [0, 1],
+														outputRange: [28, 0],
+													}),
+												},
+												{
+													scale: modeCardsAnim[index].interpolate({
+														inputRange: [0, 1],
+														outputRange: [0.88, 1],
+													}),
+												},
+											],
+										},
+									]}
+								>
+									<Pressable
+										onPress={() => setSelectedMode(mode.id)}
+										style={({ pressed }) => [
+											styles.modeCard,
+											{
+												backgroundColor: isSelected
+													? `${color}15`
+													: theme.background.elevated,
+												borderColor: isSelected ? color : theme.border.main,
+												borderWidth: isSelected ? 2 : 1,
+												opacity: pressed ? 0.8 : 1,
+												width: "100%",
+											},
+										]}
+									>
+										<View
+											style={[
+												styles.modeIconContainer,
+												{
+													backgroundColor: isSelected ? color : `${color}20`,
+													shadowColor: isSelected ? color : "transparent",
+													shadowOffset: { width: 0, height: 4 },
+													shadowOpacity: isSelected ? 0.4 : 0,
+													shadowRadius: 8,
+													elevation: isSelected ? 4 : 0,
+												},
+											]}
+										>
+											<MaterialCommunityIcons
+												name={mode.icon}
+												size={22}
+												color={isSelected ? "#fff" : color}
+											/>
+										</View>
+										<ThemedText
+											style={[
+												styles.modeLabel,
+												{ color: isSelected ? color : theme.text.primary },
+											]}
+										>
+											{t(mode.labelKey)}
+										</ThemedText>
+									</Pressable>
+								</Animated.View>
+							);
+						})}
+					</View>
+
+					{/* Mode Description */}
+					<Animated.View
+						style={[
+							styles.modeDescription,
+							{
+								backgroundColor: `${modeColor}12`,
+								borderColor: `${modeColor}30`,
+								transform: [{ scale: modeDescScaleAnim }],
+							},
+						]}
+					>
+						<ThemedText style={[styles.modeDescText, { color: modeColor }]}>
+							{t(currentMode?.descKey || "mode_standard_desc")}
+						</ThemedText>
+					</Animated.View>
 				</Animated.View>
 
 				{/* Challenge Type Selection */}
 				<Animated.View
 					style={[
+						styles.sectionGroup,
 						styles.challengeSection,
 						{
+							backgroundColor: theme.background.card,
+							borderColor: theme.border.main,
 							opacity: challengeSectionAnim,
 							transform: [
 								{
@@ -1501,7 +1493,7 @@ const GameScreen = ({ route, navigation }) => {
 						},
 					]}
 				>
-					<ThemedText variant="h3" style={styles.challengeTitle}>
+					<ThemedText style={styles.sectionTitle}>
 						{t("challenge_type") || "Challenge Type"}
 					</ThemedText>
 					<View style={styles.challengeTypesRow}>
@@ -1543,7 +1535,7 @@ const GameScreen = ({ route, navigation }) => {
 									>
 										<MaterialCommunityIcons
 											name={challenge.icon}
-											size={24}
+											size={20}
 											color={isSelected ? "#fff" : challenge.color}
 										/>
 									</View>
@@ -1569,142 +1561,147 @@ const GameScreen = ({ route, navigation }) => {
 								"Match mode doesn't support survival challenge"}
 						</ThemedText>
 					)}
+
+					{/* Timed Challenge - Time Selection */}
+					{selectedChallengeType === "timed" && (
+						<View
+							style={[
+								styles.modeSpecificCard,
+								{
+									backgroundColor: "#f59e0b08",
+									borderColor: "#f59e0b30",
+								},
+							]}
+						>
+							<View style={styles.modeSpecificHeader}>
+								<View
+									style={[
+										styles.modeSpecificIcon,
+										{ backgroundColor: "#f59e0b20" },
+									]}
+								>
+									<MaterialCommunityIcons
+										name="timer-outline"
+										size={18}
+										color="#f59e0b"
+									/>
+								</View>
+								<ThemedText
+									style={[styles.modeSpecificTitle, { color: "#f59e0b" }]}
+								>
+									{t("game_duration") || "Game Duration"}
+								</ThemedText>
+							</View>
+							<View style={styles.segmentedControl}>
+								{TIME_OPTIONS.map((option, index) => {
+									const isSelected = timeLimit === option.value;
+									const isFirst = index === 0;
+									const isLast = index === TIME_OPTIONS.length - 1;
+									return (
+										<Pressable
+											key={option.value}
+											onPress={() => setTimeLimit(option.value)}
+											style={[
+												styles.segmentedButton,
+												isFirst && styles.segmentedButtonFirst,
+												isLast && styles.segmentedButtonLast,
+												{
+													backgroundColor: isSelected
+														? "#f59e0b"
+														: "transparent",
+													borderColor: "#f59e0b40",
+												},
+											]}
+										>
+											<Text
+												style={[
+													styles.segmentedButtonText,
+													{ color: isSelected ? "#fff" : "#f59e0b" },
+												]}
+											>
+												{option.label}
+											</Text>
+										</Pressable>
+									);
+								})}
+							</View>
+						</View>
+					)}
+
+					{/* Survival Challenge - Lives Selection */}
+					{selectedChallengeType === "survival" && (
+						<View
+							style={[
+								styles.modeSpecificCard,
+								{
+									backgroundColor: "#ef444408",
+									borderColor: "#ef444430",
+								},
+							]}
+						>
+							<View style={styles.modeSpecificHeader}>
+								<View
+									style={[
+										styles.modeSpecificIcon,
+										{ backgroundColor: "#ef444420" },
+									]}
+								>
+									<MaterialCommunityIcons
+										name="heart"
+										size={18}
+										color="#ef4444"
+									/>
+								</View>
+								<ThemedText
+									style={[styles.modeSpecificTitle, { color: "#ef4444" }]}
+								>
+									{t("starting_lives") || "Starting Lives"}
+								</ThemedText>
+							</View>
+							<View style={styles.livesRow}>
+								{LIVES_OPTIONS.map((num) => {
+									const isSelected = initialLives === num;
+									return (
+										<Pressable
+											key={num}
+											onPress={() => setInitialLives(num)}
+											style={[
+												styles.heartButton,
+												{
+													backgroundColor: isSelected ? "#ef4444" : "#ef444415",
+													transform: [{ scale: isSelected ? 1.1 : 1 }],
+												},
+											]}
+										>
+											<MaterialCommunityIcons
+												name={isSelected ? "heart" : "heart-outline"}
+												size={20}
+												color={isSelected ? "#fff" : "#ef4444"}
+											/>
+											<Text
+												style={[
+													styles.heartButtonText,
+													{ color: isSelected ? "#fff" : "#ef4444" },
+												]}
+											>
+												{num}
+											</Text>
+										</Pressable>
+									);
+								})}
+							</View>
+						</View>
+					)}
 				</Animated.View>
-
-				{/* Timed Challenge - Time Selection */}
-				{selectedChallengeType === "timed" && (
-					<View
-						style={[
-							styles.modeSpecificCard,
-							{
-								backgroundColor: "#f59e0b08",
-								borderColor: "#f59e0b30",
-							},
-						]}
-					>
-						<View style={styles.modeSpecificHeader}>
-							<View
-								style={[
-									styles.modeSpecificIcon,
-									{ backgroundColor: "#f59e0b20" },
-								]}
-							>
-								<MaterialCommunityIcons
-									name="timer-outline"
-									size={18}
-									color="#f59e0b"
-								/>
-							</View>
-							<ThemedText
-								style={[styles.modeSpecificTitle, { color: "#f59e0b" }]}
-							>
-								{t("game_duration") || "Game Duration"}
-							</ThemedText>
-						</View>
-						<View style={styles.segmentedControl}>
-							{TIME_OPTIONS.map((option, index) => {
-								const isSelected = timeLimit === option.value;
-								const isFirst = index === 0;
-								const isLast = index === TIME_OPTIONS.length - 1;
-								return (
-									<Pressable
-										key={option.value}
-										onPress={() => setTimeLimit(option.value)}
-										style={[
-											styles.segmentedButton,
-											isFirst && styles.segmentedButtonFirst,
-											isLast && styles.segmentedButtonLast,
-											{
-												backgroundColor: isSelected ? "#f59e0b" : "transparent",
-												borderColor: "#f59e0b40",
-											},
-										]}
-									>
-										<Text
-											style={[
-												styles.segmentedButtonText,
-												{ color: isSelected ? "#fff" : "#f59e0b" },
-											]}
-										>
-											{option.label}
-										</Text>
-									</Pressable>
-								);
-							})}
-						</View>
-					</View>
-				)}
-
-				{/* Survival Challenge - Lives Selection */}
-				{selectedChallengeType === "survival" && (
-					<View
-						style={[
-							styles.modeSpecificCard,
-							{
-								backgroundColor: "#ef444408",
-								borderColor: "#ef444430",
-							},
-						]}
-					>
-						<View style={styles.modeSpecificHeader}>
-							<View
-								style={[
-									styles.modeSpecificIcon,
-									{ backgroundColor: "#ef444420" },
-								]}
-							>
-								<MaterialCommunityIcons
-									name="heart"
-									size={18}
-									color="#ef4444"
-								/>
-							</View>
-							<ThemedText
-								style={[styles.modeSpecificTitle, { color: "#ef4444" }]}
-							>
-								{t("starting_lives") || "Starting Lives"}
-							</ThemedText>
-						</View>
-						<View style={styles.livesRow}>
-							{LIVES_OPTIONS.map((num) => {
-								const isSelected = initialLives === num;
-								return (
-									<Pressable
-										key={num}
-										onPress={() => setInitialLives(num)}
-										style={[
-											styles.heartButton,
-											{
-												backgroundColor: isSelected ? "#ef4444" : "#ef444415",
-												transform: [{ scale: isSelected ? 1.1 : 1 }],
-											},
-										]}
-									>
-										<MaterialCommunityIcons
-											name={isSelected ? "heart" : "heart-outline"}
-											size={20}
-											color={isSelected ? "#fff" : "#ef4444"}
-										/>
-										<Text
-											style={[
-												styles.heartButtonText,
-												{ color: isSelected ? "#fff" : "#ef4444" },
-											]}
-										>
-											{num}
-										</Text>
-									</Pressable>
-								);
-							})}
-						</View>
-					</View>
-				)}
 
 				{/* Settings Section */}
 				<Animated.View
 					style={[
+						styles.sectionGroup,
 						styles.settingsSection,
 						{
+							backgroundColor: theme.background.card,
+							borderColor: theme.border.main,
 							opacity: settingsSectionAnim,
 							transform: [
 								{
@@ -1717,6 +1714,9 @@ const GameScreen = ({ route, navigation }) => {
 						},
 					]}
 				>
+					<ThemedText style={styles.sectionTitle}>
+						{t("settings") || "Settings"}
+					</ThemedText>
 					{/* Card Direction */}
 					{selectedMode !== "match" && (
 						<View
@@ -2289,6 +2289,8 @@ const GameScreen = ({ route, navigation }) => {
 					]}
 					placeholder={t("type_your_answer")}
 					placeholderTextColor={theme.text.disabled}
+					cursorColor={theme.primary.main}
+					selectionColor={theme.primary.main}
 					value={userAnswer}
 					onChangeText={setUserAnswer}
 					editable={!answerResult}
@@ -3046,6 +3048,18 @@ const styles = StyleSheet.create({
 	modeSelectContainer: {
 		padding: spacing.lg,
 	},
+	sectionTitle: {
+		textAlign: "left",
+		fontSize: 16,
+		fontWeight: "700",
+		marginBottom: spacing.md,
+	},
+	sectionGroup: {
+		padding: spacing.md,
+		borderRadius: borderRadius.lg,
+		borderWidth: 1,
+		marginBottom: spacing.md,
+	},
 	modeHeaderRow: {
 		flexDirection: "row",
 		alignItems: "center",
@@ -3073,7 +3087,7 @@ const styles = StyleSheet.create({
 		justifyContent: "space-between",
 	},
 	modeCardWrapper: {
-		width: (SCREEN_WIDTH - spacing.lg * 2 - spacing.sm) / 2,
+		width: "48%",
 		marginBottom: spacing.sm,
 	},
 	modeCard: {
@@ -3096,7 +3110,7 @@ const styles = StyleSheet.create({
 		textAlign: "center",
 	},
 	modeDescription: {
-		marginTop: spacing.lg,
+		marginTop: spacing.md,
 		padding: spacing.md,
 		borderRadius: borderRadius.md,
 		borderWidth: 1,
@@ -3108,7 +3122,7 @@ const styles = StyleSheet.create({
 	},
 	// Challenge Type Section
 	challengeSection: {
-		marginTop: spacing.lg,
+		marginTop: 0,
 	},
 	challengeTitle: {
 		textAlign: "center",
@@ -3118,28 +3132,28 @@ const styles = StyleSheet.create({
 	challengeTypesRow: {
 		flexDirection: "row",
 		justifyContent: "center",
-		gap: spacing.md,
+		gap: spacing.sm,
 		paddingHorizontal: spacing.sm,
 	},
 	challengeCard: {
 		flex: 1,
-		paddingVertical: spacing.lg,
-		paddingHorizontal: spacing.md,
+		paddingVertical: spacing.md,
+		paddingHorizontal: spacing.sm,
 		borderRadius: borderRadius.lg,
 		alignItems: "center",
-		minHeight: 100,
+		minHeight: 86,
 		justifyContent: "center",
 	},
 	challengeIconContainer: {
-		width: 48,
-		height: 48,
+		width: 40,
+		height: 40,
 		borderRadius: 12,
 		justifyContent: "center",
 		alignItems: "center",
-		marginBottom: spacing.sm,
+		marginBottom: spacing.xs,
 	},
 	challengeLabel: {
-		fontSize: 13,
+		fontSize: 12,
 		fontWeight: "700",
 		textAlign: "center",
 	},
@@ -3151,7 +3165,7 @@ const styles = StyleSheet.create({
 	},
 	// Settings Section
 	settingsSection: {
-		marginTop: spacing.lg,
+		marginTop: 0,
 		gap: spacing.md,
 	},
 	settingCard: {

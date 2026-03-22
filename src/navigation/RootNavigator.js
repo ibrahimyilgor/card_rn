@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { View, ActivityIndicator, Platform, AppState } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../context/ThemeContext";
 import { useI18n } from "../context/I18nContext";
 import { usePlan } from "../context/PlanContext";
@@ -11,6 +10,7 @@ import {
 	onAuthStateChanged,
 	signOut as firebaseSignOut,
 } from "../services/firebase";
+import { setSoundEnabled as setGlobalSoundEnabled } from "../utils/sounds";
 import {
 	initBilling,
 	syncAndroidEntitlements,
@@ -73,10 +73,7 @@ const RootNavigator = () => {
 				}
 				// Sync sound effects
 				if (profile.sound_effects_enabled !== undefined) {
-					await AsyncStorage.setItem(
-						"soundEffects",
-						profile.sound_effects_enabled.toString(),
-					);
+					await setGlobalSoundEnabled(profile.sound_effects_enabled !== false);
 				}
 			}
 		} catch (error) {
@@ -115,12 +112,13 @@ const RootNavigator = () => {
 	useEffect(() => {
 		const appStateSub = AppState.addEventListener("change", (nextState) => {
 			if (nextState === "active") {
+				syncPreferencesFromDatabase();
 				syncEntitlementsIfNeeded();
 			}
 		});
 
 		return () => appStateSub.remove();
-	}, [syncEntitlementsIfNeeded]);
+	}, [syncPreferencesFromDatabase, syncEntitlementsIfNeeded]);
 
 	const handleLogin = useCallback(async () => {
 		// Firebase auth state listener handles the state change

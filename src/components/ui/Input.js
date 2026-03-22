@@ -26,6 +26,7 @@ const Input = ({
 	onRightIconPress,
 	style,
 	inputStyle,
+	helperTextStyle,
 	...props
 }) => {
 	const { theme } = useTheme();
@@ -98,6 +99,8 @@ const Input = ({
 					onChangeText={onChangeText}
 					placeholder={placeholder}
 					placeholderTextColor={theme.text.disabled}
+					cursorColor={theme.primary.main}
+					selectionColor={theme.primary.main}
 					secureTextEntry={secureTextEntry}
 					multiline={multiline}
 					numberOfLines={numberOfLines}
@@ -127,6 +130,7 @@ const Input = ({
 					style={[
 						styles.helperText,
 						{ color: error ? theme.error.main : theme.text.secondary },
+						helperTextStyle,
 					]}
 				>
 					{error || helperText}

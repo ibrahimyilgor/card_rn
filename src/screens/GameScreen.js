@@ -10,6 +10,7 @@ import {
 	Switch,
 	Animated,
 	PanResponder,
+	Platform,
 } from "react-native";
 import { Slider } from "@miblanchard/react-native-slider";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -32,7 +33,11 @@ import {
 } from "../components/ui";
 import FlipCard from "../components/game/FlipCard";
 import { useTimer, useLives } from "../hooks";
-import sounds, { refreshSoundEnabled } from "../utils/sounds";
+import sounds, {
+	refreshSoundEnabled,
+	playCachedSound,
+	preloadSounds,
+} from "../utils/sounds";
 import { spacing, borderRadius } from "../styles/theme";
 
 // Mode colors matching web version
@@ -96,6 +101,8 @@ const CHALLENGE_TYPES = [
 ];
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const WRITE_WRONG_DELAY_MS = 1200;
+const WRITE_CORRECT_DELAY_MS = WRITE_WRONG_DELAY_MS / 10;
 
 const GameScreen = ({ route, navigation }) => {
 	const { deck } = route.params;
@@ -182,6 +189,9 @@ const GameScreen = ({ route, navigation }) => {
 	const modeCardsAnim = useRef(
 		[0, 1, 2, 3].map(() => new Animated.Value(0)),
 	).current;
+	const challengeCardsAnim = useRef(
+		CHALLENGE_TYPES.map(() => new Animated.Value(0)),
+	).current;
 	const challengeSectionAnim = useRef(new Animated.Value(0)).current;
 	const settingsSectionAnim = useRef(new Animated.Value(0)).current;
 	const startButtonAnim = useRef(new Animated.Value(0)).current;
@@ -196,6 +206,7 @@ const GameScreen = ({ route, navigation }) => {
 	const CARD_OUT_HANDLE_DELAY = 40;
 
 	const handleAnswerRef = useRef(null);
+	const writeInputRef = useRef(null);
 	const advancingRef = useRef(false);
 	const endedRef = useRef(false);
 	const finishingRef = useRef(false);
@@ -292,6 +303,17 @@ const GameScreen = ({ route, navigation }) => {
 				Animated.stagger(
 					30,
 					modeCardsAnim.map((a) =>
+						Animated.spring(a, {
+							toValue: 1,
+							useNativeDriver: true,
+							speed: 30,
+							bounciness: 6,
+						}),
+					),
+				),
+				Animated.stagger(
+					40,
+					challengeCardsAnim.map((a) =>
 						Animated.spring(a, {
 							toValue: 1,
 							useNativeDriver: true,
@@ -878,7 +900,7 @@ const GameScreen = ({ route, navigation }) => {
 			sounds.correct();
 		} else {
 			setWrongCount((prev) => prev + 1);
-			sounds.incorrect();
+			if (gameMode !== "match") sounds.incorrect();
 			if (challengeType === "survival") {
 				lives.loseLife();
 			}
@@ -994,8 +1016,25 @@ const GameScreen = ({ route, navigation }) => {
 		handleGameOverCallbackRef.current = handleGameOver;
 	}, [handleGameOver]);
 
+	useEffect(() => {
+		if (gameMode !== "write") return;
+		if (gameState !== "playing") return;
+		if (loading || answerResult) return;
+
+		const focusTimeout = setTimeout(() => {
+			writeInputRef.current?.focus();
+		}, 0);
+
+		// On mobile, preload/cached sounds for write mode to reduce latency
+		if (Platform.OS === "ios" || Platform.OS === "android") {
+			preloadSounds().catch(() => {});
+		}
+
+		return () => clearTimeout(focusTimeout);
+	}, [gameMode, gameState, loading, answerResult, currentIndex]);
+
 	const handleWriteSubmit = async () => {
-		if (!userAnswer.trim()) return;
+		if (!userAnswer.trim() || answerResult) return;
 
 		// Prevent double submission
 		if (advancingRef.current || endedRef.current || finishingRef.current)
@@ -1015,17 +1054,33 @@ const GameScreen = ({ route, navigation }) => {
 			// "almost" (similarity >= 0.7) counts as correct
 			const isClose = correct || similarity >= 0.7;
 
+			const isMobile = Platform.OS === "ios" || Platform.OS === "android";
+
 			if (correct) {
 				setAnswerResult("correct");
-				sounds.correct();
+				if (gameMode === "write" && isMobile) {
+					playCachedSound("correct").catch(() => {});
+				} else {
+					sounds.correct();
+				}
 				setCorrectCount((prev) => prev + 1);
 			} else if (similarity >= 0.7) {
 				setAnswerResult("almost");
-				sounds.correct();
+				if (gameMode === "write" && isMobile) {
+					playCachedSound("correct").catch(() => {});
+				} else {
+					sounds.correct();
+				}
 				setCorrectCount((prev) => prev + 1);
 			} else {
 				setAnswerResult("wrong");
-				sounds.incorrect();
+				if (gameMode !== "match") {
+					if (gameMode === "write" && isMobile) {
+						playCachedSound("incorrect").catch(() => {});
+					} else {
+						sounds.incorrect();
+					}
+				}
 				setWrongCount((prev) => prev + 1);
 				if (challengeType === "survival") {
 					lives.loseLife();
@@ -1033,6 +1088,9 @@ const GameScreen = ({ route, navigation }) => {
 			}
 
 			await gamesAPI.updateCardStats(currentCard.id, isClose);
+			const writeAdvanceDelay = isClose
+				? WRITE_CORRECT_DELAY_MS
+				: WRITE_WRONG_DELAY_MS;
 
 			// Auto advance after delay
 			setTimeout(() => {
@@ -1057,7 +1115,7 @@ const GameScreen = ({ route, navigation }) => {
 				} else {
 					nextCard();
 				}
-			}, 1500);
+			}, writeAdvanceDelay);
 		} catch (error) {
 			console.error("Error validating answer:", error);
 		}
@@ -1078,7 +1136,7 @@ const GameScreen = ({ route, navigation }) => {
 			sounds.correct();
 			setCorrectCount((prev) => prev + 1);
 		} else {
-			sounds.incorrect();
+			if (gameMode !== "match") sounds.incorrect();
 			setWrongCount((prev) => prev + 1);
 			if (challengeType === "survival") {
 				lives.loseLife();
@@ -1173,7 +1231,7 @@ const GameScreen = ({ route, navigation }) => {
 			} else {
 				// No match
 				setTimeout(() => {
-					sounds.incorrect();
+					if (gameMode !== "match") sounds.incorrect();
 					setWrongCount((prev) => prev + 1);
 					setFlippedIndices([]);
 					setIsCheckingMatch(false);
@@ -1497,61 +1555,76 @@ const GameScreen = ({ route, navigation }) => {
 						{t("challenge_type") || "Challenge Type"}
 					</ThemedText>
 					<View style={styles.challengeTypesRow}>
-						{CHALLENGE_TYPES.map((challenge) => {
+						{CHALLENGE_TYPES.map((challenge, index) => {
 							const isSelected = selectedChallengeType === challenge.id;
 							const isDisabled =
 								selectedMode === "match" && challenge.id === "survival";
 
 							return (
-								<Pressable
+								<Animated.View
 									key={challenge.id}
-									onPress={() =>
-										!isDisabled && setSelectedChallengeType(challenge.id)
-									}
-									disabled={isDisabled}
-									style={({ pressed }) => [
-										styles.challengeCard,
-										{
-											backgroundColor: isSelected
-												? `${challenge.color}15`
-												: theme.background.card,
-											borderColor: isSelected
-												? challenge.color
-												: theme.border.main,
-											borderWidth: isSelected ? 2 : 1,
-											opacity: isDisabled ? 0.4 : pressed ? 0.8 : 1,
-										},
-									]}
+									style={{
+										opacity: challengeCardsAnim[index],
+										transform: [
+											{
+												translateY: challengeCardsAnim[index].interpolate({
+													inputRange: [0, 1],
+													outputRange: [28, 0],
+												}),
+											},
+										],
+										width: "33%",
+									}}
 								>
-									<View
-										style={[
-											styles.challengeIconContainer,
+									<Pressable
+										onPress={() =>
+											!isDisabled && setSelectedChallengeType(challenge.id)
+										}
+										disabled={isDisabled}
+										style={({ pressed }) => [
+											styles.challengeCard,
 											{
 												backgroundColor: isSelected
+													? `${challenge.color}15`
+													: theme.background.card,
+												borderColor: isSelected
 													? challenge.color
-													: `${challenge.color}20`,
+													: theme.border.main,
+												borderWidth: isSelected ? 2 : 1,
+												opacity: isDisabled ? 0.4 : pressed ? 0.8 : 1,
 											},
 										]}
 									>
-										<MaterialCommunityIcons
-											name={challenge.icon}
-											size={20}
-											color={isSelected ? "#fff" : challenge.color}
-										/>
-									</View>
-									<ThemedText
-										style={[
-											styles.challengeLabel,
-											{
-												color: isSelected
-													? challenge.color
-													: theme.text.primary,
-											},
-										]}
-									>
-										{t(challenge.labelKey) || challenge.id}
-									</ThemedText>
-								</Pressable>
+										<View
+											style={[
+												styles.challengeIconContainer,
+												{
+													backgroundColor: isSelected
+														? challenge.color
+														: `${challenge.color}20`,
+												},
+											]}
+										>
+											<MaterialCommunityIcons
+												name={challenge.icon}
+												size={20}
+												color={isSelected ? "#fff" : challenge.color}
+											/>
+										</View>
+										<ThemedText
+											style={[
+												styles.challengeLabel,
+												{
+													color: isSelected
+														? challenge.color
+														: theme.text.primary,
+												},
+											]}
+										>
+											{t(challenge.labelKey) || challenge.id}
+										</ThemedText>
+									</Pressable>
+								</Animated.View>
 							);
 						})}
 					</View>
@@ -1728,7 +1801,8 @@ const GameScreen = ({ route, navigation }) => {
 								},
 							]}
 						>
-							<View style={styles.settingInfo}>
+							{/* Top row: icon + title */}
+							<View style={styles.settingTopRow}>
 								<View
 									style={[
 										styles.settingIconContainer,
@@ -1745,76 +1819,84 @@ const GameScreen = ({ route, navigation }) => {
 									<ThemedText style={styles.settingTitle}>
 										{t("card_direction")}
 									</ThemedText>
+								</View>
+							</View>
+							{/* Bottom row: description + controls */}
+							<View style={styles.settingBottomRow}>
+								<View style={styles.settingDescWrap}>
 									<ThemedText color="secondary" style={styles.settingDesc}>
 										{t("card_direction_desc")}
 									</ThemedText>
 								</View>
-							</View>
-							<View style={styles.toggleGroup}>
-								<Pressable
-									onPress={() => setCardDirection("normal")}
-									style={[
-										styles.toggleButton,
-										styles.toggleButtonLeft,
-										cardDirection === "normal" && styles.toggleButtonActive,
-										{
-											borderColor:
-												cardDirection === "normal"
-													? "#06b6d4"
-													: theme.border.main,
-											backgroundColor:
-												cardDirection === "normal"
-													? "#06b6d420"
-													: "transparent",
-										},
-									]}
-								>
-									<Text
-										style={[
-											styles.toggleText,
-											{
-												color:
-													cardDirection === "normal"
-														? "#06b6d4"
-														: theme.text.secondary,
-											},
-										]}
-									>
-										{t("direction_normal")}
-									</Text>
-								</Pressable>
-								<Pressable
-									onPress={() => setCardDirection("reverse")}
-									style={[
-										styles.toggleButton,
-										styles.toggleButtonRight,
-										cardDirection === "reverse" && styles.toggleButtonActive,
-										{
-											borderColor:
-												cardDirection === "reverse"
-													? "#06b6d4"
-													: theme.border.main,
-											backgroundColor:
-												cardDirection === "reverse"
-													? "#06b6d420"
-													: "transparent",
-										},
-									]}
-								>
-									<Text
-										style={[
-											styles.toggleText,
-											{
-												color:
-													cardDirection === "reverse"
-														? "#06b6d4"
-														: theme.text.secondary,
-											},
-										]}
-									>
-										{t("direction_reverse")}
-									</Text>
-								</Pressable>
+								<View style={styles.settingControlWrap}>
+									<View style={styles.toggleGroup}>
+										<Pressable
+											onPress={() => setCardDirection("normal")}
+											style={[
+												styles.toggleButton,
+												styles.toggleButtonLeft,
+												cardDirection === "normal" && styles.toggleButtonActive,
+												{
+													borderColor:
+														cardDirection === "normal"
+															? "#06b6d4"
+															: theme.border.main,
+													backgroundColor:
+														cardDirection === "normal"
+															? "#06b6d420"
+															: "transparent",
+												},
+											]}
+										>
+											<Text
+												style={[
+													styles.toggleText,
+													{
+														color:
+															cardDirection === "normal"
+																? "#06b6d4"
+																: theme.text.secondary,
+													},
+												]}
+											>
+												{t("direction_normal")}
+											</Text>
+										</Pressable>
+										<Pressable
+											onPress={() => setCardDirection("reverse")}
+											style={[
+												styles.toggleButton,
+												styles.toggleButtonRight,
+												cardDirection === "reverse" &&
+													styles.toggleButtonActive,
+												{
+													borderColor:
+														cardDirection === "reverse"
+															? "#06b6d4"
+															: theme.border.main,
+													backgroundColor:
+														cardDirection === "reverse"
+															? "#06b6d420"
+															: "transparent",
+												},
+											]}
+										>
+											<Text
+												style={[
+													styles.toggleText,
+													{
+														color:
+															cardDirection === "reverse"
+																? "#06b6d4"
+																: theme.text.secondary,
+													},
+												]}
+											>
+												{t("direction_reverse")}
+											</Text>
+										</Pressable>
+									</View>
+								</View>
 							</View>
 						</View>
 					)}
@@ -1830,7 +1912,8 @@ const GameScreen = ({ route, navigation }) => {
 								},
 							]}
 						>
-							<View style={styles.settingInfo}>
+							{/* Top row: icon + title */}
+							<View style={styles.settingTopRow}>
 								<View
 									style={[
 										styles.settingIconContainer,
@@ -1847,31 +1930,38 @@ const GameScreen = ({ route, navigation }) => {
 									<ThemedText style={styles.settingTitle}>
 										{t("card_count")}
 									</ThemedText>
+								</View>
+							</View>
+							{/* Bottom row: description + slider */}
+							<View style={styles.settingBottomRow}>
+								<View style={styles.settingDescWrap}>
 									<ThemedText color="secondary" style={styles.settingDesc}>
 										{t("card_count_desc")}
 									</ThemedText>
 								</View>
-							</View>
-							<View style={styles.countSliderWrap}>
-								<Slider
-									style={styles.countSlider}
-									value={displaySelectedCards || 1}
-									onValueChange={(value) =>
-										setStandardCardCount(
-											Array.isArray(value) ? value[0] : value,
-										)
-									}
-									minimumValue={1}
-									maximumValue={maxSelectableCards}
-									step={1}
-									disabled={isCardCountDisabled}
-									minimumTrackTintColor="#3b82f6"
-									maximumTrackTintColor={theme.border.main}
-									thumbTintColor="#3b82f6"
-								/>
-								<ThemedText color="secondary" style={styles.countMetaText}>
-									{`${displaySelectedCards} / ${displayMaxCards}`}
-								</ThemedText>
+								<View style={styles.settingControlWrap}>
+									<View style={styles.countSliderWrap}>
+										<Slider
+											style={styles.countSlider}
+											value={displaySelectedCards || 1}
+											onValueChange={(value) =>
+												setStandardCardCount(
+													Array.isArray(value) ? value[0] : value,
+												)
+											}
+											minimumValue={1}
+											maximumValue={maxSelectableCards}
+											step={1}
+											disabled={isCardCountDisabled}
+											minimumTrackTintColor="#3b82f6"
+											maximumTrackTintColor={theme.border.main}
+											thumbTintColor="#3b82f6"
+										/>
+										<ThemedText color="secondary" style={styles.countMetaText}>
+											{`${displaySelectedCards} / ${displayMaxCards}`}
+										</ThemedText>
+									</View>
+								</View>
 							</View>
 						</View>
 					)}
@@ -1886,7 +1976,8 @@ const GameScreen = ({ route, navigation }) => {
 							},
 						]}
 					>
-						<View style={styles.settingInfo}>
+						{/* Top row: icon + title */}
+						<View style={styles.settingTopRow}>
 							<View
 								style={[
 									styles.settingIconContainer,
@@ -1899,17 +1990,24 @@ const GameScreen = ({ route, navigation }) => {
 								<ThemedText style={styles.settingTitle}>
 									{t("hard_mode")}
 								</ThemedText>
+							</View>
+						</View>
+						{/* Bottom row: description + switch */}
+						<View style={styles.settingBottomRow}>
+							<View style={styles.settingDescWrap}>
 								<ThemedText color="secondary" style={styles.settingDesc}>
 									{t("hard_mode_desc")}
 								</ThemedText>
 							</View>
+							<View style={styles.settingControlWrap}>
+								<Switch
+									value={hardModeEnabled}
+									onValueChange={setHardModeEnabled}
+									trackColor={{ false: theme.border.main, true: "#f9731680" }}
+									thumbColor={hardModeEnabled ? "#f97316" : "#f4f3f4"}
+								/>
+							</View>
 						</View>
-						<Switch
-							value={hardModeEnabled}
-							onValueChange={setHardModeEnabled}
-							trackColor={{ false: theme.border.main, true: "#f9731680" }}
-							thumbColor={hardModeEnabled ? "#f97316" : "#f4f3f4"}
-						/>
 					</View>
 				</Animated.View>
 
@@ -2260,8 +2358,8 @@ const GameScreen = ({ route, navigation }) => {
 			style={styles.writeModeScroll}
 			contentContainerStyle={styles.writeModeContent}
 			showsVerticalScrollIndicator={false}
-			keyboardShouldPersistTaps="handled"
-			keyboardDismissMode="on-drag"
+			keyboardShouldPersistTaps="always"
+			keyboardDismissMode="none"
 			nestedScrollEnabled
 		>
 			<View style={styles.writeMode}>
@@ -2272,6 +2370,7 @@ const GameScreen = ({ route, navigation }) => {
 				</Card>
 
 				<TextInput
+					ref={writeInputRef}
 					style={[
 						styles.writeInput,
 						{
@@ -2294,6 +2393,8 @@ const GameScreen = ({ route, navigation }) => {
 					value={userAnswer}
 					onChangeText={setUserAnswer}
 					editable={!answerResult}
+					autoFocus
+					blurOnSubmit={false}
 					onSubmitEditing={handleWriteSubmit}
 				/>
 
@@ -3169,12 +3270,34 @@ const styles = StyleSheet.create({
 		gap: spacing.md,
 	},
 	settingCard: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "space-between",
+		flexDirection: "column",
+		alignItems: "stretch",
+		justifyContent: "flex-start",
 		padding: spacing.md,
 		borderRadius: borderRadius.lg,
 		borderWidth: 1,
+	},
+	settingTopRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: spacing.md,
+		marginBottom: spacing.xs,
+	},
+	settingBottomRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		gap: spacing.md,
+		marginTop: spacing.xs,
+	},
+	settingDescWrap: {
+		width: "50%",
+	},
+	settingControlWrap: {
+		width: "50%",
+		alignItems: "center",
+		justifyContent: "center",
+		paddingRight: spacing.md,
 	},
 	settingInfo: {
 		flexDirection: "row",
@@ -3202,12 +3325,12 @@ const styles = StyleSheet.create({
 	},
 	toggleGroup: {
 		flexDirection: "row",
-		width: 150,
+		width: 120,
 	},
 	toggleButton: {
 		flex: 1,
-		paddingVertical: spacing.sm,
-		paddingHorizontal: spacing.sm,
+		paddingVertical: spacing.xs,
+		paddingHorizontal: spacing.xs,
 		borderWidth: 1,
 		alignItems: "center",
 		justifyContent: "center",
@@ -3223,7 +3346,7 @@ const styles = StyleSheet.create({
 	},
 	toggleButtonActive: {},
 	toggleText: {
-		fontSize: 12,
+		fontSize: 11,
 		fontWeight: "500",
 	},
 	countSliderWrap: {

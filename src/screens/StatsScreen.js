@@ -580,10 +580,10 @@ const StatsScreen = () => {
 		}, []),
 	);
 
-	// Refetch when filters change
+	// Refetch when filters change (only when deck or date changes)
 	useEffect(() => {
 		fetchData();
-	}, [selectedDeck, dateRange, sortBy, sortOrder]);
+	}, [selectedDeck, dateRange]);
 
 	const animationsTriggered = useRef(false);
 
@@ -631,12 +631,18 @@ const StatsScreen = () => {
 		const startStr = formatDateForAPI(dateRange.start);
 		const endStr = formatDateForAPI(dateRange.end);
 
+		// Normalize selectedDeck to a primitive ID/value for API calls
+		const deckParam =
+			selectedDeck && typeof selectedDeck === "object"
+				? (selectedDeck.id ?? selectedDeck.value ?? selectedDeck)
+				: selectedDeck;
+
 		setLoading(true);
 		try {
 			// ── Priority fetch: stat numbers (fast) ────────────────────────────
 			// Fetch filtered stats first so StatCard values populate immediately.
 			const statsRes = await statsAPI.getFilteredStats(
-				selectedDeck,
+				deckParam,
 				startStr,
 				endStr,
 			);
@@ -648,8 +654,8 @@ const StatsScreen = () => {
 
 			// ── Secondary fetch: chart + cards table (heavier) ─────────────────
 			const [chartRes, cardsRes] = await Promise.all([
-				statsAPI.getChartData(selectedDeck, startStr, endStr),
-				statsAPI.getCardsTable(selectedDeck, sortBy, sortOrder),
+				statsAPI.getChartData(deckParam, startStr, endStr),
+				statsAPI.getCardsTable(deckParam),
 			]);
 			setChartData(chartRes.data || { data: [], grouping: "daily" });
 			setCardsTable(cardsRes.data?.cards || []);
@@ -1316,7 +1322,35 @@ const StatsScreen = () => {
 	// Use mock data for locked users so they can preview what they'd get
 	const effectiveStats = isLocked ? MOCK_FILTERED_STATS : filteredStats;
 	const effectiveChartData = isLocked ? MOCK_CHART_DATA : chartData;
-	const effectiveCardsTable = isLocked ? MOCK_CARDS_TABLE : cardsTable;
+
+	// Prepare cards table and apply client-side sorting so sorting doesn't trigger network requests
+	const unsortedCards = isLocked ? MOCK_CARDS_TABLE : cardsTable;
+	const sortedCardsTable = useMemo(() => {
+		const list = Array.isArray(unsortedCards) ? [...unsortedCards] : [];
+		const key = sortBy;
+		const dir = sortOrder === "asc" ? 1 : -1;
+
+		list.sort((a, b) => {
+			const va = a?.[key];
+			const vb = b?.[key];
+
+			if (va == null && vb == null) return 0;
+			if (va == null) return 1 * dir;
+			if (vb == null) return -1 * dir;
+
+			if (typeof va === "number" && typeof vb === "number") {
+				return (va - vb) * dir;
+			}
+
+			const sa = String(va).toLowerCase();
+			const sb = String(vb).toLowerCase();
+			return sa.localeCompare(sb) * dir;
+		});
+
+		return list;
+	}, [unsortedCards, sortBy, sortOrder]);
+
+	const effectiveCardsTable = sortedCardsTable;
 
 	// ---------------------------------------------------------------------------
 	// Fill ALL dates in the selected range so x-axis has no gaps (matches web)

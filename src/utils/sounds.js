@@ -124,3 +124,37 @@ const sounds = {
 };
 
 export default sounds;
+
+// Play from cached sound for lower latency. If not cached yet, create and cache it.
+export const playCachedSound = async (soundName) => {
+	try {
+		const enabled = await isSoundEnabled();
+		if (!enabled) return;
+
+		const file = SOUND_FILES[soundName];
+		if (!file) return;
+
+		let s = soundCache[soundName];
+		if (!s) {
+			const res = await Audio.Sound.createAsync(file);
+			s = res.sound;
+			soundCache[soundName] = s;
+		}
+
+		// Try replayAsync for minimal latency, otherwise reset position and play
+		if (s.replayAsync) {
+			s.replayAsync().catch(() => {});
+		} else {
+			try {
+				await s.setPositionAsync(0);
+				await s.playAsync();
+			} catch (e) {
+				// fallback: create one-shot
+				const { sound } = await Audio.Sound.createAsync(file);
+				sound.playAsync().catch(() => {});
+			}
+		}
+	} catch (error) {
+		console.log(`Error playing cached sound ${soundName}:`, error);
+	}
+};

@@ -102,7 +102,7 @@ const MainTabs = ({ onLogout }) => {
 		borderTopWidth: 1,
 		height: 55 + insets.bottom,
 		paddingBottom: Math.max(insets.bottom, 8),
-		paddingTop: 6,
+		paddingTop: 0,
 	};
 
 	return (
@@ -120,8 +120,8 @@ const MainTabs = ({ onLogout }) => {
 					paddingBottom: 0,
 				},
 				tabBarIconStyle: {
-					marginTop: 1,
-					marginBottom: 1,
+					marginTop: 4,
+					marginBottom: 0,
 				},
 			}}
 		>

@@ -446,7 +446,7 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 								resizeMode="contain"
 							/>
 							<ThemedText variant="h3" style={styles.aboutAppName}>
-								MemoDeck v1.0.15
+								MemoDeck v1.0.18
 							</ThemedText>
 							{/* <ThemedText color="secondary" style={styles.aboutVersion}>
 								{t("version")} 1.0.0

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useMemo, useState } from "react";
+import { useRef, useEffect, useMemo, useState } from "react";
 import {
 	View,
 	Text,
@@ -11,9 +11,10 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useTheme } from "../../context/ThemeContext";
 import { useI18n } from "../../context/I18nContext";
 import { borderRadius, spacing } from "../../styles/theme";
+import useTTS from "../../hooks/useTTS";
 
-const FRONT_ACCENT = "#8b5cf6"; // purple
-const BACK_ACCENT = "#22c55e"; // green
+const FRONT_ACCENT = "#8b5cf6";
+const BACK_ACCENT = "#22c55e";
 
 const FlipCard = ({
 	frontText,
@@ -26,9 +27,10 @@ const FlipCard = ({
 }) => {
 	const { theme, shadows } = useTheme();
 	const { t } = useI18n();
+	const { isSpeaking, speak, stop } = useTTS();
+	const { isSpeaking: isSpeakingBack, speak: speakBack, stop: stopBack } = useTTS();
 	const flipAnim = useRef(new Animated.Value(0)).current;
 
-	// Refs for auto-scrolling long content
 	const frontScrollRef = useRef(null);
 	const backScrollRef = useRef(null);
 	const frontAutoScrollTimer = useRef(null);
@@ -53,15 +55,19 @@ const FlipCard = ({
 	const isFrontVeryLong = (frontText || "").trim().length > 100;
 	const isBackVeryLong = (backText || "").trim().length > 100;
 
-	// Reset animation immediately when card changes (cardKey changes)
 	useEffect(() => {
+		// Stop speech when card changes
+		stop();
+		stopBack();
 		flipAnim.setValue(0);
-		// Reset scroll positions when card changes
 		frontScrollRef.current?.scrollTo?.({ y: 0, animated: false });
 		backScrollRef.current?.scrollTo?.({ y: 0, animated: false });
 	}, [cardKey]);
 
 	useEffect(() => {
+		// Stop any ongoing speech when card flips
+		stop();
+		stopBack();
 		Animated.timing(flipAnim, {
 			toValue: isFlipped ? 1 : 0,
 			duration: 400,
@@ -69,121 +75,59 @@ const FlipCard = ({
 		}).start();
 	}, [isFlipped]);
 
-	// Stop any running auto-scroll timers
 	const stopAutoScroll = () => {
-		if (frontAutoScrollTimer.current) {
-			clearInterval(frontAutoScrollTimer.current);
-			frontAutoScrollTimer.current = null;
-		}
-		if (backAutoScrollTimer.current) {
-			clearInterval(backAutoScrollTimer.current);
-			backAutoScrollTimer.current = null;
-		}
-		if (frontResetTimeout.current) {
-			clearTimeout(frontResetTimeout.current);
-			frontResetTimeout.current = null;
-		}
-		if (backResetTimeout.current) {
-			clearTimeout(backResetTimeout.current);
-			backResetTimeout.current = null;
-		}
+		if (frontAutoScrollTimer.current) { clearInterval(frontAutoScrollTimer.current); frontAutoScrollTimer.current = null; }
+		if (backAutoScrollTimer.current) { clearInterval(backAutoScrollTimer.current); backAutoScrollTimer.current = null; }
+		if (frontResetTimeout.current) { clearTimeout(frontResetTimeout.current); frontResetTimeout.current = null; }
+		if (backResetTimeout.current) { clearTimeout(backResetTimeout.current); backResetTimeout.current = null; }
 	};
 
-	// Auto-scroll the visible side if content is long.
-	// Behavior: slowly scroll down; when reaching bottom, reset to top and repeat.
 	useEffect(() => {
 		stopAutoScroll();
-
 		const safeScrollTo = (ref, y) => {
-			// Ref can become null during unmount / flip transitions; guard to avoid crashes.
 			const node = ref.current;
 			if (!node || typeof node.scrollTo !== "function") return false;
 			node.scrollTo({ y, animated: false });
 			return true;
 		};
-
 		const start = ({ ref, viewportH, contentH, timerRef, resetTimeoutRef }) => {
 			if (!(viewportH > 0 && contentH > viewportH + 8)) return;
-
 			let y = 0;
 			const maxY = Math.max(0, contentH - viewportH);
-			const step = 1.2; // px per tick
-			const tickMs = 16; // ~60fps
+			const step = 1.2;
+			const tickMs = 16;
 			const pauseAtEndsMs = 600;
 			let pausedUntil = 0;
-
 			timerRef.current = setInterval(() => {
 				const now = Date.now();
 				if (now < pausedUntil) return;
-
 				y += step;
 				if (y >= maxY) {
 					y = maxY;
 					if (!safeScrollTo(ref, y)) return;
 					pausedUntil = now + pauseAtEndsMs;
-					// Reset back to top after a short pause at bottom
-					resetTimeoutRef.current = setTimeout(() => {
-						safeScrollTo(ref, 0);
-					}, pauseAtEndsMs);
+					resetTimeoutRef.current = setTimeout(() => { safeScrollTo(ref, 0); }, pauseAtEndsMs);
 					y = 0;
 					pausedUntil = now + pauseAtEndsMs * 2;
 					return;
 				}
-
 				safeScrollTo(ref, y);
 			}, tickMs);
 		};
-
 		if (!disabled) {
 			if (!isFlipped) {
-				start({
-					ref: frontScrollRef,
-					viewportH: frontViewportH,
-					contentH: frontContentH,
-					timerRef: frontAutoScrollTimer,
-					resetTimeoutRef: frontResetTimeout,
-				});
+				start({ ref: frontScrollRef, viewportH: frontViewportH, contentH: frontContentH, timerRef: frontAutoScrollTimer, resetTimeoutRef: frontResetTimeout });
 			} else {
-				start({
-					ref: backScrollRef,
-					viewportH: backViewportH,
-					contentH: backContentH,
-					timerRef: backAutoScrollTimer,
-					resetTimeoutRef: backResetTimeout,
-				});
+				start({ ref: backScrollRef, viewportH: backViewportH, contentH: backContentH, timerRef: backAutoScrollTimer, resetTimeoutRef: backResetTimeout });
 			}
 		}
-
 		return () => stopAutoScroll();
-	}, [
-		isFlipped,
-		disabled,
-		frontViewportH,
-		frontContentH,
-		backViewportH,
-		backContentH,
-		cardKey,
-	]);
+	}, [isFlipped, disabled, frontViewportH, frontContentH, backViewportH, backContentH, cardKey]);
 
-	const frontRotate = flipAnim.interpolate({
-		inputRange: [0, 1],
-		outputRange: ["0deg", "180deg"],
-	});
-
-	const backRotate = flipAnim.interpolate({
-		inputRange: [0, 1],
-		outputRange: ["180deg", "360deg"],
-	});
-
-	const frontOpacity = flipAnim.interpolate({
-		inputRange: [0, 0.49, 0.5, 1],
-		outputRange: [1, 1, 0, 0],
-	});
-
-	const backOpacity = flipAnim.interpolate({
-		inputRange: [0, 0.49, 0.5, 1],
-		outputRange: [0, 0, 1, 1],
-	});
+	const frontRotate = flipAnim.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "180deg"] });
+	const backRotate = flipAnim.interpolate({ inputRange: [0, 1], outputRange: ["180deg", "360deg"] });
+	const frontOpacity = flipAnim.interpolate({ inputRange: [0, 0.49, 0.5, 1], outputRange: [1, 1, 0, 0] });
+	const backOpacity = flipAnim.interpolate({ inputRange: [0, 0.49, 0.5, 1], outputRange: [0, 0, 1, 1] });
 
 	return (
 		<Pressable
@@ -191,77 +135,61 @@ const FlipCard = ({
 			style={[styles.container, shadows.large, style]}
 		>
 			{/* Front Side */}
-			<Animated.View
-				style={[
+				<Animated.View
+					pointerEvents={isFlipped ? "none" : "auto"}
+					style={[
 					styles.card,
-					{
-						backgroundColor: theme.background.elevated,
-						borderColor: theme.border.main,
-					},
-					{
-						transform: [{ perspective: 1000 }, { rotateY: frontRotate }],
-						opacity: frontOpacity,
-						backfaceVisibility: "hidden",
-					},
+					{ backgroundColor: theme.background.elevated, borderColor: theme.border.main },
+					{ transform: [{ perspective: 1000 }, { rotateY: frontRotate }], opacity: frontOpacity, backfaceVisibility: "hidden" },
 				]}
 			>
-				{/* Purple accent bar */}
 				<View style={[styles.accentBar, { backgroundColor: FRONT_ACCENT }]} />
-				{/* Content */}
+				{/* TTS button inside front face — flips with card */}
+				<Pressable
+					onPress={(e) => { e.stopPropagation?.(); if (isFlipped) return; isSpeaking ? stop() : speak(frontText); }}
+					hitSlop={8}
+					style={styles.ttsButton}
+				>
+					<MaterialCommunityIcons name={isSpeaking ? "stop" : "volume-high"} size={24} color="#3b82f6" />
+				</Pressable>
 				<ScrollView
 					ref={frontScrollRef}
-					style={[styles.contentScroll]}
+					style={styles.contentScroll}
 					contentContainerStyle={styles.contentScrollContent}
 					showsVerticalScrollIndicator={false}
 					scrollEnabled={autoScrollEnabledFront}
 					onLayout={(e) => setFrontViewportH(e.nativeEvent.layout.height)}
 					onContentSizeChange={(_w, h) => setFrontContentH(h)}
 				>
-					<Text
-						style={[
-							styles.text,
-							styles.textBreathingRoom,
-							isFrontVeryLong && styles.textSmall,
-							{ color: theme.text.primary },
-						]}
-					>
+					<Text style={[styles.text, styles.textBreathingRoom, isFrontVeryLong && styles.textSmall, { color: theme.text.primary }]}>
 						{frontText}
 					</Text>
 				</ScrollView>
-				{/* Tap hint */}
 				<View style={styles.hintRow}>
-					<MaterialCommunityIcons
-						name="gesture-tap"
-						size={15}
-						color={theme.text.disabled}
-						style={styles.hintIcon}
-					/>
-					<Text style={[styles.hint, { color: theme.text.disabled }]}>
-						{t("tap_to_flip")}
-					</Text>
+					<MaterialCommunityIcons name="gesture-tap" size={15} color={theme.text.disabled} style={styles.hintIcon} />
+					<Text style={[styles.hint, { color: theme.text.disabled }]}>{t("tap_to_flip")}</Text>
 				</View>
 			</Animated.View>
 
 			{/* Back Side */}
 			<Animated.View
+				pointerEvents={isFlipped ? "auto" : "none"}
 				style={[
 					styles.card,
-					{
-						backgroundColor: theme.background.elevated,
-						borderColor: theme.border.main,
-					},
-					{
-						transform: [{ perspective: 1000 }, { rotateY: backRotate }],
-						opacity: backOpacity,
-						backfaceVisibility: "hidden",
-					},
+					{ backgroundColor: theme.background.elevated, borderColor: theme.border.main },
+					{ transform: [{ perspective: 1000 }, { rotateY: backRotate }], opacity: backOpacity, backfaceVisibility: "hidden" },
 				]}
 			>
-				{/* Green accent bar */}
 				<View style={[styles.accentBar, { backgroundColor: BACK_ACCENT }]} />
-				{/* BACK label (kept at top, never overlaps content) */}
 				<Text style={styles.backLabel}>{t("flip_back_label")}</Text>
-				{/* Content */}
+				{/* TTS button inside back face — mirrored so it appears top-right when flipped */}
+				<Pressable
+					onPress={(e) => { e.stopPropagation?.(); if (!isFlipped) return; isSpeakingBack ? stopBack() : speakBack(backText); }}
+					hitSlop={8}
+					style={styles.ttsButtonMirrored}
+				>
+					<MaterialCommunityIcons name={isSpeakingBack ? "stop" : "volume-high"} size={24} color="#3b82f6" />
+				</Pressable>
 				<ScrollView
 					ref={backScrollRef}
 					style={styles.contentScroll}
@@ -271,28 +199,13 @@ const FlipCard = ({
 					onLayout={(e) => setBackViewportH(e.nativeEvent.layout.height)}
 					onContentSizeChange={(_w, h) => setBackContentH(h)}
 				>
-					<Text
-						style={[
-							styles.text,
-							styles.textBreathingRoom,
-							isBackVeryLong && styles.textSmall,
-							{ color: theme.text.primary },
-						]}
-					>
+					<Text style={[styles.text, styles.textBreathingRoom, isBackVeryLong && styles.textSmall, { color: theme.text.primary }]}>
 						{backText}
 					</Text>
 				</ScrollView>
-				{/* Tap hint */}
 				<View style={styles.hintRow}>
-					<MaterialCommunityIcons
-						name="gesture-tap"
-						size={15}
-						color={theme.text.disabled}
-						style={styles.hintIcon}
-					/>
-					<Text style={[styles.hint, { color: theme.text.disabled }]}>
-						{t("tap_to_flip_back")}
-					</Text>
+					<MaterialCommunityIcons name="gesture-tap" size={15} color={theme.text.disabled} style={styles.hintIcon} />
+					<Text style={[styles.hint, { color: theme.text.disabled }]}>{t("tap_to_flip_back")}</Text>
 				</View>
 			</Animated.View>
 		</Pressable>
@@ -334,16 +247,29 @@ const styles = StyleSheet.create({
 		color: BACK_ACCENT,
 		textTransform: "uppercase",
 	},
+	// Front face: top-right
+	ttsButton: {
+		position: "absolute",
+		top: spacing.md + 4,
+		right: spacing.md,
+		zIndex: 10,
+		padding: 4,
+	},
+	// Back face: top-left so it appears top-right after 180° mirror
+	ttsButtonMirrored: {
+		position: "absolute",
+		top: spacing.md + 4,
+		left: spacing.md,
+		zIndex: 10,
+		padding: 4,
+	},
 	contentScroll: {
 		width: "100%",
 		alignSelf: "stretch",
 		marginVertical: 45,
-		// Horizontal padding so text never hugs edges
 		paddingHorizontal: spacing.lg,
 	},
 	contentScrollContent: {
-		// Fill available height so short text can be centered, but still keep
-		// guaranteed top/bottom breathing room via padding.
 		flexGrow: 1,
 		justifyContent: "center",
 		alignItems: "center",
@@ -361,7 +287,6 @@ const styles = StyleSheet.create({
 		lineHeight: 28,
 	},
 	textBreathingRoom: {
-		// A bit of space so centered text doesn't feel cramped when wrapping
 		paddingVertical: spacing.sm,
 	},
 	hintRow: {

@@ -39,6 +39,7 @@ import sounds, {
 	preloadSounds,
 } from "../utils/sounds";
 import { spacing, borderRadius } from "../styles/theme";
+import useTTS from "../hooks/useTTS";
 
 // Mode colors matching web version
 const MODE_COLORS = {
@@ -111,6 +112,7 @@ const GameScreen = ({ route, navigation }) => {
 	const { showAchievements } = useAchievement();
 	const { planCode, hasAds } = usePlan();
 	const { showInterstitial, showVideoAd } = useAds();
+	const { isSpeaking: ttsSpeaking, speak: ttsSpeak, stop: ttsStop } = useTTS();
 
 	// Game state
 	const [gameState, setGameState] = useState("mode_select"); // 'mode_select' | 'playing' | 'summary'
@@ -427,6 +429,8 @@ const GameScreen = ({ route, navigation }) => {
 	const animateCardOut = (isCorrect) => {
 		if (advancingRef.current || endedRef.current || finishingRef.current)
 			return;
+		// Stop any ongoing TTS when answering
+		ttsStop();
 
 		// Lock immediately so double-taps are ignored during the animation
 		advancingRef.current = true;
@@ -2367,6 +2371,17 @@ const GameScreen = ({ route, navigation }) => {
 					<ThemedText style={styles.questionText}>
 						{getFrontText(currentCard)}
 					</ThemedText>
+					<Pressable
+						onPress={() => ttsSpeaking ? ttsStop() : ttsSpeak(getFrontText(currentCard))}
+						hitSlop={8}
+						style={styles.questionTtsBtn}
+					>
+						<MaterialCommunityIcons
+							name={ttsSpeaking ? "stop" : "volume-high"}
+							size={24}
+							color="#3b82f6"
+						/>
+					</Pressable>
 				</Card>
 
 				<TextInput
@@ -2519,6 +2534,17 @@ const GameScreen = ({ route, navigation }) => {
 					<ThemedText style={styles.questionText}>
 						{getFrontText(currentCard)}
 					</ThemedText>
+					<Pressable
+						onPress={() => ttsSpeaking ? ttsStop() : ttsSpeak(getFrontText(currentCard))}
+						hitSlop={8}
+						style={styles.questionTtsBtn}
+					>
+						<MaterialCommunityIcons
+							name={ttsSpeaking ? "stop" : "volume-high"}
+							size={24}
+							color="#3b82f6"
+						/>
+					</Pressable>
 				</Card>
 
 				<ScrollView
@@ -3608,10 +3634,18 @@ const styles = StyleSheet.create({
 		flexGrow: 1,
 		paddingBottom: spacing.lg,
 	},
+	questionTtsBtn: {
+		position: "absolute",
+		top: 8,
+		right: 8,
+		padding: 4,
+		zIndex: 10,
+	},
 	questionCard: {
 		padding: spacing.lg,
 		marginBottom: spacing.lg,
 		alignItems: "center",
+		position: "relative",
 	},
 	questionText: {
 		fontSize: 22,

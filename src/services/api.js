@@ -280,11 +280,9 @@ export const statsAPI = {
 		return api.get(`/stats/chart-data?${params.toString()}`);
 	},
 
-	getCardsTable: (deckId, sortBy = "times_played", sortOrder = "desc") => {
+	getCardsTable: (deckId) => {
 		const params = new URLSearchParams();
 		if (deckId && deckId !== "all") params.append("deckId", deckId);
-		params.append("sort", sortBy);
-		params.append("order", sortOrder);
 		return api.get(`/stats/cards-table?${params.toString()}`);
 	},
 };

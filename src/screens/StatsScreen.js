@@ -655,10 +655,19 @@ const StatsScreen = () => {
 			// ── Secondary fetch: chart + cards table (heavier) ─────────────────
 			const [chartRes, cardsRes] = await Promise.all([
 				statsAPI.getChartData(deckParam, startStr, endStr),
-				statsAPI.getCardsTable(deckParam),
+				statsAPI.getCardsTable(deckParam), // fetch by deck, sort is done client-side
 			]);
 			setChartData(chartRes.data || { data: [], grouping: "daily" });
-			setCardsTable(cardsRes.data?.cards || []);
+			const rawCards = cardsRes.data?.cards || [];
+			console.log(
+				"cards sample:",
+				rawCards.slice(0, 3).map((c) => ({
+					deck: c.deck_title,
+					acc: c.accuracy,
+					type: typeof c.accuracy,
+				})),
+			);
+			setCardsTable(rawCards);
 		} catch (error) {
 			console.error("Error fetching stats:", error);
 			setLoading(false);
@@ -1330,13 +1339,22 @@ const StatsScreen = () => {
 		const key = sortBy;
 		const dir = sortOrder === "asc" ? 1 : -1;
 
+		// Numeric fields — always compare as numbers to avoid string sort issues
+		// (backend may return these as strings)
+		const numericKeys = ["times_played", "correct", "wrong", "accuracy"];
+		const isNumeric = numericKeys.includes(key);
+
 		list.sort((a, b) => {
-			const va = a?.[key];
-			const vb = b?.[key];
+			let va = a?.[key];
+			let vb = b?.[key];
 
 			if (va == null && vb == null) return 0;
 			if (va == null) return 1 * dir;
 			if (vb == null) return -1 * dir;
+
+			if (isNumeric) {
+				return (Number(va) - Number(vb)) * dir;
+			}
 
 			if (typeof va === "number" && typeof vb === "number") {
 				return (va - vb) * dir;
@@ -2544,7 +2562,7 @@ const styles = StyleSheet.create({
 		maxHeight: "60%",
 		borderTopLeftRadius: borderRadius.xl,
 		borderTopRightRadius: borderRadius.xl,
-		paddingBottom: spacing.xl,
+		paddingBottom: spacing.xl * 2,
 	},
 	modalHeader: {
 		flexDirection: "row",

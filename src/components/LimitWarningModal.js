@@ -1,12 +1,12 @@
-import React, { useEffect, useRef } from "react";
-import { View, StyleSheet, Animated } from "react-native";
+import React from "react";
+import { View, Text, StyleSheet, Modal as RNModal, Pressable } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useI18n } from "../context/I18nContext";
 import { usePlan } from "../context/PlanContext";
 import { useTheme } from "../context/ThemeContext";
 import { borderRadius, spacing } from "../styles/theme";
-import { ThemedText, Modal, Button } from "./ui";
+import { Button } from "./ui";
 
 const LimitWarningModal = ({ visible, onClose, limitType = "general" }) => {
 	const { theme } = useTheme();
@@ -20,10 +20,6 @@ const LimitWarningModal = ({ visible, onClose, limitType = "general" }) => {
 		maxFlashcards,
 		deckOverage,
 		flashcardOverage,
-		canPlay,
-		canCreateDeck,
-		canCreateFlashcard,
-		isOverLimit,
 	} = usePlan();
 
 	const handleUpgrade = () => {
@@ -31,52 +27,36 @@ const LimitWarningModal = ({ visible, onClose, limitType = "general" }) => {
 		navigation.navigate("Settings", { screen: "Plans" });
 	};
 
-	// Determine the message and icon based on limit type
 	const getContent = () => {
 		switch (limitType) {
 			case "deck":
 				return {
-					icon: "folder-multiple",
 					title: t("deck_limit_reached_title") || "Deck Limit Reached",
-					message:
-						t("deck_limit_reached") ||
-						`You have reached your deck limit (${currentDecks}/${maxDecks}). Upgrade your plan to create more decks.`,
+					message: t("deck_limit_reached") || "You have reached the limit for your current plan. To continue, please upgrade your plan.",
 					showUsage: true,
 				};
 			case "flashcard":
 				return {
-					icon: "cards",
 					title: t("card_limit_reached_title") || "Flashcard Limit Reached",
-					message:
-						t("card_limit_reached") ||
-						`You have reached your flashcard limit (${currentFlashcards}/${maxFlashcards}). Upgrade your plan to create more flashcards.`,
+					message: t("card_limit_reached") || "You have reached the limit for your current plan. To continue, please upgrade your plan.",
 					showUsage: true,
 				};
 			case "game":
 				return {
-					icon: "gamepad-variant",
 					title: t("cannot_start_game") || "Cannot Start Game",
-					message:
-						t("over_limit_message") ||
-						"You have exceeded your plan limits. Please delete some content or upgrade your plan to continue playing.",
+					message: t("over_limit_message") || "You have exceeded your plan limits. Please delete some content or upgrade your plan to continue playing.",
 					showUsage: true,
 				};
 			case "stats":
 				return {
-					icon: "chart-bar",
 					title: t("stats_locked") || "Statistics Locked",
-					message:
-						t("stats_locked_message") ||
-						"Advanced statistics are only available for Pro and Premium users. Upgrade your plan to unlock detailed insights.",
+					message: t("stats_locked_message") || "Advanced statistics are only available for Pro and Premium users. Upgrade your plan to unlock detailed insights.",
 					showUsage: false,
 				};
 			default:
 				return {
-					icon: "alert-circle",
 					title: t("limit_reached") || "Limit Reached",
-					message:
-						t("limit_reached_message") ||
-						"You have reached your plan limits. Upgrade to continue.",
+					message: t("limit_reached_message") || "You have reached your plan limits. Upgrade to continue.",
 					showUsage: true,
 				};
 		}
@@ -84,258 +64,211 @@ const LimitWarningModal = ({ visible, onClose, limitType = "general" }) => {
 
 	const content = getContent();
 
-	// Animations
-	const iconScale = useRef(new Animated.Value(0.3)).current;
-	const contentOpacity = useRef(new Animated.Value(0)).current;
-	const contentTranslateY = useRef(new Animated.Value(15)).current;
-
-	useEffect(() => {
-		if (visible) {
-			iconScale.setValue(0.3);
-			contentOpacity.setValue(0);
-			contentTranslateY.setValue(15);
-			Animated.sequence([
-				Animated.spring(iconScale, {
-					toValue: 1,
-					tension: 50,
-					friction: 5,
-					useNativeDriver: true,
-				}),
-				Animated.parallel([
-					Animated.timing(contentOpacity, {
-						toValue: 1,
-						duration: 250,
-						useNativeDriver: true,
-					}),
-					Animated.spring(contentTranslateY, {
-						toValue: 0,
-						tension: 50,
-						friction: 8,
-						useNativeDriver: true,
-					}),
-				]),
-			]).start();
-		}
-	}, [visible]);
-
 	const getPlanBadgeColor = () => {
 		switch (planCode) {
-			case "pro":
-				return "#3b82f6";
-			case "premium":
-				return "#8b5cf6";
-			default:
-				return "#64748b";
+			case "pro": return "#3b82f6";
+			case "premium": return "#8b5cf6";
+			default: return "#64748b";
 		}
 	};
 
+	const badgeColor = getPlanBadgeColor();
+
 	return (
-		<Modal visible={visible} onClose={onClose} title={content.title}>
-			<View style={styles.container}>
-				{/* Icon */}
-				<Animated.View
-					style={[
-						styles.iconContainer,
-						{
-							backgroundColor: theme.warning.main + "20",
-							transform: [{ scale: iconScale }],
-						},
-					]}
-				>
-					<MaterialCommunityIcons
-						name={content.icon}
-						size={48}
-						color={theme.warning.main}
-					/>
-				</Animated.View>
+		<RNModal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
+			<Pressable style={styles.backdrop} onPress={onClose}>
+				<Pressable style={[styles.card, { backgroundColor: theme.background.elevated, borderColor: theme.border.main }]} onPress={() => {}}>
 
-				{/* Current Plan Badge */}
-				<View
-					style={[
-						styles.planBadge,
-						{ backgroundColor: getPlanBadgeColor() + "20" },
-					]}
-				>
-					<ThemedText
-						style={[styles.planBadgeText, { color: getPlanBadgeColor() }]}
-					>
-						{t("current_plan") || "Current Plan"}:{" "}
-						{planCode.charAt(0).toUpperCase() + planCode.slice(1)}
-					</ThemedText>
-				</View>
-
-				{/* Message */}
-				<Animated.View
-					style={{
-						opacity: contentOpacity,
-						transform: [{ translateY: contentTranslateY }],
-					}}
-				>
-					<ThemedText style={styles.message}>{content.message}</ThemedText>
-				</Animated.View>
-
-				{/* Usage Stats */}
-				{content.showUsage && (
-					<View
-						style={[
-							styles.usageContainer,
-							{ backgroundColor: theme.background.paper },
-						]}
-					>
-						{/* Deck Usage */}
-						{maxDecks !== null && maxDecks !== undefined && (
-							<View style={styles.usageRow}>
-								<View style={styles.usageLabelContainer}>
-									<MaterialCommunityIcons
-										name="folder"
-										size={18}
-										color={theme.text.secondary}
-									/>
-									<ThemedText color="secondary" style={styles.usageLabel}>
-										{t("decks") || "Decks"}
-									</ThemedText>
-								</View>
-								<View style={styles.usageValueContainer}>
-									<ThemedText
-										style={[
-											styles.usageValue,
-											deckOverage > 0 && { color: theme.error.main },
-										]}
-									>
-										{currentDecks}/{maxDecks}
-									</ThemedText>
-									{deckOverage > 0 && (
-										<ThemedText
-											style={[styles.overage, { color: theme.error.main }]}
-										>
-											(+{deckOverage})
-										</ThemedText>
-									)}
-								</View>
+					{/* Header */}
+					<View style={[styles.header, { borderBottomColor: theme.border.subtle }]}>
+						<View style={styles.headerLeft}>
+							<View style={styles.headerIcon}>
+								<MaterialCommunityIcons name="alert" size={20} color="#fff" />
 							</View>
-						)}
+							<Text style={[styles.headerTitle, { color: theme.text.primary }]}>{content.title}</Text>
+						</View>
+						<Pressable onPress={onClose} hitSlop={8}>
+							<MaterialCommunityIcons name="close" size={20} color={theme.text.secondary} />
+						</Pressable>
+					</View>
 
-						{/* Flashcard Usage */}
-						{maxFlashcards !== null && maxFlashcards !== undefined && (
-							<View style={styles.usageRow}>
-								<View style={styles.usageLabelContainer}>
-									<MaterialCommunityIcons
-										name="cards"
-										size={18}
-										color={theme.text.secondary}
-									/>
-									<ThemedText color="secondary" style={styles.usageLabel}>
-										{t("flashcards") || "Flashcards"}
-									</ThemedText>
-								</View>
-								<View style={styles.usageValueContainer}>
-									<ThemedText
-										style={[
-											styles.usageValue,
-											flashcardOverage > 0 && { color: theme.error.main },
-										]}
-									>
-										{currentFlashcards}/{maxFlashcards}
-									</ThemedText>
-									{flashcardOverage > 0 && (
-										<ThemedText
-											style={[styles.overage, { color: theme.error.main }]}
-										>
-											(+{flashcardOverage})
-										</ThemedText>
-									)}
-								</View>
+					{/* Body */}
+					<View style={styles.body}>
+						{/* Plan Badge */}
+						<View style={[styles.planBadge, { backgroundColor: badgeColor + "25" }]}>
+							<Text style={[styles.planBadgeText, { color: badgeColor }]}>
+								{t("current_plan") || "Current Plan"}: {planCode.charAt(0).toUpperCase() + planCode.slice(1)}
+							</Text>
+						</View>
+
+						{/* Message */}
+						<Text style={[styles.message, { color: theme.text.secondary }]}>{content.message}</Text>
+
+						{/* Usage Card */}
+						{content.showUsage && (
+							<View style={[styles.usageCard, { backgroundColor: theme.background.default ?? "#0f172a" }]}>
+								{maxDecks !== null && maxDecks !== undefined && (
+									<>
+										<View style={styles.usageRow}>
+											<View style={styles.usageLeft}>
+												<MaterialCommunityIcons
+													name="layers-triple"
+													size={18}
+													color={(deckOverage > 0 || currentDecks >= maxDecks) ? theme.error.main : "#3b82f6"}
+												/>
+												<Text style={[styles.usageLabel, (deckOverage > 0 || currentDecks >= maxDecks) && { color: theme.error.main, fontWeight: "700" }]}>
+													{t("deck_limit") || "Deck Limit"}
+												</Text>
+											</View>
+											<Text style={[styles.usageValue, (deckOverage > 0 || currentDecks >= maxDecks) && { color: theme.error.main }]}>
+												{currentDecks}/{maxDecks}
+											</Text>
+										</View>
+										{maxFlashcards !== null && maxFlashcards !== undefined && (
+											<View style={[styles.divider, { backgroundColor: theme.border.subtle }]} />
+										)}
+									</>
+								)}
+								{maxFlashcards !== null && maxFlashcards !== undefined && (
+									<View style={styles.usageRow}>
+										<View style={styles.usageLeft}>
+											<MaterialCommunityIcons
+												name="cards"
+												size={18}
+												color={(flashcardOverage > 0 || currentFlashcards >= maxFlashcards) ? theme.error.main : "#3b82f6"}
+											/>
+											<Text style={[styles.usageLabel, (flashcardOverage > 0 || currentFlashcards >= maxFlashcards) && { color: theme.error.main, fontWeight: "700" }]}>
+												{t("flashcard_limit") || "Flashcard Limit"}
+											</Text>
+										</View>
+										<Text style={[styles.usageValue, (flashcardOverage > 0 || currentFlashcards >= maxFlashcards) && { color: theme.error.main }]}>
+											{currentFlashcards}/{maxFlashcards}
+										</Text>
+									</View>
+								)}
 							</View>
 						)}
 					</View>
-				)}
 
-				{/* Upgrade Button */}
-				<Button
-					variant="primary"
-					onPress={handleUpgrade}
-					style={styles.upgradeButton}
-				>
-					{t("upgrade_plan") || "Upgrade Plan"}
-				</Button>
+					{/* Footer */}
+					<View style={[styles.footer, { borderTopColor: theme.border.subtle }]}>
+						<Button variant="ghost" onPress={onClose} style={styles.closeBtn}>
+							{t("close") || "Close"}
+						</Button>
+						<Button variant="primary" onPress={handleUpgrade} style={styles.upgradeBtn}>
+							{t("upgrade_plan") || "Upgrade Plan"}
+						</Button>
+					</View>
 
-				{/* Close Button */}
-				<Button variant="ghost" onPress={onClose} style={styles.closeButton}>
-					{t("close") || "Close"}
-				</Button>
-			</View>
-		</Modal>
+				</Pressable>
+			</Pressable>
+		</RNModal>
 	);
 };
 
 const styles = StyleSheet.create({
-	container: {
-		alignItems: "center",
-		paddingVertical: spacing.md,
-	},
-	iconContainer: {
-		width: 80,
-		height: 80,
-		borderRadius: 40,
+	backdrop: {
+		flex: 1,
+		backgroundColor: "rgba(0,0,0,0.6)",
 		justifyContent: "center",
 		alignItems: "center",
-		marginBottom: spacing.md,
+		paddingHorizontal: spacing.lg,
+	},
+	card: {
+		width: "100%",
+		borderRadius: borderRadius.xl,
+		borderWidth: 1,
+		overflow: "hidden",
+	},
+	header: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		paddingHorizontal: spacing.lg,
+		paddingVertical: spacing.md,
+		borderBottomWidth: 1,
+	},
+	headerLeft: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: spacing.sm,
+		flex: 1,
+	},
+	headerIcon: {
+		width: 36,
+		height: 36,
+		borderRadius: 10,
+		backgroundColor: "#6366f1",
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	headerTitle: {
+		fontSize: 17,
+		fontWeight: "700",
+		flex: 1,
+	},
+	body: {
+		padding: spacing.lg,
+		alignItems: "center",
+		gap: spacing.md,
 	},
 	planBadge: {
 		paddingHorizontal: spacing.md,
 		paddingVertical: spacing.xs,
 		borderRadius: borderRadius.full,
-		marginBottom: spacing.md,
 	},
 	planBadgeText: {
-		fontSize: 12,
+		fontSize: 13,
 		fontWeight: "600",
 	},
 	message: {
 		textAlign: "center",
-		marginBottom: spacing.lg,
+		fontSize: 15,
 		lineHeight: 22,
-		paddingHorizontal: spacing.sm,
 	},
-	usageContainer: {
+	usageCard: {
 		width: "100%",
-		padding: spacing.md,
 		borderRadius: borderRadius.lg,
-		marginBottom: spacing.lg,
+		overflow: "hidden",
 	},
 	usageRow: {
 		flexDirection: "row",
-		justifyContent: "space-between",
 		alignItems: "center",
-		paddingVertical: spacing.xs,
+		justifyContent: "space-between",
+		paddingHorizontal: spacing.md,
+		paddingVertical: spacing.sm + 3,
 	},
-	usageLabelContainer: {
+	usageLeft: {
 		flexDirection: "row",
 		alignItems: "center",
-		gap: spacing.xs,
+		gap: spacing.sm,
 	},
 	usageLabel: {
-		fontSize: 14,
-	},
-	usageValueContainer: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: spacing.xs,
+		fontSize: 15,
+		fontWeight: "600",
+		color: "#94a3b8",
 	},
 	usageValue: {
-		fontSize: 14,
-		fontWeight: "600",
+		fontSize: 15,
+		fontWeight: "700",
+		color: "#94a3b8",
 	},
-	overage: {
-		fontSize: 12,
-		fontWeight: "500",
+	divider: {
+		height: 1,
+		marginHorizontal: spacing.md,
 	},
-	upgradeButton: {
-		width: "100%",
-		marginBottom: spacing.sm,
+	footer: {
+		flexDirection: "row",
+		paddingHorizontal: spacing.lg,
+		paddingVertical: spacing.sm,
+		borderTopWidth: 1,
+		gap: spacing.sm,
 	},
-	closeButton: {
-		width: "100%",
+	closeBtn: {
+		flex: 0.55,
+	},
+	upgradeBtn: {
+		flex: 1,
 	},
 });
 

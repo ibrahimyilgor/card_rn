@@ -11,7 +11,14 @@ import {
 	Animated,
 	PanResponder,
 	Platform,
+	LayoutAnimation,
+	UIManager,
 } from "react-native";
+
+// Enable LayoutAnimation on Android
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+	UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 import { Slider } from "@miblanchard/react-native-slider";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -32,6 +39,7 @@ import {
 	ConfirmDialog,
 } from "../components/ui";
 import FlipCard from "../components/game/FlipCard";
+import AchievementBadge from "../components/AchievementBadge";
 import { useTimer, useLives } from "../hooks";
 import sounds, {
 	refreshSoundEnabled,
@@ -105,6 +113,99 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const WRITE_WRONG_DELAY_MS = 1200;
 const WRITE_CORRECT_DELAY_MS = WRITE_WRONG_DELAY_MS / 10;
 
+// ─── StatItem for summary ─────────────────────────────────────────────────────
+function SummaryStatItem({ value, label, color, iconName, theme }) {
+	return (
+		<View style={[{ alignItems: "center", padding: 8, borderRadius: 8, borderWidth: 1, minWidth: 70, flex: 1 }, { backgroundColor: `${color}15`, borderColor: `${color}30` }]}>
+			<View style={{ width: 32, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center", marginBottom: 4, backgroundColor: `${color}25` }}>
+				<MaterialCommunityIcons name={iconName} size={18} color={color} />
+			</View>
+			<Text style={{ fontSize: 18, fontWeight: "700", marginBottom: 2, color }}>{value}</Text>
+			<Text style={{ fontSize: 10, fontWeight: "500", textTransform: "uppercase", color: theme.text.secondary }}>{label}</Text>
+		</View>
+	);
+}
+
+// ─── Accordion for card results ───────────────────────────────────────────────
+function AccordionResults({ cardResults, theme, t }) {
+	const [open, setOpen] = useState(false);
+	const animHeight = useRef(new Animated.Value(0)).current;
+	const MAX_HEIGHT = 280;
+
+	const toggle = () => {
+		const toValue = open ? 0 : MAX_HEIGHT;
+		Animated.timing(animHeight, {
+			toValue,
+			duration: 250,
+			useNativeDriver: false,
+		}).start();
+		setOpen((p) => !p);
+	};
+
+	return (
+		<View style={{ marginTop: 16, width: "100%" }}>
+			<Pressable
+				onPress={toggle}
+				style={({ pressed }) => ({
+					flexDirection: "row",
+					alignItems: "center",
+					justifyContent: "space-between",
+					paddingVertical: 8,
+					paddingHorizontal: 4,
+					borderRadius: 8,
+					opacity: pressed ? 0.7 : 1,
+				})}
+			>
+				<Text style={{ color: theme.text.secondary, fontWeight: "600", fontSize: 13 }}>
+					{t("correct")} / {t("incorrect")}
+				</Text>
+				<MaterialCommunityIcons
+					name={open ? "chevron-up" : "chevron-down"}
+					size={20}
+					color={theme.text.secondary}
+				/>
+			</Pressable>
+			<Animated.View style={{ height: animHeight, overflow: "hidden" }}>
+				<ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} style={{ marginTop: 4 }}>
+					{cardResults.map((r, i) => (
+						<View
+							key={i}
+							style={{
+								flexDirection: "row",
+								alignItems: "flex-start",
+								gap: 10,
+								paddingVertical: 8,
+								paddingHorizontal: 10,
+								marginBottom: 4,
+								borderRadius: 10,
+								width: "100%",
+								backgroundColor: r.isCorrect ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)",
+								borderWidth: 1,
+								borderColor: r.isCorrect ? "rgba(34,197,94,0.2)" : "rgba(239,68,68,0.2)",
+							}}
+						>
+							<MaterialCommunityIcons
+								name={r.isCorrect ? "check-circle" : "close-circle"}
+								size={16}
+								color={r.isCorrect ? "#22c55e" : "#ef4444"}
+								style={{ marginTop: 2, flexShrink: 0 }}
+							/>
+							<View style={{ flex: 1 }}>
+								<Text style={{ color: theme.text.primary, fontWeight: "600", fontSize: 13, lineHeight: 18 }}>
+									{r.front}
+								</Text>
+								<Text style={{ color: theme.text.secondary, fontSize: 12, lineHeight: 17 }}>
+									{r.back}
+								</Text>
+							</View>
+						</View>
+					))}
+				</ScrollView>
+			</Animated.View>
+		</View>
+	);
+}
+
 const GameScreen = ({ route, navigation }) => {
 	const { deck } = route.params;
 	const { theme, shadows } = useTheme();
@@ -130,6 +231,8 @@ const GameScreen = ({ route, navigation }) => {
 	const [showRestartDialog, setShowRestartDialog] = useState(false);
 	const [showExitDialog, setShowExitDialog] = useState(false);
 	const [planLimitInfo, setPlanLimitInfo] = useState(null); // set when backend returns 403 limit exceeded
+	const [newAchievements, setNewAchievements] = useState([]);
+	const [cardResults, setCardResults] = useState([]);
 
 	// Settings state
 	const [cardDirection, setCardDirection] = useState("normal"); // 'normal' | 'reverse'
@@ -614,6 +717,8 @@ const GameScreen = ({ route, navigation }) => {
 		setIsCheckingMatch(false);
 		setCards([]);
 		setPlanLimitInfo(null);
+		setNewAchievements([]);
+		setCardResults([]);
 		timer.reset(timeLimit);
 	}, [timeLimit]);
 
@@ -783,6 +888,8 @@ const GameScreen = ({ route, navigation }) => {
 		sessionRecordedRef.current = false;
 		setAnswering(false);
 		setPlanLimitInfo(null);
+		setNewAchievements([]);
+		setCardResults([]);
 
 		// Fetch cards after state is reset to ensure proper rendering
 		setTimeout(() => {
@@ -848,6 +955,8 @@ const GameScreen = ({ route, navigation }) => {
 		sessionRecordedRef.current = false;
 		setAnswering(false);
 		setPlanLimitInfo(null);
+		setNewAchievements([]);
+		setCardResults([]);
 
 		// Fetch cards after state is reset to ensure proper rendering
 		setTimeout(() => {
@@ -913,6 +1022,12 @@ const GameScreen = ({ route, navigation }) => {
 		// Update card stats
 		try {
 			await gamesAPI.updateCardStats(currentCard.id, isCorrect);
+			// Track result for accordion
+			setCardResults((prev) => [...prev, {
+				front: getFrontText(currentCard),
+				back: getBackText(currentCard),
+				isCorrect,
+			}]);
 		} catch (error) {
 			console.error("Error updating stats:", error);
 		}
@@ -1092,7 +1207,13 @@ const GameScreen = ({ route, navigation }) => {
 			}
 
 			await gamesAPI.updateCardStats(currentCard.id, isClose);
-			const writeAdvanceDelay = isClose
+			// Track result for accordion
+			setCardResults((prev) => [...prev, {
+				front: getFrontText(currentCard),
+				back: getBackText(currentCard),
+				isCorrect: isClose,
+			}]);
+			const writeAdvanceDelay = correct
 				? WRITE_CORRECT_DELAY_MS
 				: WRITE_WRONG_DELAY_MS;
 
@@ -1149,6 +1270,11 @@ const GameScreen = ({ route, navigation }) => {
 
 		try {
 			await gamesAPI.updateCardStats(currentCard.id, isCorrect);
+			setCardResults((prev) => [...prev, {
+				front: getFrontText(currentCard),
+				back: getBackText(currentCard),
+				isCorrect,
+			}]);
 		} catch (error) {
 			console.error("Error updating stats:", error);
 		}
@@ -1338,10 +1464,9 @@ const GameScreen = ({ route, navigation }) => {
 				console.log("Achievement response:", achievementResponse.data);
 
 				if (
-					!suppressAchievementPopup &&
 					achievementResponse.data?.newlyEarned?.length > 0
 				) {
-					showAchievements(achievementResponse.data.newlyEarned);
+					setNewAchievements(achievementResponse.data.newlyEarned);
 				}
 			} catch (error) {
 				console.error("Error checking achievements:", error);
@@ -2950,179 +3075,121 @@ const GameScreen = ({ route, navigation }) => {
 
 	// Render Summary
 	const renderSummary = () => {
-		const { grade, message, color: gradeColor } = getGrade();
-		const percentage = getSuccessRate();
-		const totalCards = correctCount + wrongCount;
+			const totalCards = correctCount + wrongCount;
 
-		// StatItem component
-		const StatItem = ({ value, label, color, iconName }) => (
-			<View
-				style={[
-					styles.statItem,
-					{
-						backgroundColor: `${color}15`,
-						borderColor: `${color}30`,
-					},
-				]}
-			>
-				<View
-					style={[styles.statIconContainer, { backgroundColor: `${color}25` }]}
+			return (
+				<ScrollView
+					style={styles.summaryScrollView}
+					contentContainerStyle={styles.summaryContainer}
+					showsVerticalScrollIndicator={false}
 				>
-					<MaterialCommunityIcons name={iconName} size={18} color={color} />
-				</View>
-				<Text style={[styles.statItemValue, { color }]}>{value}</Text>
-				<Text style={[styles.statItemLabel, { color: theme.text.secondary }]}>
-					{label}
-				</Text>
-			</View>
-		);
+					{/* 1. Buttons */}
+					<View style={styles.summaryActions}>
+						<Pressable
+							onPress={restartGame}
+							disabled={finishing}
+							style={({ pressed }) => [
+								styles.summaryButton,
+								styles.summaryButtonPrimary,
+								{ backgroundColor: theme.primary.main },
+								pressed && { opacity: 0.8 },
+								finishing && { opacity: 0.6 },
+							]}
+						>
+							<MaterialCommunityIcons name="refresh" size={20} color="#fff" />
+							<Text style={styles.summaryButtonTextPrimary}>{t("play_again")}</Text>
+						</Pressable>
 
-		return (
-			<ScrollView
-				style={styles.summaryScrollView}
-				contentContainerStyle={styles.summaryContainer}
-				showsVerticalScrollIndicator={false}
-			>
-				{/* Main Card */}
-				<Card variant="elevated" style={styles.summaryCard}>
-					{/* Title */}
-					<ThemedText variant="h2" style={styles.summaryTitle}>
-						{t("game_summary")}
-					</ThemedText>
-					{gameMode !== "match" && (
-						<Text style={[styles.summaryMessage, { color: gradeColor }]}>
-							{message}
-						</Text>
+						<View style={styles.summaryButtonRow}>
+							<Pressable
+								onPress={() => navigation.goBack()}
+								style={({ pressed }) => [
+									styles.summaryButton,
+									styles.summaryButtonSecondary,
+									{ backgroundColor: theme.background.card, borderColor: theme.border.main, flex: 1 },
+									pressed && { opacity: 0.8 },
+								]}
+							>
+								<MaterialCommunityIcons name="home" size={18} color={theme.text.primary} />
+								<Text style={[styles.summaryButtonTextSecondary, { color: theme.text.primary }]}>
+									{t("back_to_decks")}
+								</Text>
+							</Pressable>
+
+							<Pressable
+								onPress={() => { resetSessionStateForExit(); setGameState("mode_select"); }}
+								style={({ pressed }) => [
+									styles.summaryButton,
+									styles.summaryButtonSecondary,
+									{ backgroundColor: theme.background.card, borderColor: theme.border.main, flex: 1 },
+									pressed && { opacity: 0.8 },
+								]}
+							>
+								<MaterialCommunityIcons name="cog" size={18} color={theme.text.primary} />
+								<Text style={[styles.summaryButtonTextSecondary, { color: theme.text.primary }]}>
+									{t("change_mode")}
+								</Text>
+							</Pressable>
+						</View>
+					</View>
+
+					{/* 2. New Achievements */}
+					{newAchievements.length > 0 && (
+						<Card variant="elevated" style={styles.achievementsCard}>
+							<Text style={styles.achievementsCardTitle}>
+								{t("achievements_earned_new") || "KAZANILAN ROZETLER"}
+							</Text>
+							<View style={styles.achievementsRow}>
+								{newAchievements.map((a, i) => (
+									<View key={i} style={styles.achievementItem}>
+										<AchievementBadge
+											type={a.category}
+											size={64}
+											earned
+											interactive
+											value={a.threshold}
+										/>
+										<Text
+											style={[styles.achievementItemLabel, { color: theme.text.secondary }]}
+											numberOfLines={2}
+										>
+											{t(`achievement_${a.name}`) || a.description}
+										</Text>
+									</View>
+								))}
+							</View>
+						</Card>
 					)}
 
-					{gameMode === "match" && <View style={{ padding: 5 }}></View>}
+					{/* 3. Summary Card */}
+					<Card variant="elevated" style={[styles.summaryCard, { marginTop: spacing.lg }]}>
+						<ThemedText variant="h2" style={styles.summaryTitle}>
+							{t("game_summary")}
+						</ThemedText>
 
-					{/* Stats Row */}
-					<View style={styles.statsRow}>
-						{/* Match mode: show pairs and attempts only */}
-						{gameMode === "match" ? (
-							<>
-								<StatItem
-									value={matchedPairs.length}
-									label={t("pairs") || "Pairs"}
-									color={theme.primary.main}
-									iconName="layers"
-								/>
-								<StatItem
-									value={matchAttempts}
-									label={t("attempts") || "Attempts"}
-									color="#ec4899"
-									iconName="grid"
-								/>
-							</>
-						) : (
-							<>
-								<StatItem
-									value={correctCount}
-									label={t("correct")}
-									color={theme.success.main}
-									iconName="check-circle"
-								/>
-								<StatItem
-									value={wrongCount}
-									label={t("incorrect")}
-									color={theme.error.main}
-									iconName="close-circle"
-								/>
-								<StatItem
-									value={totalCards}
-									label={t("total")}
-									color={theme.primary.main}
-									iconName="layers"
-								/>
-							</>
+						<View style={styles.statsRow}>
+							{gameMode === "match" ? (
+								<>
+									<SummaryStatItem value={matchedPairs.length} label={t("pairs") || "Pairs"} color={theme.primary.main} iconName="layers" theme={theme} />
+									<SummaryStatItem value={matchAttempts} label={t("attempts") || "Attempts"} color="#ec4899" iconName="grid" theme={theme} />
+								</>
+							) : (
+								<>
+									<SummaryStatItem value={correctCount} label={t("correct")} color={theme.success.main} iconName="check-circle" theme={theme} />
+									<SummaryStatItem value={wrongCount} label={t("incorrect")} color={theme.error.main} iconName="close-circle" theme={theme} />
+									<SummaryStatItem value={totalCards} label={t("total")} color={theme.primary.main} iconName="layers" theme={theme} />
+								</>
+							)}
+						</View>
+
+					{/* Accordion: Correct / Incorrect */}
+						{cardResults.length > 0 && gameMode !== "match" && (
+							<AccordionResults cardResults={cardResults} theme={theme} t={t} />
 						)}
-					</View>
-				</Card>
-
-				{/* Action Buttons */}
-				<View style={styles.summaryActions}>
-					<Pressable
-						onPress={restartGame}
-						disabled={finishing}
-						style={({ pressed }) => [
-							styles.summaryButton,
-							styles.summaryButtonPrimary,
-							{ backgroundColor: theme.primary.main },
-							pressed && { opacity: 0.8 },
-							finishing && { opacity: 0.6 },
-						]}
-					>
-						<MaterialCommunityIcons name="refresh" size={20} color="#fff" />
-						<Text style={styles.summaryButtonTextPrimary}>
-							{t("play_again")}
-						</Text>
-					</Pressable>
-
-					<View style={styles.summaryButtonRow}>
-						<Pressable
-							onPress={() => navigation.goBack()}
-							style={({ pressed }) => [
-								styles.summaryButton,
-								styles.summaryButtonSecondary,
-								{
-									backgroundColor: theme.background.card,
-									borderColor: theme.border.main,
-									flex: 1,
-								},
-								pressed && { opacity: 0.8 },
-							]}
-						>
-							<MaterialCommunityIcons
-								name="home"
-								size={18}
-								color={theme.text.primary}
-							/>
-							<Text
-								style={[
-									styles.summaryButtonTextSecondary,
-									{ color: theme.text.primary },
-								]}
-							>
-								{t("back_to_decks")}
-							</Text>
-						</Pressable>
-
-						<Pressable
-							onPress={() => {
-								resetSessionStateForExit();
-								setGameState("mode_select");
-							}}
-							style={({ pressed }) => [
-								styles.summaryButton,
-								styles.summaryButtonSecondary,
-								{
-									backgroundColor: theme.background.card,
-									borderColor: theme.border.main,
-									flex: 1,
-								},
-								pressed && { opacity: 0.8 },
-							]}
-						>
-							<MaterialCommunityIcons
-								name="cog"
-								size={18}
-								color={theme.text.primary}
-							/>
-							<Text
-								style={[
-									styles.summaryButtonTextSecondary,
-									{ color: theme.text.primary },
-								]}
-							>
-								{t("change_mode")}
-							</Text>
-						</Pressable>
-					</View>
-				</View>
-			</ScrollView>
-		);
-	};
+					</Card>
+				</ScrollView>
+			);
+		};
 
 	return (
 		<ThemedView variant="gradient" style={styles.container}>
@@ -3845,8 +3912,10 @@ const styles = StyleSheet.create({
 		marginBottom: spacing.lg,
 	},
 	summaryTitle: {
-		marginBottom: spacing.xs,
+		marginBottom: spacing.md,
 		textAlign: "center",
+		fontSize: 18,
+		fontWeight: "700",
 	},
 	summaryMessage: {
 		fontSize: 14,
@@ -3891,6 +3960,7 @@ const styles = StyleSheet.create({
 	summaryActions: {
 		width: "100%",
 		gap: spacing.sm,
+		marginBottom: spacing.sm,
 	},
 	summaryButton: {
 		flexDirection: "row",
@@ -3919,6 +3989,39 @@ const styles = StyleSheet.create({
 	summaryButtonTextSecondary: {
 		fontSize: 14,
 		fontWeight: "600",
+	},
+	// Achievements card in summary
+	achievementsCard: {
+		width: "100%",
+		padding: spacing.lg,
+		alignItems: "center",
+		marginTop: spacing.lg,
+		marginBottom: spacing.md,
+	},
+	achievementsCardTitle: {
+		fontSize: 11,
+		fontWeight: "700",
+		letterSpacing: 1.5,
+		textTransform: "uppercase",
+		color: "#d4af37",
+		marginBottom: spacing.md,
+		textAlign: "center",
+	},
+	achievementsRow: {
+		flexDirection: "row",
+		flexWrap: "wrap",
+		justifyContent: "center",
+		gap: spacing.md,
+	},
+	achievementItem: {
+		alignItems: "center",
+		width: 80,
+	},
+	achievementItemLabel: {
+		fontSize: 11,
+		textAlign: "center",
+		marginTop: 4,
+		lineHeight: 14,
 	},
 	// Plan Limit Warning
 	limitContainer: {

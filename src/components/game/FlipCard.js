@@ -70,7 +70,7 @@ const FlipCard = ({
 		stopBack();
 		Animated.timing(flipAnim, {
 			toValue: isFlipped ? 1 : 0,
-			duration: 400,
+			duration: 250,
 			useNativeDriver: true,
 		}).start();
 	}, [isFlipped]);

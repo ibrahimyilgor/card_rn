@@ -22,6 +22,8 @@ import {
 } from "../components/ui";
 import { spacing, borderRadius } from "../styles/theme";
 import { Ionicons } from "@expo/vector-icons";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 
 // Module-level flag — persists across context-triggered remounts within the same app session
 let _settingsAnimated = false;
@@ -446,7 +448,7 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 								resizeMode="contain"
 							/>
 							<ThemedText variant="h3" style={styles.aboutAppName}>
-								MemoDeck v1.0.18
+								MemoDeck v1.0.19
 							</ThemedText>
 							{/* <ThemedText color="secondary" style={styles.aboutVersion}>
 								{t("version")} 1.0.0
@@ -495,7 +497,41 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 
 			<ConfirmDialog
 				visible={showLogoutDialog}
-				title={t("logout")}
+				title={
+					<View
+						style={{
+							flexDirection: "row",
+							alignItems: "center",
+							gap: 8,
+							flex: 1,
+						}}
+					>
+						<LinearGradient
+							colors={["#6366f1", "#8b5cf6"]}
+							start={{ x: 0, y: 0 }}
+							end={{ x: 1, y: 1 }}
+							style={{
+								width: 36,
+								height: 36,
+								borderRadius: 10,
+								alignItems: "center",
+								justifyContent: "center",
+							}}
+						>
+							<MaterialCommunityIcons name="logout" size={20} color="#fff" />
+						</LinearGradient>
+						<Text
+							style={{
+								fontSize: 18,
+								fontWeight: "600",
+								color: theme.text.primary,
+								flex: 1,
+							}}
+						>
+							{t("logout")}
+						</Text>
+					</View>
+				}
 				message={t("logout_confirm")}
 				confirmLabel={t("logout")}
 				cancelLabel={t("cancel")}

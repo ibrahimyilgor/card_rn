@@ -21,6 +21,38 @@ import {
 	EmptyState,
 } from "../components/ui";
 import { spacing, borderRadius } from "../styles/theme";
+import AchievementBadge from "../components/AchievementBadge";
+import { LinearGradient } from "expo-linear-gradient";
+import Svg, { Defs, LinearGradient as SvgGradient, Stop, Text as SvgText } from "react-native-svg";
+
+// Gradient text via SVG
+function GradientText({ text, fontSize = 22, colors = ["#6C63FF", "#9B59B6"] }) {
+	const charCount = text.length;
+	const width = fontSize * charCount * 0.65;
+	const height = fontSize * 1.4;
+	return (
+		<Svg width={width} height={height}>
+			<Defs>
+				<SvgGradient id="tg" x1="0%" y1="0%" x2="100%" y2="0%">
+					<Stop offset="0%" stopColor={colors[0]} />
+					<Stop offset="100%" stopColor={colors[1]} />
+				</SvgGradient>
+			</Defs>
+			<SvgText
+				x={width / 2} y={fontSize * 1.05}
+				textAnchor="middle"
+				fontSize={fontSize}
+				fontWeight="800"
+				fill="url(#tg)"
+				letterSpacing="0.5"
+			>
+				{text}
+			</SvgText>
+		</Svg>
+	);
+}
+
+const fmt = (n) => Number(n).toLocaleString("en-US");
 
 const AchievementsScreen = () => {
 	const { theme } = useTheme();
@@ -114,14 +146,14 @@ const AchievementsScreen = () => {
 
 		// Dynamic translations based on category
 		if (category === "streak") {
-			return t("achievement_streak", { count: threshold });
+			return t("achievement_streak", { count: fmt(threshold) });
 		} else if (category === "accuracy") {
 			if (threshold === 100) {
 				return t("achievement_accuracy_100");
 			}
-			return t("achievement_accuracy", { count: threshold });
+			return t("achievement_accuracy", { count: fmt(threshold) });
 		} else if (category === "volume") {
-			return t("achievement_volume", { count: threshold });
+			return t("achievement_volume", { count: fmt(threshold) });
 		}
 
 		// Fallback to database description
@@ -140,35 +172,17 @@ const AchievementsScreen = () => {
 
 	const categoryOrder = ["accuracy", "streak", "volume"];
 
-	// Modern icon components for categories
-	const CategoryIcon = ({ category, size = 24, color }) => {
-		const iconColor = color || theme.text.primary;
-		switch (category) {
-			case "streak":
-				return (
-					<MaterialCommunityIcons name="fire" size={size} color="#FF6B35" />
-				);
-			case "accuracy":
-				return (
-					<MaterialCommunityIcons
-						name="crosshairs"
-						size={size}
-						color="#4ECDC4"
-					/>
-				);
-			case "volume":
-				return (
-					<MaterialCommunityIcons
-						name="book-open-page-variant"
-						size={size}
-						color="#9B59B6"
-					/>
-				);
-			default:
-				return (
-					<MaterialCommunityIcons name="star" size={size} color={iconColor} />
-				);
-		}
+	// Modern icon components for categories — mini SVG badge
+	const CategoryIcon = ({ category, size: iconSize = 28 }) => {
+		return (
+			<AchievementBadge
+				type={category}
+				size={iconSize}
+				earned={true}
+				interactive={false}
+				value={null}
+			/>
+		);
 	};
 
 	// Achievement icon based on category and threshold
@@ -217,18 +231,15 @@ const AchievementsScreen = () => {
 		);
 	};
 
+	const CATEGORY_COLOR = {
+		accuracy: "#4ECDC4",
+		streak:   "#FF6B35",
+		volume:   "#9B59B6",
+	};
+
 	// Return a color for the achievement (used for badge backgrounds)
 	const getAchievementColor = (achievement) => {
-		const { category, threshold } = achievement;
-		if (category === "streak") {
-			if (threshold >= 30) return "#FF4500";
-			if (threshold >= 14) return "#FF6B35";
-			if (threshold >= 7) return "#FF8C00";
-			return "#FFA500";
-		}
-		if (category === "accuracy") return "#4ECDC4";
-		if (category === "volume") return "#9B59B6";
-		return theme.primary.main;
+		return CATEGORY_COLOR[achievement.category] || theme.primary.main;
 	};
 
 	if (loading) {
@@ -300,30 +311,17 @@ const AchievementsScreen = () => {
 					>
 						<Card style={styles.progressCard}>
 							<View style={styles.progressRow}>
-								{/* Circle count */}
-								<View
-									style={[
-										styles.progressCircle,
-										{ backgroundColor: theme.primary.main + "15" },
-									]}
-								>
-									<Text
-										style={[
-											styles.progressCircleCount,
-											{ color: theme.primary.main },
-										]}
-									>
-										{`${earnedCount} / ${achievements.length}`}
-									</Text>
+								{/* Gradient text pill */}
+								<View style={styles.progressPill}>
+									<GradientText
+										text={`${fmt(earnedCount)}/${fmt(achievements.length)}`}
+										fontSize={22}
+										colors={["#6C63FF", "#9B59B6"]}
+									/>
 								</View>
-								{/* Info + bar */}
+								{/* Info */}
 								<View style={styles.progressInfo}>
-									<Text
-										style={[
-											styles.progressTitle,
-											{ color: theme.text.primary },
-										]}
-									>
+									<Text style={[styles.progressTitle, { color: theme.text.primary }]}>
 										{t("achievements_earned") || t("achievements_earned")}
 									</Text>
 								</View>
@@ -341,42 +339,41 @@ const AchievementsScreen = () => {
 							<View key={category} style={styles.categorySection}>
 								<View style={styles.categoryHeader}>
 									<CategoryIcon category={category} size={24} />
-									<ThemedText variant="h3">
+									<ThemedText variant="h3" style={{ color: CATEGORY_COLOR[category] }}>
 										{t(`achievement_category_${category}`)}
 									</ThemedText>
 								</View>
 
 								<View style={styles.achievementsGrid}>
-									{categoryAchievements.map((achievement) => (
+									{categoryAchievements.map((achievement) => {
+										const catColor = CATEGORY_COLOR[achievement.category] || theme.primary.main;
+										return (
 										<Card
 											key={achievement.id}
 											style={[
 												styles.achievementCard,
 												!achievement.earned && styles.achievementCardLocked,
+												achievement.earned && {
+													borderColor: catColor + "33",
+													borderWidth: 1,
+												},
 											]}
 										>
-											<View
-												style={[
-													styles.achievementIcon,
-													{
-														backgroundColor: achievement.earned
-															? theme.primary.main + "15"
-															: theme.background.elevated,
-													},
-												]}
-											>
-												<AchievementIcon
-													achievement={achievement}
-													size={32}
-													earned={achievement.earned}
-												/>
-											</View>
+											<AchievementBadge
+												type={achievement.category}
+												size={72}
+												earned={achievement.earned}
+												interactive={achievement.earned}
+												value={achievement.threshold}
+											/>
 
 											<ThemedText
 												numberOfLines={2}
 												style={[
 													styles.achievementName,
-													!achievement.earned && { opacity: 0.5 },
+													achievement.earned
+														? { color: catColor }
+														: { opacity: 0.4 },
 												]}
 											>
 												{getAchievementName(achievement)}
@@ -395,18 +392,17 @@ const AchievementsScreen = () => {
 												<View
 													style={[
 														styles.earnedBadge,
-														{
-															backgroundColor: getAchievementColor(achievement),
-														},
+														{ backgroundColor: catColor },
 													]}
 												>
 													<Text style={styles.earnedBadgeText}>
-														×{achievement.done_count}
+														×{fmt(achievement.done_count)}
 													</Text>
 												</View>
 											)}
 										</Card>
-									))}
+										);
+									})}
 								</View>
 							</View>
 						);
@@ -507,17 +503,23 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		gap: spacing.md,
 	},
-	progressCircle: {
-		width: 100,
-		height: 72,
-		borderRadius: 36,
+	progressPill: {
+		paddingHorizontal: spacing.lg,
+		paddingVertical: spacing.sm,
+		borderRadius: 50,
 		justifyContent: "center",
 		alignItems: "center",
 		marginRight: spacing.md,
+		backgroundColor: "rgba(108,99,255,0.12)",
+		borderWidth: 1,
+		borderColor: "rgba(108,99,255,0.25)",
+		overflow: "hidden",
 	},
-	progressCircleCount: {
-		fontSize: 18,
+	progressPillText: {
+		fontSize: 22,
 		fontWeight: "800",
+		color: "#fff",
+		letterSpacing: 0.5,
 	},
 	progressTitle: {
 		fontSize: 14,
@@ -554,7 +556,7 @@ const styles = StyleSheet.create({
 	},
 	achievementCard: {
 		width: "48%",
-		height: 140,
+		height: 160,
 		padding: spacing.md,
 		alignItems: "center",
 		justifyContent: "center",

@@ -6,6 +6,7 @@ import {
 	Alert,
 	Animated,
 	Pressable,
+	Text,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../context/ThemeContext";
@@ -27,6 +28,8 @@ import {
 } from "../components/ui";
 import { spacing, borderRadius } from "../styles/theme";
 import { Ionicons } from "@expo/vector-icons";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 
 // Module-level flag to persist animation state across remounts
 let _accountAnimated = false;
@@ -588,7 +591,21 @@ const AccountScreen = ({ navigation, onLogout }) => {
 
 			<ConfirmDialog
 				visible={showDeleteDialog}
-				title={t("delete_account")}
+				title={
+					<View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
+						<LinearGradient
+							colors={["#6366f1", "#8b5cf6"]}
+							start={{ x: 0, y: 0 }}
+							end={{ x: 1, y: 1 }}
+							style={{ width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" }}
+						>
+							<MaterialCommunityIcons name="trash-can-outline" size={20} color="#fff" />
+						</LinearGradient>
+						<Text style={{ fontSize: 18, fontWeight: "600", color: theme.text.primary, flex: 1 }}>
+							{t("delete_account")}
+						</Text>
+					</View>
+				}
 				message={t("delete_account_message")}
 				confirmLabel={t("delete")}
 				cancelLabel={t("cancel")}
@@ -600,7 +617,21 @@ const AccountScreen = ({ navigation, onLogout }) => {
 
 			<ConfirmDialog
 				visible={showResetDialog}
-				title={t("reset_statistics") || "Reset Statistics"}
+				title={
+					<View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
+						<LinearGradient
+							colors={["#6366f1", "#8b5cf6"]}
+							start={{ x: 0, y: 0 }}
+							end={{ x: 1, y: 1 }}
+							style={{ width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" }}
+						>
+							<Ionicons name="refresh-outline" size={20} color="#fff" />
+						</LinearGradient>
+						<Text style={{ fontSize: 18, fontWeight: "600", color: theme.text.primary, flex: 1 }}>
+							{t("reset_statistics") || "Reset Statistics"}
+						</Text>
+					</View>
+				}
 				message={
 					t("reset_statistics_confirm") ||
 					"Are you sure you want to reset all statistics? This action cannot be undone."

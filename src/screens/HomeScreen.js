@@ -706,19 +706,19 @@ const HomeScreen = ({ navigation, onLogout }) => {
 						</View>
 
 						{/* Play Button - Top Right */}
-						{inlineDeleteDeckId !== item.id && (
-							<Pressable
-								onPress={() => handlePlayDeck(item)}
-								style={[
-									styles.playButton,
-									{
-										backgroundColor: "rgba(34, 197, 94, 0.15)",
-									},
-								]}
-							>
-								<Ionicons name="play" size={18} color="#22c55e" />
-							</Pressable>
-						)}
+						<Pressable
+							onPress={() => handlePlayDeck(item)}
+							style={[
+								styles.playButton,
+								{
+									backgroundColor: "rgba(34, 197, 94, 0.15)",
+									opacity: inlineDeleteDeckId === item.id ? 0 : 1,
+								},
+							]}
+							disabled={inlineDeleteDeckId === item.id}
+						>
+							<Ionicons name="play" size={18} color="#22c55e" />
+						</Pressable>
 					</View>
 
 					{/* Description */}
@@ -870,9 +870,10 @@ const HomeScreen = ({ navigation, onLogout }) => {
 							{/* Delete Button */}
 							<Pressable
 								onPress={() => setInlineDeleteDeckId(item.id)}
-								style={[
+								style={({ pressed }) => [
 									styles.actionIconButton,
 									{ backgroundColor: "rgba(239, 68, 68, 0.1)" },
+									pressed && { transform: [{ scale: 0.82 }], backgroundColor: "rgba(239, 68, 68, 0.22)" },
 								]}
 							>
 								<Ionicons name="trash" size={18} color="#ef4444" />
@@ -1330,7 +1331,21 @@ const HomeScreen = ({ navigation, onLogout }) => {
 						setImportTitle("");
 						setImportDescription("");
 					}}
-					title={t("import_deck") || "Import Deck"}
+					title={
+						<View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
+							<LinearGradient
+								colors={["#6366f1", "#8b5cf6"]}
+								start={{ x: 0, y: 0 }}
+								end={{ x: 1, y: 1 }}
+								style={{ width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" }}
+							>
+								<MaterialCommunityIcons name="layers" size={20} color="#fff" />
+							</LinearGradient>
+							<Text style={{ fontSize: 18, fontWeight: "600", color: theme.text.primary }}>
+								{t("import_deck") || "Import Deck"}
+							</Text>
+						</View>
+					}
 					verticalAlign="center"
 					footer={
 						<View style={styles.modalFooter}>
@@ -1344,6 +1359,7 @@ const HomeScreen = ({ navigation, onLogout }) => {
 									setImportTitle("");
 									setImportDescription("");
 								}}
+								textStyle={{ color: theme.text.secondary }}
 							>
 								{t("cancel") || "Cancel"}
 							</Button>

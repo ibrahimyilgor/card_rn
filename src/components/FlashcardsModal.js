@@ -10,6 +10,7 @@ import {
 	UIManager,
 	View,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { flashcardsAPI } from "../services/api";
@@ -66,7 +67,7 @@ const InlineCardForm = ({
 		>
 			<View style={{ flexDirection: "row" }}>
 				<View style={{ width: 4, backgroundColor: accentColor }} />
-				<View style={{ flex: 1, padding: spacing.md, gap: spacing.sm }}>
+				<View style={{ flex: 1, padding: spacing.sm, gap: spacing.xs }}>
 					<Input
 						value={frontText}
 						onChangeText={setFrontText}
@@ -177,7 +178,7 @@ const FlashcardsModal = ({
 	const [searchQuery, setSearchQuery] = useState("");
 	const [sortBy, setSortBy] = useState("newest");
 	const [sortModalVisible, setSortModalVisible] = useState(false);
-	const [expandedCardId, setExpandedCardId] = useState(null);
+	const [expandedCardIds, setExpandedCardIds] = useState(new Set());
 
 	const filteredFlashcards = flashcards.filter((card) => {
 		if (!searchQuery.trim()) return true;
@@ -250,7 +251,7 @@ const FlashcardsModal = ({
 			setIsInlineAdding(false);
 			setEditingCardId(null);
 			setSortModalVisible(false);
-			setExpandedCardId(null);
+			setExpandedCardIds(new Set());
 		}
 	}, [visible, deck]);
 
@@ -436,7 +437,15 @@ const FlashcardsModal = ({
 
 	const handleToggleExpandedCard = (cardId) => {
 		animateFlashcardLayout(180);
-		setExpandedCardId((prev) => (prev === cardId ? null : cardId));
+		setExpandedCardIds((prev) => {
+			const next = new Set(prev);
+			if (next.has(cardId)) {
+				next.delete(cardId);
+			} else {
+				next.add(cardId);
+			}
+			return next;
+		});
 	};
 
 	const handleBulkSetEnabled = async (nextEnabled) => {
@@ -521,7 +530,21 @@ const FlashcardsModal = ({
 			<Modal
 				visible={visible}
 				onClose={onClose}
-				title={displayTitle}
+				title={
+					<View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
+						<LinearGradient
+							colors={["#6366f1", "#8b5cf6"]}
+							start={{ x: 0, y: 0 }}
+							end={{ x: 1, y: 1 }}
+							style={{ width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" }}
+						>
+							<MaterialCommunityIcons name="cards" size={20} color="#fff" />
+						</LinearGradient>
+						<Text style={{ fontSize: 18, fontWeight: "600", color: theme.text.primary, flex: 1 }} numberOfLines={1}>
+							{displayTitle}
+						</Text>
+					</View>
+				}
 				size="large"
 				verticalAlign="center"
 				avoidKeyboard={false}
@@ -595,7 +618,7 @@ const FlashcardsModal = ({
 										<Ionicons
 											name="close-circle"
 											size={18}
-											color={theme.primary.main}
+											color="#3b82f6"
 										/>
 									</Pressable>
 								) : null}
@@ -726,7 +749,7 @@ const FlashcardsModal = ({
 								}}
 							>
 								<MaterialCommunityIcons
-									name="cards-outline"
+									name="cards"
 									size={48}
 									color={theme.primary.main}
 								/>
@@ -755,9 +778,9 @@ const FlashcardsModal = ({
 								}}
 							>
 								<Ionicons
-									name="search-outline"
+									name="magnify"
 									size={36}
-									color={theme.text.secondary}
+									color="#3b82f6"
 								/>
 								<ThemedText
 									color="secondary"
@@ -804,7 +827,8 @@ const FlashcardsModal = ({
 													padding: spacing.md,
 													flexDirection: "row",
 													alignItems:
-														expandedCardId === card.id
+														expandedCardIds.has(card.id) &&
+														(card.front_text.length > 60 || card.back_text.length > 60)
 															? "flex-start"
 															: "center",
 													gap: spacing.sm,
@@ -817,7 +841,7 @@ const FlashcardsModal = ({
 													<ThemedText
 														style={styles.flashcardFront}
 														numberOfLines={
-															expandedCardId === card.id ? undefined : 1
+															expandedCardIds.has(card.id) ? undefined : 1
 														}
 													>
 														{card.front_text}
@@ -826,7 +850,7 @@ const FlashcardsModal = ({
 														color="secondary"
 														style={styles.flashcardBack}
 														numberOfLines={
-															expandedCardId === card.id ? undefined : 1
+															expandedCardIds.has(card.id) ? undefined : 1
 														}
 													>
 														{card.back_text}
@@ -995,10 +1019,11 @@ const styles = StyleSheet.create({
 	},
 	flashcardFront: {
 		fontWeight: "600",
-		marginBottom: 4,
+		marginBottom: 0,
 	},
 	flashcardBack: {
 		fontSize: 13,
+		marginTop: -1,
 	},
 	flashcardActionBtn: {
 		padding: spacing.xs,

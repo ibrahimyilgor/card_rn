@@ -24,6 +24,7 @@ const Modal = ({
 	size = "medium", // 'small' | 'medium' | 'large' | 'full'
 	showCloseButton = true,
 	verticalAlign = "center", // 'auto' | 'top' | 'center'
+	maxHeightPercent = 0.85,
 }) => {
 	const { theme, shadows } = useTheme();
 	const isIOS = Platform.OS === "ios";
@@ -109,7 +110,7 @@ const Modal = ({
 							styles.container,
 							{
 								width: getWidth(),
-								maxHeight: isIOS ? "85%" : WINDOW_HEIGHT * 0.85,
+								maxHeight: isIOS ? `${maxHeightPercent * 100}%` : WINDOW_HEIGHT * maxHeightPercent,
 								backgroundColor: theme.background.elevated,
 								borderColor: theme.border.main,
 								opacity: contentOpacity,
@@ -130,9 +131,13 @@ const Modal = ({
 									{ borderBottomColor: theme.border.subtle },
 								]}
 							>
-								<Text style={[styles.title, { color: theme.text.primary }]}>
-									{title}
-								</Text>
+								{typeof title === "string" ? (
+									<Text style={[styles.title, { color: theme.text.primary }]}>
+										{title}
+									</Text>
+								) : (
+									title
+								)}
 								{showCloseButton && (
 									<Pressable onPress={onClose} style={styles.closeButton}>
 										<Text
@@ -231,14 +236,14 @@ const styles = StyleSheet.create({
 		flexGrow: 0,
 	},
 	contentContainer: {
-		padding: spacing.lg,
+		padding: spacing.xl,
 	},
 	footer: {
 		flexDirection: "row",
 		justifyContent: "flex-end",
 		gap: spacing.sm,
 		paddingHorizontal: spacing.lg,
-		paddingVertical: spacing.md,
+		paddingVertical: spacing.sm,
 		borderTopWidth: 1,
 	},
 });

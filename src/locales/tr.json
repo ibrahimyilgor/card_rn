@@ -150,7 +150,7 @@
 	"daily_breakdown": "Günlük Detay",
 	"stats_subtitle": "Öğrenme ilerlemenizi takip edin",
 	"accuracy": "Doğruluk",
-	"welcome_back": "Tekrar hoş geldiniz",
+	"welcome_back": "Hoş geldiniz",
 	"login_subtitle": "Öğrenme yolculuğunuza devam etmek için giriş yapın",
 	"create_account": "Hesap Oluştur",
 	"signup_subtitle": "Öğrenme yolculuğunuza bugün başlayın",
@@ -479,5 +479,6 @@
 	"downgrade_in_play_store": "Planı düşür",
 	"deck_limit": "Deste Limiti",
 	"flashcard_limit": "Kart Limiti",
-	"achievements_earned_new": "Kazanılan Rozetler"
+	"achievements_earned_new": "Kazanılan Rozetler",
+	"manage": "Planlar"
 }

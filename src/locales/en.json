@@ -150,7 +150,7 @@
 	"daily_breakdown": "Daily Breakdown",
 	"stats_subtitle": "Track your learning progress",
 	"accuracy": "Accuracy",
-	"welcome_back": "Welcome back",
+	"welcome_back": "Welcome",
 	"login_subtitle": "Sign in to continue your learning journey",
 	"create_account": "Create Account",
 	"signup_subtitle": "Start your learning journey today",
@@ -479,5 +479,6 @@
 	"downgrade_in_play_store": "Downgrade in Play Store",
 	"deck_limit": "Deck Limit",
 	"flashcard_limit": "Flashcard Limit",
-	"achievements_earned_new": "Achievements Earned"
+	"achievements_earned_new": "Achievements Earned",
+	"manage": "Plans"
 }

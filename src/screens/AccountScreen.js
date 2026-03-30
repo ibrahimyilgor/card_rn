@@ -9,6 +9,7 @@ import {
 	Text,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useFocusEffect } from "@react-navigation/native";
 import { useTheme } from "../context/ThemeContext";
 import { useI18n } from "../context/I18nContext";
 import { accountAPI, authAPI, authHelpers } from "../services/api";
@@ -31,12 +32,35 @@ import { Ionicons } from "@expo/vector-icons";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 
-// Module-level flag to persist animation state across remounts
-let _accountAnimated = false;
+// Memoized header to prevent re-renders of icon/title/description
+const Header = React.memo(({ primaryColor, title, subtitle }) => {
+	return (
+		<View style={styles.header}>
+			<View style={styles.headerTitle}>
+				<Ionicons name="person" size={26} color={primaryColor} />
+				<ThemedText variant="h2" style={styles.headerTitleText}>
+					{title}
+				</ThemedText>
+			</View>
+			<ThemedText color="secondary">{subtitle}</ThemedText>
+		</View>
+	);
+});
+
+// Animations will run on every focus (no module-level persistence)
 
 const AccountScreen = ({ navigation, onLogout }) => {
 	const { theme } = useTheme();
 	const { t, language } = useI18n();
+
+	// Stabilize header props so Header (React.memo) doesn't re-render
+	const headerTitle = React.useMemo(() => t("account"), [t]);
+	const headerSubtitle = React.useMemo(() => t("account_subtitle"), [t]);
+	const headerPrimaryColor = React.useMemo(() => theme.primary.main, [
+		theme.primary.main,
+	]);
+
+	const scrollRef = useRef(null);
 
 	const locale = language === "tr" ? "tr-TR" : "en-US";
 	const subscriptionDividerColor =
@@ -63,64 +87,113 @@ const AccountScreen = ({ navigation, onLogout }) => {
 		onClose: null,
 	});
 
-	// Entrance animations (preserve finished state across remounts)
-	const headerAnim = useRef(
-		new Animated.Value(_accountAnimated ? 1 : 0),
-	).current;
-	const profileAnim = useRef(
-		new Animated.Value(_accountAnimated ? 1 : 0),
-	).current;
-	const avatarScale = useRef(
-		new Animated.Value(_accountAnimated ? 1 : 0.5),
-	).current;
+	// Entrance animations (reset on each focus so user sees them every time)
+	const profileAnim = useRef(new Animated.Value(0)).current;
+	const avatarScale = useRef(new Animated.Value(0.5)).current;
+	const subscriptionAnim = useRef(new Animated.Value(0)).current;
 	const sectionAnims = useRef([
-		new Animated.Value(_accountAnimated ? 1 : 0),
-		new Animated.Value(_accountAnimated ? 1 : 0),
+		new Animated.Value(0),
+		new Animated.Value(0),
 	]).current;
+
+	// Inline confirmation states for Reset / Delete (no modal)
+	const [showResetInline, setShowResetInline] = useState(false);
+	const resetInlineAnim = useRef(new Animated.Value(0)).current;
+	const [showDeleteInline, setShowDeleteInline] = useState(false);
+	const deleteInlineAnim = useRef(new Animated.Value(0)).current;
+
+	// Simple skeleton component (pulse)
+	const Skeleton = ({ width = "100%", height = 12, style }) => {
+		const pulse = useRef(new Animated.Value(0.85)).current;
+		useEffect(() => {
+			const loop = Animated.loop(
+				Animated.sequence([
+					Animated.timing(pulse, {
+						toValue: 1,
+						duration: 600,
+						useNativeDriver: true,
+					}),
+					Animated.timing(pulse, {
+						toValue: 0.85,
+						duration: 600,
+						useNativeDriver: true,
+					}),
+				]),
+			);
+			loop.start();
+			return () => loop.stop();
+		}, [pulse]);
+
+		const bg = theme && theme.mode === "dark" ? "#3a3a3a" : "#e6e9ee";
+		return (
+			<Animated.View
+				style={[
+					{
+						width,
+						height,
+						borderRadius: 8,
+						backgroundColor: bg,
+						opacity: pulse,
+					},
+					style,
+				]}
+			/>
+		);
+	};
 
 	useEffect(() => {
 		fetchAccount();
 	}, []);
 
-	useEffect(() => {
-		if (_accountAnimated) return; // already animated this session
-		if (!loading) {
-			// Start entrance animations when data is loaded
-			Animated.timing(headerAnim, {
-				toValue: 1,
-				duration: 350,
-				useNativeDriver: true,
-			}).start();
+	// Run (and reset) the entrance animation every time the screen comes into focus.
+	useFocusEffect(
+		React.useCallback(() => {
+			if (loading) return;
 
-			Animated.spring(profileAnim, {
-				toValue: 1,
-				delay: 100,
-				useNativeDriver: true,
-				speed: 12,
-				bounciness: 4,
-			}).start();
+			// reset starting values so animation looks the same each time
+			avatarScale.setValue(0.5);
+			profileAnim.setValue(0);
+			subscriptionAnim.setValue(0);
+			sectionAnims.forEach((a) => a.setValue(0));
 
-			Animated.spring(avatarScale, {
-				toValue: 1,
-				delay: 200,
-				useNativeDriver: true,
-				speed: 8,
-				bounciness: 10,
-			}).start();
-
-			sectionAnims.forEach((anim, index) => {
-				Animated.spring(anim, {
+			// Faster durations for snappier feel (header is static)
+			const seq = [
+				Animated.timing(avatarScale, {
 					toValue: 1,
-					delay: 250 + index * 100,
+					duration: 160,
 					useNativeDriver: true,
-					speed: 14,
-					bounciness: 3,
-				}).start();
-			});
+				}),
+				Animated.timing(profileAnim, {
+					toValue: 1,
+					duration: 140,
+					useNativeDriver: true,
+				}),
+				Animated.timing(subscriptionAnim, {
+					toValue: 1,
+					duration: 120,
+					useNativeDriver: true,
+				}),
+				...sectionAnims.map((anim) =>
+					Animated.spring(anim, {
+						toValue: 1,
+						useNativeDriver: true,
+						speed: 20,
+						bounciness: 4,
+					}),
+				),
+			];
 
-			_accountAnimated = true;
-		}
-	}, [loading]);
+			const animation = Animated.sequence(seq);
+			animation.start();
+
+			return () => {
+				// stop animation when unfocusing
+				try {
+					animation.stop();
+				} catch (e) {}
+			};
+		}, [loading, avatarScale, profileAnim, subscriptionAnim, sectionAnims]),
+	);
 
 	const fetchAccount = async () => {
 		try {
@@ -260,9 +333,90 @@ const AccountScreen = ({ navigation, onLogout }) => {
 	};
 
 	if (loading) {
+		// Show header and skeleton placeholders while loading (no plain "loading" text)
 		return (
 			<ThemedView variant="gradient" style={styles.container}>
-				<LoadingState fullScreen message={t("loading")} />
+				<SafeAreaView style={styles.safeArea} edges={["top"]}>
+					<ScrollView
+						ref={scrollRef}
+						contentContainerStyle={styles.scrollContent}
+					>
+						{/* Header (visible during skeleton) */}
+						<Header
+							primaryColor={headerPrimaryColor}
+							title={headerTitle}
+							subtitle={headerSubtitle}
+						/>
+
+						{/* Profile skeleton */}
+						<Card style={styles.profileCard}>
+							<View style={{ flexDirection: "row", alignItems: "center" }}>
+								<Skeleton width={60} height={60} style={{ borderRadius: 30 }} />
+								<View style={{ marginLeft: spacing.md, flex: 1 }}>
+									<Skeleton
+										width="50%"
+										height={22}
+										style={{ marginBottom: spacing.sm }}
+									/>
+									<Skeleton
+										width="40%"
+										height={14}
+										style={{ marginBottom: spacing.xs }}
+									/>
+									<Skeleton width="30%" height={12} />
+								</View>
+							</View>
+						</Card>
+
+						{/* Subscription skeleton */}
+						<Card style={styles.subscriptionCard}>
+							<Skeleton
+								width="40%"
+								height={20}
+								style={{ marginBottom: spacing.md }}
+							/>
+							<Skeleton
+								width="60%"
+								height={14}
+								style={{ marginBottom: spacing.sm }}
+							/>
+							<Skeleton
+								width="30%"
+								height={12}
+								style={{ marginTop: spacing.md }}
+							/>
+						</Card>
+
+						{/* Security skeletons */}
+						<View style={styles.dangerZone}>
+							{[0, 1].map((i) => (
+								<Card key={i} style={styles.securityCard}>
+									<View
+										style={{
+											flexDirection: "row",
+											alignItems: "center",
+											gap: spacing.md,
+										}}
+									>
+										<Skeleton
+											width={44}
+											height={44}
+											style={{ borderRadius: 12 }}
+										/>
+										<View style={{ flex: 1 }}>
+											<Skeleton
+												width="60%"
+												height={16}
+												style={{ marginBottom: spacing.xs }}
+											/>
+											<Skeleton width="80%" height={12} />
+										</View>
+									</View>
+								</Card>
+							))}
+						</View>
+					</ScrollView>
+				</SafeAreaView>
 			</ThemedView>
 		);
 	}
@@ -272,30 +426,11 @@ const AccountScreen = ({ navigation, onLogout }) => {
 			<SafeAreaView style={styles.safeArea} edges={["top"]}>
 				<ScrollView contentContainerStyle={styles.scrollContent}>
 					{/* Header */}
-					<Animated.View
-						style={[
-							styles.header,
-							{
-								opacity: headerAnim,
-								transform: [
-									{
-										translateY: headerAnim.interpolate({
-											inputRange: [0, 1],
-											outputRange: [-15, 0],
-										}),
-									},
-								],
-							},
-						]}
-					>
-						<View style={styles.headerTitle}>
-							<Ionicons name="person" size={26} color={theme.primary.main} />
-							<ThemedText variant="h2" style={styles.headerTitleText}>
-								{t("account")}
-							</ThemedText>
-						</View>
-						<ThemedText color="secondary">{t("account_subtitle")}</ThemedText>
-					</Animated.View>
+					<Header
+						primaryColor={headerPrimaryColor}
+						title={headerTitle}
+						subtitle={headerSubtitle}
+					/>
 
 					{/* Profile Info */}
 					<Animated.View
@@ -313,29 +448,38 @@ const AccountScreen = ({ navigation, onLogout }) => {
 					>
 						<Card style={styles.profileCard}>
 							<Animated.View
-								style={[
-									styles.avatar,
-									{
-										backgroundColor: theme.primary.main,
-										transform: [{ scale: avatarScale }],
-									},
-								]}
+								style={[styles.avatar, { transform: [{ scale: avatarScale }] }]}
 							>
-								<ThemedText style={styles.avatarText}>
-									{(account?.displayName || account?.email)
-										?.charAt(0)
-										.toUpperCase() || "U"}
-								</ThemedText>
+								{account?.photoURL ? (
+									<Animated.Image
+										source={{ uri: account.photoURL }}
+										style={styles.avatarImage}
+										resizeMode="cover"
+									/>
+								) : (
+									<View
+										style={[
+											styles.avatarFallback,
+											{ backgroundColor: theme.primary.main },
+										]}
+									>
+										<ThemedText style={styles.avatarText}>
+											{(account?.displayName || account?.email)
+												?.charAt(0)
+												.toUpperCase() || "U"}
+										</ThemedText>
+									</View>
+								)}
 							</Animated.View>
 							<View style={styles.profileInfo}>
-								<ThemedText variant="h3">
+								<ThemedText variant="h3" style={styles.displayName}>
 									{account?.displayName || account?.email?.split("@")[0]}
 								</ThemedText>
 								<ThemedText color="secondary" style={styles.emailText}>
 									{account?.email}
 								</ThemedText>
 								{account?.created_at && (
-									<ThemedText color="secondary" style={styles.createdDate}>
+									<ThemedText color="secondary" style={styles.memberSince}>
 										{t("member_since")} {formatDate(account.created_at)}
 									</ThemedText>
 								)}
@@ -346,10 +490,10 @@ const AccountScreen = ({ navigation, onLogout }) => {
 					{/* Subscription Status */}
 					<Animated.View
 						style={{
-							opacity: profileAnim,
+							opacity: subscriptionAnim,
 							transform: [
 								{
-									translateY: profileAnim.interpolate({
+									translateY: subscriptionAnim.interpolate({
 										inputRange: [0, 1],
 										outputRange: [20, 0],
 									}),
@@ -357,60 +501,57 @@ const AccountScreen = ({ navigation, onLogout }) => {
 							],
 						}}
 					>
-						<Pressable onPress={() => navigation.navigate("Plans")}>
-							{({ pressed }) => {
-								const planCode = account?.plan || "free";
-								const planConfig = {
-									free: {
-										icon: "calendar-outline",
-										color: getPlanColor("free"),
-										label: t("free_plan"),
-									},
-									pro: {
-										icon: "calendar-outline",
-										color: getPlanColor("pro"),
-										label: t("pro_plan"),
-									},
-									premium: {
-										icon: "calendar-outline",
-										color: getPlanColor("premium"),
-										label: t("premium_plan"),
-									},
-								};
-								const cfg = planConfig[planCode] || planConfig.free;
-								return (
-									<Card
-										style={[
-											styles.subscriptionCard,
-											{
-												borderWidth: 1,
-												borderColor: `${cfg.color}30`,
-												opacity: pressed ? 0.92 : 1,
-												transform: [{ scale: pressed ? 0.995 : 1 }],
-											},
-										]}
-									>
-										<View style={styles.subscriptionRow}>
-											<View style={styles.subscriptionHeader}>
+						{(() => {
+							const planCode = account?.plan || "free";
+							const planConfig = {
+								free: {
+									icon: "calendar-outline",
+									color: getPlanColor("free"),
+									label: t("free_plan"),
+								},
+								pro: {
+									icon: "calendar-outline",
+									color: getPlanColor("pro"),
+									label: t("pro_plan"),
+								},
+								premium: {
+									icon: "calendar-outline",
+									color: getPlanColor("premium"),
+									label: t("premium_plan"),
+								},
+							};
+							const cfg = planConfig[planCode] || planConfig.free;
+							return (
+								<Card
+									style={[
+										styles.subscriptionCard,
+										{
+											borderWidth: 1,
+											borderColor: `${cfg.color}30`,
+										},
+									]}
+								>
+									<View style={{ position: "relative" }}>
+										<View style={styles.subscriptionTop}>
+											<LinearGradient
+												colors={[cfg.color, theme.primary.main]}
+												start={{ x: 0, y: 0 }}
+												end={{ x: 1, y: 1 }}
+												style={styles.planIconGradient}
+											>
+												<Ionicons name={cfg.icon} size={22} color="#fff" />
+											</LinearGradient>
+											<View style={{ flex: 1, marginLeft: spacing.md }}>
+												<ThemedText color="secondary" style={{ fontSize: 12 }}>
+													{t("subscription") || "Subscription"}
+												</ThemedText>
 												<View
-													style={[
-														styles.planIconContainer,
-														{ backgroundColor: `${cfg.color}18` },
-													]}
+													style={{
+														flexDirection: "row",
+														alignItems: "center",
+														justifyContent: "flex-start",
+													}}
 												>
-													<Ionicons
-														name={cfg.icon}
-														size={22}
-														color={cfg.color}
-													/>
-												</View>
-												<View>
-													<ThemedText
-														color="secondary"
-														style={{ fontSize: 12 }}
-													>
-														{t("subscription") || "Subscription"}
-													</ThemedText>
 													<ThemedText
 														variant="h4"
 														style={[styles.planName, { color: cfg.color }]}
@@ -419,59 +560,61 @@ const AccountScreen = ({ navigation, onLogout }) => {
 													</ThemedText>
 												</View>
 											</View>
-											<Ionicons
-												name="chevron-forward"
-												size={20}
-												color={theme.text.secondary}
-											/>
 										</View>
-										<View
+										{/* Absolute positioned Plans button in top-right of card */}
+										<Pressable
+											onPress={() => navigation.navigate("Plans")}
+											style={styles.planManageBtn}
+										>
+											<ThemedText style={styles.planManageBtnText}>
+												{t("manage") || t("plans") || "Plans"}
+											</ThemedText>
+										</Pressable>
+									</View>
+									<View
+										style={[
+											styles.subscriptionMetaRow,
+											{ borderTopColor: subscriptionDividerColor },
+										]}
+									>
+										<ThemedText
+											color="secondary"
+											style={styles.subscriptionMetaLabel}
+										>
+											{t("plan_end_time")}
+										</ThemedText>
+										<ThemedText style={styles.subscriptionMetaValue}>
+											{formatDateTime(account?.currentPeriodEnd)}
+										</ThemedText>
+									</View>
+									<View
+										style={[
+											styles.subscriptionMetaRow,
+											{ borderTopColor: subscriptionDividerColor },
+										]}
+									>
+										<ThemedText
+											color="secondary"
+											style={styles.subscriptionMetaLabel}
+										>
+											{t("auto_renewal")}
+										</ThemedText>
+										<ThemedText
 											style={[
-												styles.subscriptionMetaRow,
-												{ borderTopColor: subscriptionDividerColor },
+												styles.subscriptionMetaValue,
+												{
+													color: account?.autoRenewing ? "#22c55e" : "#ef4444",
+												},
 											]}
 										>
-											<ThemedText
-												color="secondary"
-												style={styles.subscriptionMetaLabel}
-											>
-												{t("plan_end_time")}
-											</ThemedText>
-											<ThemedText style={styles.subscriptionMetaValue}>
-												{formatDateTime(account?.currentPeriodEnd)}
-											</ThemedText>
-										</View>
-										<View
-											style={[
-												styles.subscriptionMetaRow,
-												{ borderTopColor: subscriptionDividerColor },
-											]}
-										>
-											<ThemedText
-												color="secondary"
-												style={styles.subscriptionMetaLabel}
-											>
-												{t("auto_renewal")}
-											</ThemedText>
-											<ThemedText
-												style={[
-													styles.subscriptionMetaValue,
-													{
-														color: account?.autoRenewing
-															? "#22c55e"
-															: "#ef4444",
-													},
-												]}
-											>
-												{account?.autoRenewing
-													? t("renews_automatically")
-													: t("will_not_renew")}
-											</ThemedText>
-										</View>
-									</Card>
-								);
-							}}
-						</Pressable>
+											{account?.autoRenewing
+												? t("renews_automatically")
+												: t("will_not_renew")}
+										</ThemedText>
+									</View>
+								</Card>
+							);
+						})()}
 					</Animated.View>
 
 					{/* Security Section */}
@@ -496,14 +639,33 @@ const AccountScreen = ({ navigation, onLogout }) => {
 						</ThemedText>
 
 						{/* Reset Statistics */}
-						<Pressable onPress={() => setShowResetDialog(true)}>
+						<Pressable
+							onPress={() => {
+								if (showResetInline) {
+									// Hide when pressed again
+									Animated.timing(resetInlineAnim, {
+										toValue: 0,
+										duration: 160,
+										useNativeDriver: true,
+									}).start(() => setShowResetInline(false));
+									return;
+								}
+								setShowResetInline(true);
+								resetInlineAnim.setValue(0);
+								Animated.timing(resetInlineAnim, {
+									toValue: 1,
+									duration: 200,
+									useNativeDriver: true,
+								}).start(() => {
+									scrollRef.current?.scrollToEnd({ animated: true });
+								});
+							}}
+						>
 							{({ pressed }) => (
 								<Card
 									style={[
 										styles.securityCard,
 										{
-											borderColor: "#f59e0b30",
-											backgroundColor: "#f59e0b08",
 											opacity: pressed ? 0.96 : 1,
 											transform: [{ scale: pressed ? 0.997 : 1 }],
 										},
@@ -526,30 +688,122 @@ const AccountScreen = ({ navigation, onLogout }) => {
 											<ThemedText style={styles.securityTitle}>
 												{t("reset_statistics") || "Reset Statistics"}
 											</ThemedText>
-											<ThemedText color="secondary" style={styles.securityDesc}>
-												{t("reset_statistics_warning") ||
-													"Reset all card statistics and delete study sessions."}
-											</ThemedText>
 										</View>
 										<Ionicons
 											name="chevron-forward"
 											size={18}
-											color="#f59e0b"
+											color={theme.text.secondary}
 										/>
 									</View>
 								</Card>
 							)}
 						</Pressable>
 
+						{/* Inline reset confirmation */}
+						{showResetInline && (
+							<Animated.View
+								style={{
+									opacity: resetInlineAnim,
+									transform: [
+										{
+											translateY: resetInlineAnim.interpolate({
+												inputRange: [0, 1],
+												outputRange: [-8, 0],
+											}),
+										},
+									],
+								}}
+							>
+								<View
+									style={{
+										marginTop: spacing.sm,
+										marginBottom: spacing.md,
+										flexDirection: "row",
+										alignItems: "center",
+									}}
+								>
+									<View style={{ flex: 1, paddingRight: spacing.sm }}>
+										<ThemedText numberOfLines={2} ellipsizeMode="tail">
+											{t("reset_statistics_confirm") ||
+												t("reset_statistics_warning")}
+										</ThemedText>
+									</View>
+									<View
+										style={{
+											flexDirection: "row",
+											width: 92,
+											justifyContent: "flex-end",
+											gap: spacing.sm,
+										}}
+									>
+										<Pressable
+											onPress={() => {
+												Animated.timing(resetInlineAnim, {
+													toValue: 0,
+													duration: 160,
+													useNativeDriver: true,
+												}).start(() => setShowResetInline(false));
+											}}
+											style={{ padding: 8, borderRadius: 8 }}
+										>
+											<Ionicons
+												name="close"
+												size={20}
+												color={theme.error?.main ?? "#ef4444"}
+											/>
+										</Pressable>
+										<Pressable
+											onPress={async () => {
+												Animated.timing(resetInlineAnim, {
+													toValue: 0,
+													duration: 160,
+													useNativeDriver: true,
+												}).start(async () => {
+													setShowResetInline(false);
+													await handleResetStatistics();
+												});
+											}}
+											style={{ padding: 8, borderRadius: 8 }}
+										>
+											<Ionicons
+												name="checkmark"
+												size={20}
+												color={theme.success?.main ?? "#22c55e"}
+											/>
+										</Pressable>
+									</View>
+								</View>
+							</Animated.View>
+						)}
+
 						{/* Delete Account */}
-						<Pressable onPress={() => setShowDeleteDialog(true)}>
+						<Pressable
+							onPress={() => {
+								if (showDeleteInline) {
+									// Hide when pressed again
+									Animated.timing(deleteInlineAnim, {
+										toValue: 0,
+										duration: 160,
+										useNativeDriver: true,
+									}).start(() => setShowDeleteInline(false));
+									return;
+								}
+								setShowDeleteInline(true);
+								deleteInlineAnim.setValue(0);
+								Animated.timing(deleteInlineAnim, {
+									toValue: 1,
+									duration: 200,
+									useNativeDriver: true,
+								}).start(() => {
+									scrollRef.current?.scrollToEnd({ animated: true });
+								});
+							}}
+						>
 							{({ pressed }) => (
 								<Card
 									style={[
 										styles.securityCard,
 										{
-											borderColor: `${theme.error.main}30`,
-											backgroundColor: `${theme.error.main}08`,
 											opacity: pressed ? 0.96 : 1,
 											transform: [{ scale: pressed ? 0.997 : 1 }],
 										},
@@ -572,77 +826,97 @@ const AccountScreen = ({ navigation, onLogout }) => {
 											<ThemedText style={styles.securityTitle}>
 												{t("delete_account")}
 											</ThemedText>
-											<ThemedText color="secondary" style={styles.securityDesc}>
-												{t("delete_account_warning")}
-											</ThemedText>
 										</View>
 										<Ionicons
 											name="chevron-forward"
 											size={18}
-											color={theme.error.main}
+											color={theme.text.secondary}
 										/>
 									</View>
 								</Card>
 							)}
 						</Pressable>
+
+						{/* Inline delete confirmation */}
+						{showDeleteInline && (
+							<Animated.View
+								style={{
+									opacity: deleteInlineAnim,
+									transform: [
+										{
+											translateY: deleteInlineAnim.interpolate({
+												inputRange: [0, 1],
+												outputRange: [-8, 0],
+											}),
+										},
+									],
+								}}
+							>
+								<View
+									style={{
+										marginTop: spacing.sm,
+										marginBottom: spacing.md,
+										flexDirection: "row",
+										alignItems: "center",
+									}}
+								>
+									<View style={{ flex: 1, paddingRight: spacing.sm }}>
+										<ThemedText numberOfLines={2} ellipsizeMode="tail">
+											{t("delete_account_warning")}
+										</ThemedText>
+									</View>
+									<View
+										style={{
+											flexDirection: "row",
+											width: 92,
+											justifyContent: "flex-end",
+											gap: spacing.sm,
+										}}
+									>
+										<Pressable
+											onPress={() => {
+												Animated.timing(deleteInlineAnim, {
+													toValue: 0,
+													duration: 160,
+													useNativeDriver: true,
+												}).start(() => setShowDeleteInline(false));
+											}}
+											style={{ padding: 8, borderRadius: 8 }}
+										>
+											<Ionicons
+												name="close"
+												size={20}
+												color={theme.error?.main ?? "#ef4444"}
+											/>
+										</Pressable>
+										<Pressable
+											onPress={async () => {
+												Animated.timing(deleteInlineAnim, {
+													toValue: 0,
+													duration: 160,
+													useNativeDriver: true,
+												}).start(async () => {
+													setShowDeleteInline(false);
+													await handleDeleteAccount();
+												});
+											}}
+											style={{ padding: 8, borderRadius: 8 }}
+										>
+											<Ionicons
+												name="checkmark"
+												size={20}
+												color={theme.success?.main ?? "#22c55e"}
+											/>
+										</Pressable>
+									</View>
+								</View>
+							</Animated.View>
+						)}
 					</Animated.View>
 				</ScrollView>
 			</SafeAreaView>
 
-			<ConfirmDialog
-				visible={showDeleteDialog}
-				title={
-					<View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
-						<LinearGradient
-							colors={["#6366f1", "#8b5cf6"]}
-							start={{ x: 0, y: 0 }}
-							end={{ x: 1, y: 1 }}
-							style={{ width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" }}
-						>
-							<MaterialCommunityIcons name="trash-can-outline" size={20} color="#fff" />
-						</LinearGradient>
-						<Text style={{ fontSize: 18, fontWeight: "600", color: theme.text.primary, flex: 1 }}>
-							{t("delete_account")}
-						</Text>
-					</View>
-				}
-				message={t("delete_account_message")}
-				confirmLabel={t("delete")}
-				cancelLabel={t("cancel")}
-				onConfirm={handleDeleteAccount}
-				onClose={() => setShowDeleteDialog(false)}
-				confirmVariant="danger"
-				loading={deleting}
-			/>
-
-			<ConfirmDialog
-				visible={showResetDialog}
-				title={
-					<View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
-						<LinearGradient
-							colors={["#6366f1", "#8b5cf6"]}
-							start={{ x: 0, y: 0 }}
-							end={{ x: 1, y: 1 }}
-							style={{ width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" }}
-						>
-							<Ionicons name="refresh-outline" size={20} color="#fff" />
-						</LinearGradient>
-						<Text style={{ fontSize: 18, fontWeight: "600", color: theme.text.primary, flex: 1 }}>
-							{t("reset_statistics") || "Reset Statistics"}
-						</Text>
-					</View>
-				}
-				message={
-					t("reset_statistics_confirm") ||
-					"Are you sure you want to reset all statistics? This action cannot be undone."
-				}
-				confirmLabel={t("reset") || "Reset"}
-				cancelLabel={t("cancel")}
-				onConfirm={handleResetStatistics}
-				onClose={() => setShowResetDialog(false)}
-				confirmVariant="warning"
-				loading={resetting}
-			/>
+			{/* Removed modal ConfirmDialogs for reset and delete — using inline confirmations instead */}
 
 			<AlertDialog
 				visible={alertConfig.visible}
@@ -676,11 +950,32 @@ const styles = StyleSheet.create({
 		marginBottom: spacing.md,
 	},
 	avatar: {
-		width: 60,
-		height: 60,
-		borderRadius: 30,
+		width: 72,
+		height: 72,
+		borderRadius: 36,
 		justifyContent: "center",
 		alignItems: "center",
+	},
+	avatarImage: {
+		width: 72,
+		height: 72,
+		borderRadius: 36,
+	},
+	avatarFallback: {
+		width: 72,
+		height: 72,
+		borderRadius: 36,
+		justifyContent: "center",
+		alignItems: "center",
+	},
+	displayName: {
+		fontSize: 18,
+		fontWeight: "700",
+	},
+	memberSince: {
+		marginTop: 6,
+		fontSize: 12,
+		color: "#9aa4b2",
 	},
 	avatarText: {
 		fontSize: 24,
@@ -722,6 +1017,47 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "center",
 		gap: spacing.md,
+	},
+	subscriptionTop: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		marginBottom: spacing.sm,
+	},
+	planIconGradient: {
+		width: 48,
+		height: 48,
+		borderRadius: 12,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	manageBtn: {
+		paddingHorizontal: 10,
+		paddingVertical: 6,
+		borderRadius: 8,
+		borderWidth: 1,
+		borderColor: "transparent",
+		backgroundColor: "rgba(255,255,255,0.06)",
+	},
+	manageBtnText: {
+		fontSize: 13,
+		fontWeight: "600",
+		color: "#fff",
+	},
+	planManageBtn: {
+		position: "absolute",
+		top: spacing.sm,
+		right: spacing.sm,
+		paddingHorizontal: 10,
+		paddingVertical: 6,
+		borderRadius: 8,
+		backgroundColor: "#3b82f6",
+		zIndex: 2,
+	},
+	planManageBtnText: {
+		color: "#fff",
+		fontWeight: "700",
+		fontSize: 13,
 	},
 	planIconContainer: {
 		width: 44,

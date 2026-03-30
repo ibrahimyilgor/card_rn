@@ -23,10 +23,19 @@ import {
 import { spacing, borderRadius } from "../styles/theme";
 import AchievementBadge from "../components/AchievementBadge";
 import { LinearGradient } from "expo-linear-gradient";
-import Svg, { Defs, LinearGradient as SvgGradient, Stop, Text as SvgText } from "react-native-svg";
+import Svg, {
+	Defs,
+	LinearGradient as SvgGradient,
+	Stop,
+	Text as SvgText,
+} from "react-native-svg";
 
 // Gradient text via SVG
-function GradientText({ text, fontSize = 22, colors = ["#6C63FF", "#9B59B6"] }) {
+function GradientText({
+	text,
+	fontSize = 22,
+	colors = ["#6C63FF", "#9B59B6"],
+}) {
 	const charCount = text.length;
 	const width = fontSize * charCount * 0.65;
 	const height = fontSize * 1.4;
@@ -39,7 +48,8 @@ function GradientText({ text, fontSize = 22, colors = ["#6C63FF", "#9B59B6"] }) 
 				</SvgGradient>
 			</Defs>
 			<SvgText
-				x={width / 2} y={fontSize * 1.05}
+				x={width / 2}
+				y={fontSize * 1.05}
 				textAnchor="middle"
 				fontSize={fontSize}
 				fontWeight="800"
@@ -233,8 +243,8 @@ const AchievementsScreen = () => {
 
 	const CATEGORY_COLOR = {
 		accuracy: "#4ECDC4",
-		streak:   "#FF6B35",
-		volume:   "#9B59B6",
+		streak: "#FF6B35",
+		volume: "#9B59B6",
 	};
 
 	// Return a color for the achievement (used for badge backgrounds)
@@ -242,10 +252,95 @@ const AchievementsScreen = () => {
 		return CATEGORY_COLOR[achievement.category] || theme.primary.main;
 	};
 
+	// Simple skeleton component (pulse)
+	const Skeleton = ({ width = "100%", height = 12, style }) => {
+		const pulse = useRef(new Animated.Value(0.8)).current;
+		useEffect(() => {
+			const loop = Animated.loop(
+				Animated.sequence([
+					Animated.timing(pulse, {
+						toValue: 1,
+						duration: 600,
+						useNativeDriver: true,
+					}),
+					Animated.timing(pulse, {
+						toValue: 0.8,
+						duration: 600,
+						useNativeDriver: true,
+					}),
+				]),
+			);
+			loop.start();
+			return () => loop.stop();
+		}, [pulse]);
+
+		const bg = theme && theme.mode === "dark" ? "#3a3a3a" : "#e6e9ee";
+		return (
+			<Animated.View
+				style={[
+					{
+						width,
+						height,
+						borderRadius: 8,
+						backgroundColor: bg,
+						opacity: pulse,
+					},
+					style,
+				]}
+			/>
+		);
+	};
+
 	if (loading) {
+		// Show header and skeleton placeholders while loading
 		return (
 			<ThemedView variant="gradient" style={styles.container}>
-				<LoadingState fullScreen message={t("loading")} />
+				<SafeAreaView style={styles.safeArea} edges={["top"]}>
+					<ScrollView contentContainerStyle={styles.scrollContent}>
+						{/* Header (always visible) */}
+						<View style={styles.header}>
+							<View style={styles.headerTitle}>
+								<FontAwesome5
+									name="trophy"
+									size={26}
+									color={theme.primary.main}
+								/>
+								<ThemedText variant="h2" style={styles.headerTitleText}>
+									{t("achievements")}
+								</ThemedText>
+							</View>
+							<ThemedText color="secondary">
+								{t("achievements_subtitle")}
+							</ThemedText>
+						</View>
+
+						{/* Progress skeleton — simplified: no pill, only outer skeleton */}
+						<Card style={styles.progressCard}>
+							<Skeleton width="100%" height={48} />
+						</Card>
+
+						{/* Category skeletons */}
+						{categoryOrder.map((category) => (
+							<View key={category} style={styles.categorySection}>
+								{/* Simplified: skeletonize outer sections only */}
+								<Skeleton
+									width="40%"
+									height={20}
+									style={{ marginBottom: spacing.md }}
+								/>
+								<Card
+									style={[
+										styles.achievementCard,
+										styles.achievementCardLocked,
+										{ width: "100%", height: 160, padding: spacing.md },
+									]}
+								>
+									<Skeleton width="100%" height={120} />
+								</Card>
+							</View>
+						))}
+					</ScrollView>
+				</SafeAreaView>
 			</ThemedView>
 		);
 	}
@@ -321,7 +416,12 @@ const AchievementsScreen = () => {
 								</View>
 								{/* Info */}
 								<View style={styles.progressInfo}>
-									<Text style={[styles.progressTitle, { color: theme.text.primary }]}>
+									<Text
+										style={[
+											styles.progressTitle,
+											{ color: theme.text.primary },
+										]}
+									>
 										{t("achievements_earned") || t("achievements_earned")}
 									</Text>
 								</View>
@@ -339,68 +439,73 @@ const AchievementsScreen = () => {
 							<View key={category} style={styles.categorySection}>
 								<View style={styles.categoryHeader}>
 									<CategoryIcon category={category} size={24} />
-									<ThemedText variant="h3" style={{ color: CATEGORY_COLOR[category] }}>
+									<ThemedText
+										variant="h3"
+										style={{ color: CATEGORY_COLOR[category] }}
+									>
 										{t(`achievement_category_${category}`)}
 									</ThemedText>
 								</View>
 
 								<View style={styles.achievementsGrid}>
 									{categoryAchievements.map((achievement) => {
-										const catColor = CATEGORY_COLOR[achievement.category] || theme.primary.main;
+										const catColor =
+											CATEGORY_COLOR[achievement.category] ||
+											theme.primary.main;
 										return (
-										<Card
-											key={achievement.id}
-											style={[
-												styles.achievementCard,
-												!achievement.earned && styles.achievementCardLocked,
-												achievement.earned && {
-													borderColor: catColor + "33",
-													borderWidth: 1,
-												},
-											]}
-										>
-											<AchievementBadge
-												type={achievement.category}
-												size={72}
-												earned={achievement.earned}
-												interactive={achievement.earned}
-												value={achievement.threshold}
-											/>
-
-											<ThemedText
-												numberOfLines={2}
+											<Card
+												key={achievement.id}
 												style={[
-													styles.achievementName,
-													achievement.earned
-														? { color: catColor }
-														: { opacity: 0.4 },
+													styles.achievementCard,
+													!achievement.earned && styles.achievementCardLocked,
+													achievement.earned && {
+														borderColor: catColor + "33",
+														borderWidth: 1,
+													},
 												]}
 											>
-												{getAchievementName(achievement)}
-											</ThemedText>
+												<AchievementBadge
+													type={achievement.category}
+													size={72}
+													earned={achievement.earned}
+													interactive={achievement.earned}
+													value={achievement.threshold}
+												/>
 
-											{achievement.earned && achievement.earned_at && (
 												<ThemedText
-													style={styles.achievementDesc}
-													color="secondary"
-												>
-													{formatDate(achievement.earned_at)}
-												</ThemedText>
-											)}
-
-											{achievement.earned && achievement.done_count > 1 && (
-												<View
+													numberOfLines={2}
 													style={[
-														styles.earnedBadge,
-														{ backgroundColor: catColor },
+														styles.achievementName,
+														achievement.earned
+															? { color: catColor }
+															: { opacity: 0.4 },
 													]}
 												>
-													<Text style={styles.earnedBadgeText}>
-														×{fmt(achievement.done_count)}
-													</Text>
-												</View>
-											)}
-										</Card>
+													{getAchievementName(achievement)}
+												</ThemedText>
+
+												{achievement.earned && achievement.earned_at && (
+													<ThemedText
+														style={styles.achievementDesc}
+														color="secondary"
+													>
+														{formatDate(achievement.earned_at)}
+													</ThemedText>
+												)}
+
+												{achievement.earned && achievement.done_count > 1 && (
+													<View
+														style={[
+															styles.earnedBadge,
+															{ backgroundColor: catColor },
+														]}
+													>
+														<Text style={styles.earnedBadgeText}>
+															×{fmt(achievement.done_count)}
+														</Text>
+													</View>
+												)}
+											</Card>
 										);
 									})}
 								</View>

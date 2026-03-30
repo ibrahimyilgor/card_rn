@@ -4,11 +4,11 @@
 		"slug": "card_rn",
 		"version": "1.0.0",
 		"orientation": "portrait",
-		"icon": "./assets/icon.png",
+		"icon": "./assets/favicon.svg",
 		"userInterfaceStyle": "light",
 		"newArchEnabled": false,
 		"splash": {
-			"image": "./assets/splash-icon.png",
+			"image": "./assets/splash-favicon.svg",
 			"resizeMode": "contain",
 			"backgroundColor": "#ffffff"
 		},
@@ -19,7 +19,7 @@
 		},
 		"android": {
 			"adaptiveIcon": {
-				"foregroundImage": "./assets/adaptive-icon.png",
+				"foregroundImage": "./assets/adaptive-favicon.svg",
 				"backgroundColor": "#ffffff"
 			},
 			"edgeToEdgeEnabled": true,
@@ -27,7 +27,7 @@
 			"googleServicesFile": "./google-services.json"
 		},
 		"web": {
-			"favicon": "./assets/favicon.png"
+			"favicon": "./assets/favicon.svg"
 		},
 		"extra": {
 			"apiUrl": "http://localhost:5000",

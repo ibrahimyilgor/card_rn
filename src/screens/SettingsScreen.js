@@ -3,12 +3,12 @@ import {
 	View,
 	StyleSheet,
 	ScrollView,
-	Switch,
 	Text,
-	Image,
 	Animated,
+	Pressable,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useFocusEffect } from "@react-navigation/native";
 import { useTheme } from "../context/ThemeContext";
 import { useI18n } from "../context/I18nContext";
 import { authHelpers, accountAPI } from "../services/api";
@@ -24,9 +24,11 @@ import { spacing, borderRadius } from "../styles/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import AppLogo from "../components/ui/AppLogo";
+import Toggle from "../components/ui/Toggle";
+import { TRFlag, GBFlag } from "../components/ui/FlagIcons";
 
-// Module-level flag — persists across context-triggered remounts within the same app session
-let _settingsAnimated = false;
+// Animations will run on every focus (no module-level persistence)
 
 // Defined outside the component so React never sees it as a new component type on re-render
 const SettingsItem = ({
@@ -67,43 +69,47 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 	const { theme, mode, setTheme, isDark } = useTheme();
 	const { t, language, setLanguage } = useI18n();
 
+	const scrollRef = useRef(null);
+	const contentHeightRef = useRef(0);
+
 	const [soundEnabled, setSoundEnabled] = useState(true);
 	const [loading, setLoading] = useState(false);
 	const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+	const [showInlineLogout, setShowInlineLogout] = useState(false);
+	const inlineLogoutAnim = useRef(new Animated.Value(0)).current;
 	const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
 
-	// Section entrance animations
-	const headerAnim = useRef(
-		new Animated.Value(_settingsAnimated ? 1 : 0),
-	).current;
+	// Section entrance animations (reset on each focus)
 	const sectionAnims = useRef(
-		Array.from(
-			{ length: 6 },
-			() => new Animated.Value(_settingsAnimated ? 1 : 0),
-		),
+		Array.from({ length: 6 }, () => new Animated.Value(0)),
 	).current;
+	// Run and reset entrance animations on every focus so they always look the same
+	useFocusEffect(
+		React.useCallback(() => {
+			// ensure scroll is at top on each focus and reset sections
+			scrollRef.current?.scrollTo({ y: 0, animated: true });
 
-	useEffect(() => {
-		// Run entrance animations only once per app session
-		if (_settingsAnimated) return;
-		_settingsAnimated = true;
+			// reset sections
+			sectionAnims.forEach((a) => a.setValue(0));
 
-		Animated.timing(headerAnim, {
-			toValue: 1,
-			duration: 350,
-			useNativeDriver: true,
-		}).start();
+			// faster, snappy timings to match Account screen (header is static)
+			sectionAnims.forEach((anim, index) => {
+				Animated.spring(anim, {
+					toValue: 1,
+					delay: 80 + index * 60,
+					useNativeDriver: true,
+					speed: 20,
+					bounciness: 4,
+				}).start();
+			});
 
-		sectionAnims.forEach((anim, index) => {
-			Animated.spring(anim, {
-				toValue: 1,
-				delay: 100 + index * 80,
-				useNativeDriver: true,
-				speed: 14,
-				bounciness: 3,
-			}).start();
-		});
-	}, []);
+			return () => {
+				try {
+					sectionAnims.forEach((a) => a.stopAnimation());
+				} catch (e) {}
+			};
+		}, [sectionAnims]),
+	);
 
 	// Load preferences on mount
 	useEffect(() => {
@@ -162,8 +168,31 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 	}, []);
 
 	const handleLogout = React.useCallback(() => {
-		setShowLogoutDialog(true);
-	}, []);
+		// Toggle: if confirmation already visible, hide it; otherwise show it
+		if (showInlineLogout) {
+			Animated.timing(inlineLogoutAnim, {
+				toValue: 0,
+				duration: 180,
+				useNativeDriver: true,
+			}).start(() => setShowInlineLogout(false));
+			return;
+		}
+
+		// show inline animated confirmation instead of modal
+		setShowInlineLogout(true);
+		inlineLogoutAnim.setValue(0);
+		Animated.timing(inlineLogoutAnim, {
+			toValue: 1,
+			duration: 220,
+			useNativeDriver: true,
+		}).start(() => {
+			// ensure it's visible by scrolling to bottom after animation (use measured height for smoother native scroll)
+			scrollRef.current?.scrollTo({
+				y: Math.max(0, contentHeightRef.current - 1),
+				animated: true,
+			});
+		});
+	}, [inlineLogoutAnim, showInlineLogout]);
 
 	const confirmLogout = React.useCallback(async () => {
 		await authHelpers.clearAuth();
@@ -177,24 +206,13 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 	return (
 		<ThemedView variant="gradient" style={styles.container}>
 			<SafeAreaView style={styles.safeArea} edges={["top"]}>
-				<ScrollView contentContainerStyle={styles.scrollContent}>
+				<ScrollView
+					ref={scrollRef}
+					contentContainerStyle={styles.scrollContent}
+					onContentSizeChange={(w, h) => (contentHeightRef.current = h)}
+				>
 					{/* Header */}
-					<Animated.View
-						style={[
-							styles.header,
-							{
-								opacity: headerAnim,
-								transform: [
-									{
-										translateY: headerAnim.interpolate({
-											inputRange: [0, 1],
-											outputRange: [-15, 0],
-										}),
-									},
-								],
-							},
-						]}
-					>
+					<View style={styles.header}>
 						<View style={styles.headerTitle}>
 							<Ionicons name="settings" size={26} color={theme.primary.main} />
 							<ThemedText variant="h2" style={styles.headerTitleText}>
@@ -202,7 +220,7 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 							</ThemedText>
 						</View>
 						<ThemedText color="secondary">{t("settings_subtitle")}</ThemedText>
-					</Animated.View>
+					</View>
 
 					{/* Appearance Section */}
 					<Animated.View
@@ -238,15 +256,10 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 										mode === "dark" ? theme.text.secondary : theme.primary.main
 									}
 								/>
-								<Switch
+								<Toggle
 									value={mode === "dark"}
 									onValueChange={handleThemeChange}
-									trackColor={{
-										false: theme.background.elevated,
-										true: theme.primary.main,
-									}}
-									thumbColor={mode === "dark" ? "#fff" : "#f4f3f4"}
-									style={{ marginHorizontal: spacing.sm }}
+									activeColor={theme.primary.main}
 								/>
 								<Ionicons
 									name="moon-outline"
@@ -286,9 +299,13 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 							onPress={() => setShowLanguageDropdown((v) => !v)}
 						>
 							<View style={styles.languageContent}>
-								<Text style={styles.flag}>
-									{language === "tr" ? "🇹🇷" : "🇬🇧"}
-								</Text>
+								<View style={styles.flagWrap}>
+									{language === "tr" ? (
+										<TRFlag size={18} />
+									) : (
+										<GBFlag size={18} />
+									)}
+								</View>
 								<ThemedText style={styles.languageLabel}>
 									{language === "tr" ? "Türkçe" : "English"}
 								</ThemedText>
@@ -305,19 +322,27 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 							<View
 								style={[
 									styles.dropdownContainer,
-									{ borderColor: theme.divider },
+									{
+										backgroundColor: theme.background.elevated,
+										borderColor: theme.border.main,
+									},
 								]}
 							>
 								{[
-									{ code: "en", flag: "🇬🇧", label: "English" },
-									{ code: "tr", flag: "🇹🇷", label: "Türkçe" },
-								].map((lang) => (
-									<Card
+									{ code: "en", Flag: GBFlag, label: "English" },
+									{ code: "tr", Flag: TRFlag, label: "Türkçe" },
+								].map((lang, index, arr) => (
+									<Pressable
 										key={lang.code}
-										style={[
+										style={({ pressed }) => [
 											styles.dropdownItem,
 											language === lang.code && {
-												backgroundColor: theme.primary.main + "15",
+												backgroundColor: theme.primary.main + "18",
+											},
+											pressed && { backgroundColor: theme.primary.main + "25" },
+											index < arr.length - 1 && {
+												borderBottomWidth: 1,
+												borderBottomColor: theme.border.subtle,
 											},
 										]}
 										onPress={() => {
@@ -326,7 +351,9 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 										}}
 									>
 										<View style={styles.languageContent}>
-											<Text style={styles.flag}>{lang.flag}</Text>
+											<View style={styles.flagWrap}>
+												<lang.Flag size={18} />
+											</View>
 											<ThemedText style={styles.languageLabel}>
 												{lang.label}
 											</ThemedText>
@@ -338,7 +365,7 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 												color={theme.primary.main}
 											/>
 										)}
-									</Card>
+									</Pressable>
 								))}
 							</View>
 						)}
@@ -370,14 +397,10 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 							icon="volume-high-outline"
 							label={t("sound_effects")}
 						>
-							<Switch
+							<Toggle
 								value={soundEnabled}
 								onValueChange={handleSoundChange}
-								trackColor={{
-									false: theme.background.elevated,
-									true: theme.primary.main,
-								}}
-								thumbColor={soundEnabled ? "#fff" : "#f4f3f4"}
+								activeColor={theme.primary.main}
 							/>
 						</SettingsItem>
 					</Animated.View>
@@ -442,20 +465,17 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 						</ThemedText>
 
 						<Card style={styles.aboutCard}>
-							<Image
-								source={require("../../assets/memodeck.png")}
-								style={styles.aboutLogo}
-								resizeMode="contain"
-							/>
-							<ThemedText variant="h3" style={styles.aboutAppName}>
-								MemoDeck v1.0.19
-							</ThemedText>
-							{/* <ThemedText color="secondary" style={styles.aboutVersion}>
-								{t("version")} 1.0.0
-							</ThemedText> */}
-							<ThemedText color="secondary" style={styles.aboutTagline}>
-								{"memodeck26@gmail.com"}
-							</ThemedText>
+							<View style={styles.aboutRow}>
+								<AppLogo width={56} height={56} />
+								<View style={styles.aboutInfo}>
+									<ThemedText variant="h3" style={styles.aboutAppName}>
+										MemoDeck v1.0.20
+									</ThemedText>
+									<ThemedText color="secondary" style={styles.aboutTagline}>
+										{"memodeck26@gmail.com"}
+									</ThemedText>
+								</View>
+							</View>
 						</Card>
 					</Animated.View>
 
@@ -479,8 +499,8 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 							style={[
 								styles.logoutButton,
 								{
-									borderColor: "#dc2626",
-									backgroundColor: "#dc2626",
+									borderColor: "#9f1239",
+									backgroundColor: "#9f1239",
 								},
 							]}
 						>
@@ -491,6 +511,75 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 								</Text>
 							</View>
 						</Button>
+
+						{/* Inline animated logout confirmation */}
+						{showInlineLogout && (
+							<Animated.View
+								style={[
+									styles.inlineConfirm,
+									{
+										opacity: inlineLogoutAnim,
+										transform: [
+											{
+												translateY: inlineLogoutAnim.interpolate({
+													inputRange: [0, 1],
+													outputRange: [-8, 0],
+												}),
+											},
+										],
+									},
+								]}
+							>
+								<View style={styles.inlineRow}>
+									<ThemedText style={styles.inlineText}>
+										{t("logout_confirm")}
+									</ThemedText>
+									<View style={styles.inlineButtons}>
+										<Pressable
+											onPress={() => {
+												Animated.timing(inlineLogoutAnim, {
+													toValue: 0,
+													duration: 180,
+													useNativeDriver: true,
+												}).start(() => setShowInlineLogout(false));
+											}}
+											style={({ pressed }) => [
+												styles.inlineBtn,
+												pressed && { opacity: 0.7 },
+											]}
+										>
+											<Ionicons
+												name="close"
+												size={20}
+												color={theme.error?.main ?? "#ef4444"}
+											/>
+										</Pressable>
+										<Pressable
+											onPress={async () => {
+												Animated.timing(inlineLogoutAnim, {
+													toValue: 0,
+													duration: 160,
+													useNativeDriver: true,
+												}).start(async () => {
+													setShowInlineLogout(false);
+													await confirmLogout();
+												});
+											}}
+											style={({ pressed }) => [
+												styles.inlineBtn,
+												pressed && { opacity: 0.7 },
+											]}
+										>
+											<Ionicons
+												name="checkmark"
+												size={20}
+												color={theme.success?.main ?? "#22c55e"}
+											/>
+										</Pressable>
+									</View>
+								</View>
+							</Animated.View>
+						)}
 					</Animated.View>
 				</ScrollView>
 			</SafeAreaView>
@@ -574,12 +663,41 @@ const styles = StyleSheet.create({
 		marginBottom: spacing.sm,
 		marginLeft: spacing.xs,
 	},
+	inlineConfirm: {
+		marginTop: spacing.sm,
+		marginBottom: spacing.md,
+		padding: spacing.sm,
+		borderRadius: borderRadius.md,
+		backgroundColor: "transparent",
+	},
+	inlineRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		gap: spacing.sm,
+	},
+	inlineText: {
+		flex: 1,
+		fontSize: 14,
+	},
+	inlineButtons: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: spacing.sm,
+	},
+	inlineBtn: {
+		padding: 8,
+		borderRadius: 8,
+		alignItems: "center",
+		justifyContent: "center",
+	},
 	settingsItem: {
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "space-between",
 		padding: spacing.md,
 		marginBottom: spacing.sm,
+		height: 65,
 	},
 	settingsItemLeft: {
 		flexDirection: "row",
@@ -610,12 +728,13 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		justifyContent: "space-between",
 		padding: spacing.md,
-		marginBottom: 0,
+		marginBottom: spacing.sm,
+		height: 65,
 	},
 	dropdownContainer: {
 		borderWidth: 1,
-		borderRadius: borderRadius.md,
-		marginTop: 4,
+		borderRadius: borderRadius.lg,
+		marginTop: 6,
 		marginBottom: spacing.sm,
 		overflow: "hidden",
 	},
@@ -623,16 +742,17 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "space-between",
-		padding: spacing.md,
-		borderRadius: 0,
+		paddingHorizontal: spacing.md,
+		paddingVertical: spacing.md,
 	},
 	languageContent: {
 		flexDirection: "row",
 		alignItems: "center",
 	},
-	flag: {
-		fontSize: 28,
+	flagWrap: {
 		marginRight: spacing.md,
+		borderRadius: 3,
+		overflow: "hidden",
 	},
 	languageLabel: {
 		fontSize: 16,
@@ -658,26 +778,22 @@ const styles = StyleSheet.create({
 		fontWeight: "600",
 	},
 	aboutCard: {
-		alignItems: "center",
-		padding: spacing.xl,
+		padding: spacing.lg,
 	},
-	aboutLogo: {
-		width: 80,
-		height: 80,
-		borderRadius: 16,
-		marginBottom: spacing.md,
+	aboutRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: spacing.md,
+	},
+	aboutInfo: {
+		flex: 1,
+		gap: 2,
 	},
 	aboutAppName: {
 		fontWeight: "700",
-		marginBottom: spacing.xs,
-	},
-	aboutVersion: {
-		fontSize: 14,
-		marginBottom: spacing.sm,
 	},
 	aboutTagline: {
 		fontSize: 13,
-		textAlign: "center",
 	},
 });
 

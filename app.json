@@ -20,11 +20,9 @@
 		},
 		"android": {
 			"softwareKeyboardLayoutMode": "pan",
-			"blockedPermissions": [
-				"com.google.android.gms.permission.AD_ID"
-			],
+			"blockedPermissions": ["com.google.android.gms.permission.AD_ID"],
 			"adaptiveIcon": {
-				"foregroundImage": "./assets/adaptive-icon.png",
+				"foregroundImage": "./assets/adaptive-icon-new.png",
 				"backgroundColor": "#ffffff"
 			},
 			"edgeToEdgeEnabled": true,
@@ -32,7 +30,7 @@
 			"googleServicesFile": "./google-services.json"
 		},
 		"web": {
-			"favicon": "./assets/favicon.png"
+			"favicon": "./assets/favicon.svg"
 		},
 		"extra": {
 			"apiUrl": "http://localhost:5000",

@@ -37,7 +37,6 @@ import {
 	LoadingState,
 	Button,
 	AlertDialog,
-	LoadingOverlay,
 } from "../components/ui";
 import { useNavigation } from "@react-navigation/native";
 import { spacing, borderRadius } from "../styles/theme";
@@ -48,12 +47,13 @@ const CHART_WIDTH = SCREEN_WIDTH - spacing.lg * 2 - spacing.md * 2;
 // Load logo as base64 for PDF
 const getLogoBase64 = async () => {
 	try {
-		const asset = Asset.fromModule(require("../../assets/memodeck.png"));
+		const asset = Asset.fromModule(require("../../assets/favicon.svg"));
 		await asset.downloadAsync();
-		const base64 = await FileSystem.readAsStringAsync(asset.localUri, {
-			encoding: "base64",
+		const svgText = await FileSystem.readAsStringAsync(asset.localUri, {
+			encoding: "utf8",
 		});
-		return `data:image/png;base64,${base64}`;
+		const base64 = btoa(unescape(encodeURIComponent(svgText)));
+		return `data:image/svg+xml;base64,${base64}`;
 	} catch (error) {
 		console.error("Error loading logo:", error);
 		return null;
@@ -402,6 +402,47 @@ const StatsScreen = () => {
 	const [sortBy, setSortBy] = useState("times_played");
 	const [sortOrder, setSortOrder] = useState("desc");
 
+	// Simple skeleton component (pulse)
+	const Skeleton = ({ width = "100%", height = 12, style }) => {
+		const pulse = useRef(new Animated.Value(0.8)).current;
+		useEffect(() => {
+			const loop = Animated.loop(
+				Animated.sequence([
+					Animated.timing(pulse, {
+						toValue: 1,
+						duration: 600,
+						useNativeDriver: true,
+					}),
+					Animated.timing(pulse, {
+						toValue: 0.8,
+						duration: 600,
+						useNativeDriver: true,
+					}),
+				]),
+			);
+			loop.start();
+			return () => loop.stop();
+		}, [pulse]);
+
+		const bg = theme && theme.mode === "dark" ? "#3a3a3a" : "#e6e9ee";
+		return (
+			<Animated.View
+				style={[
+					{
+						width,
+						height,
+						borderRadius: 8,
+						backgroundColor: bg,
+						opacity: pulse,
+					},
+					style,
+				]}
+			/>
+		);
+	};
+
+	const showSkeleton = loading && !filteredStats;
+
 	// Date presets (added 1y, removed custom selector)
 	const presets = [
 		// { key: "today", label: t("today") || "Today", days: 0 },
@@ -657,6 +698,8 @@ const StatsScreen = () => {
 				statsAPI.getChartData(deckParam, startStr, endStr),
 				statsAPI.getCardsTable(deckParam), // fetch by deck, sort is done client-side
 			]);
+			console.log("fetchData params:", { deckParam, startStr, endStr });
+			console.log("chartRes sample:", chartRes?.data?.data?.slice(0, 3));
 			setChartData(chartRes.data || { data: [], grouping: "daily" });
 			const rawCards = cardsRes.data?.cards || [];
 			console.log(
@@ -1619,11 +1662,7 @@ const StatsScreen = () => {
 
 	return (
 		<ThemedView variant="gradient" style={styles.container}>
-			{/* Overlay shown while refreshing/filtering (not on first load) */}
-			<LoadingOverlay
-				visible={loading && !!filteredStats}
-				message={t("loading") || "Loading..."}
-			/>
+
 			<SafeAreaView style={styles.safeArea} edges={["top"]}>
 				<ScrollView
 					contentContainerStyle={styles.scrollContent}
@@ -1823,247 +1862,284 @@ const StatsScreen = () => {
 								},
 							]}
 						>
-							<StatCard
-								icon={
-									<MaterialCommunityIcons
-										name="school"
-										size={24}
-										color="#3b82f6"
+							{showSkeleton ? (
+								<>
+									{[...Array(6)].map((_, i) => (
+										<Card key={`sk-${i}`} style={styles.statCard}>
+											<View style={[styles.statIconContainer]}>
+												<Skeleton width={32} height={32} style={{ borderRadius: 8 }} />
+											</View>
+											<View style={styles.statContent}>
+												<Skeleton width="60%" height={12} />
+												<View style={{ height: 6 }} />
+												<Skeleton width="40%" height={18} />
+											</View>
+										</Card>
+									))}
+								</>
+							) : (
+								<>
+									<StatCard
+										icon={
+											<MaterialCommunityIcons
+												name="school"
+												size={24}
+												color="#3b82f6"
+											/>
+										}
+										iconColor="#3b82f6"
+										title={t("cards_studied") || "Cards Studied"}
+										value={effectiveStats?.cardsStudied || 0}
+										theme={theme}
 									/>
-								}
-								iconColor="#3b82f6"
-								title={t("cards_studied") || "Cards Studied"}
-								value={effectiveStats?.cardsStudied || 0}
-								theme={theme}
-							/>
-							<StatCard
-								icon={
-									<MaterialCommunityIcons
-										name="check-circle"
-										size={24}
-										color="#22c55e"
+									<StatCard
+										icon={
+											<MaterialCommunityIcons
+												name="check-circle"
+												size={24}
+												color="#22c55e"
+											/>
+										}
+										iconColor="#22c55e"
+										title={t("correct_answers") || "Correct"}
+										value={effectiveStats?.correct || 0}
+										theme={theme}
 									/>
-								}
-								iconColor="#22c55e"
-								title={t("correct_answers") || "Correct"}
-								value={effectiveStats?.correct || 0}
-								theme={theme}
-							/>
-							<StatCard
-								icon={
-									<MaterialCommunityIcons
-										name="alert-circle-outline"
-										size={24}
-										color="#ef4444"
+									<StatCard
+										icon={
+											<MaterialCommunityIcons
+												name="alert-circle-outline"
+												size={24}
+												color="#ef4444"
+											/>
+										}
+										iconColor="#ef4444"
+										title={t("wrong_answers") || "Incorrect"}
+										value={effectiveStats?.incorrect || 0}
+										theme={theme}
 									/>
-								}
-								iconColor="#ef4444"
-								title={t("wrong_answers") || "Incorrect"}
-								value={effectiveStats?.incorrect || 0}
-								theme={theme}
-							/>
-							<StatCard
-								icon={
-									<MaterialCommunityIcons
-										name="trophy"
-										size={24}
-										color="#8b5cf6"
+									<StatCard
+										icon={
+											<MaterialCommunityIcons
+												name="trophy"
+												size={24}
+												color="#8b5cf6"
+											/>
+										}
+										iconColor="#8b5cf6"
+										title={t("accuracy") || "Accuracy"}
+										value={`${accuracy}%`}
+										theme={theme}
 									/>
-								}
-								iconColor="#8b5cf6"
-								title={t("accuracy") || "Accuracy"}
-								value={`${accuracy}%`}
-								theme={theme}
-							/>
-							<StatCard
-								icon={
-									<MaterialCommunityIcons
-										name="clock-outline"
-										size={24}
-										color="#06b6d4"
+									<StatCard
+										icon={
+											<MaterialCommunityIcons
+												name="clock-outline"
+												size={24}
+												color="#06b6d4"
+											/>
+										}
+										iconColor="#06b6d4"
+										title={t("study_time") || "Study Time"}
+										value={formatDuration(effectiveStats?.studyTimeSeconds || 0)}
+										theme={theme}
 									/>
-								}
-								iconColor="#06b6d4"
-								title={t("study_time") || "Study Time"}
-								value={formatDuration(effectiveStats?.studyTimeSeconds || 0)}
-								theme={theme}
-							/>
-							<StatCard
-								icon={
-									<MaterialCommunityIcons
-										name="calendar"
-										size={24}
-										color="#f59e0b"
+									<StatCard
+										icon={
+											<MaterialCommunityIcons
+												name="calendar"
+												size={24}
+												color="#f59e0b"
+											/>
+										}
+										iconColor="#f59e0b"
+										title={t("sessions") || "Sessions"}
+										value={effectiveStats?.sessions || 0}
+										theme={theme}
 									/>
-								}
-								iconColor="#f59e0b"
-								title={t("sessions") || "Sessions"}
-								value={effectiveStats?.sessions || 0}
-								theme={theme}
-							/>
+								</>
+							)}
 						</Animated.View>
 
 						{/* Charts Section */}
 						{/* Study Activity Chart */}
-						{activityChartData && (
+						{showSkeleton ? (
 							<Card style={styles.chartCard}>
-								<SectionHeader
-									icon="chart-line"
-									title={t("study_activity") || "Study Activity"}
-									theme={theme}
-								/>
-								<LineChart
-									data={activityChartData}
-									width={CHART_WIDTH}
-									height={200}
-									chartConfig={chartConfig}
-									bezier
-									style={styles.chart}
-									formatYLabel={(y) => `${Math.round(Number(y) || 0)}`}
-									onDataPointClick={({ index, value, x, y }) => {
-										const d = (filledChartData.data || [])[index];
-										setTooltip({
-											x,
-											y,
-											label: d ? formatFullDate(d.date) : "",
-											value: `${value} ${t("cards") || "Cards"}`,
-											chart: "activity",
-										});
-									}}
-									decorator={() =>
-										tooltip?.chart === "activity" ? (
-											<View
-												style={[
-													styles.tooltipContainer,
-													{ left: tooltip.x - 60, top: tooltip.y - 55 },
-												]}
-											>
-												<Text style={styles.tooltipDate}>{tooltip.label}</Text>
-												<Text style={styles.tooltipValue}>{tooltip.value}</Text>
-											</View>
-										) : null
-									}
-								/>
+								<Skeleton height={200} width="100%" />
 							</Card>
+						) : (
+							activityChartData && (
+								<Card style={styles.chartCard}>
+									<SectionHeader
+										icon="chart-line"
+										title={t("study_activity") || "Study Activity"}
+										theme={theme}
+									/>
+									<LineChart
+										data={activityChartData}
+										width={CHART_WIDTH}
+										height={200}
+										chartConfig={chartConfig}
+										bezier
+										style={styles.chart}
+										formatYLabel={(y) => `${Math.round(Number(y) || 0)}`}
+										onDataPointClick={({ index, value, x, y }) => {
+											const d = (filledChartData.data || [])[index];
+											setTooltip({
+												x,
+												y,
+												label: d ? formatFullDate(d.date) : "",
+												value: `${value} ${t("cards") || "Cards"}`,
+												chart: "activity",
+											});
+										}}
+										decorator={() =>
+											tooltip?.chart === "activity" ? (
+												<View
+													style={[
+														styles.tooltipContainer,
+														{ left: tooltip.x - 60, top: tooltip.y - 55 },
+													]}
+												>
+													<Text style={styles.tooltipDate}>{tooltip.label}</Text>
+													<Text style={styles.tooltipValue}>{tooltip.value}</Text>
+												</View>
+											) : null
+										}
+									/>
+								</Card>
+							)
 						)}
 
 						{/* Accuracy Trend Chart */}
-						{accuracyChartData && (
+						{showSkeleton ? (
 							<Card style={styles.chartCard}>
-								<SectionHeader
-									icon="target"
-									title={t("accuracy_trend") || "Accuracy Trend"}
-									theme={theme}
-								/>
-								<LineChart
-									data={accuracyChartData}
-									width={CHART_WIDTH}
-									height={200}
-									chartConfig={{
-										...chartConfig,
-										color: () => "#22c55e",
-									}}
-									bezier
-									style={styles.chart}
-									formatYLabel={(y) => `${Math.round(Number(y) || 0)}`}
-									withLegend={false}
-									onDataPointClick={({ index, x, y }) => {
-										const d = (filledChartData.data || [])[index];
-										const correctVal = parseInt(d?.correct) || 0;
-										const incorrectVal = parseInt(d?.incorrect) || 0;
-										setTooltip({
-											x,
-											y,
-											label: d ? formatFullDate(d.date) : "",
-											value: `✓ ${correctVal}  ✗ ${incorrectVal}`,
-											chart: "accuracy",
-										});
-									}}
-									decorator={() =>
-										tooltip?.chart === "accuracy" ? (
-											<View
-												style={[
-													styles.tooltipContainer,
-													{ left: tooltip.x - 60, top: tooltip.y - 55 },
-												]}
-											>
-												<Text style={styles.tooltipDate}>{tooltip.label}</Text>
-												<Text style={styles.tooltipValue}>{tooltip.value}</Text>
-											</View>
-										) : null
-									}
-								/>
-								<View style={styles.legendContainer}>
-									<View style={styles.legendItem}>
-										<View
-											style={[styles.legendDot, { backgroundColor: "#22c55e" }]}
-										/>
-										<ThemedText color="secondary" style={styles.legendText}>
-											{t("correct") || "Correct"}
-										</ThemedText>
-									</View>
-									<View style={styles.legendItem}>
-										<View
-											style={[styles.legendDot, { backgroundColor: "#ef4444" }]}
-										/>
-										<ThemedText color="secondary" style={styles.legendText}>
-											{t("incorrect") || "Incorrect"}
-										</ThemedText>
-									</View>
-								</View>
+								<Skeleton height={200} width="100%" />
 							</Card>
+						) : (
+							accuracyChartData && (
+								<Card style={styles.chartCard}>
+									<SectionHeader
+										icon="target"
+										title={t("accuracy_trend") || "Accuracy Trend"}
+										theme={theme}
+									/>
+									<LineChart
+										data={accuracyChartData}
+										width={CHART_WIDTH}
+										height={200}
+										chartConfig={{
+											...chartConfig,
+											color: () => "#22c55e",
+										}}
+										bezier
+										style={styles.chart}
+										formatYLabel={(y) => `${Math.round(Number(y) || 0)}`}
+										withLegend={false}
+										onDataPointClick={({ index, x, y }) => {
+											const d = (filledChartData.data || [])[index];
+											const correctVal = parseInt(d?.correct) || 0;
+											const incorrectVal = parseInt(d?.incorrect) || 0;
+											setTooltip({
+												x,
+												y,
+												label: d ? formatFullDate(d.date) : "",
+												value: `✓ ${correctVal}  ✗ ${incorrectVal}`,
+												chart: "accuracy",
+											});
+										}}
+										decorator={() =>
+											tooltip?.chart === "accuracy" ? (
+												<View
+													style={[
+														styles.tooltipContainer,
+														{ left: tooltip.x - 60, top: tooltip.y - 55 },
+														]}
+												>
+													<Text style={styles.tooltipDate}>{tooltip.label}</Text>
+													<Text style={styles.tooltipValue}>{tooltip.value}</Text>
+												</View>
+											) : null
+										}
+									/>
+									<View style={styles.legendContainer}>
+										<View style={styles.legendItem}>
+											<View
+												style={[styles.legendDot, { backgroundColor: "#22c55e" }]}
+											/>
+											<ThemedText color="secondary" style={styles.legendText}>
+												{t("correct") || "Correct"}
+											</ThemedText>
+										</View>
+										<View style={styles.legendItem}>
+											<View
+												style={[styles.legendDot, { backgroundColor: "#ef4444" }]}
+											/>
+											<ThemedText color="secondary" style={styles.legendText}>
+												{t("incorrect") || "Incorrect"}
+											</ThemedText>
+										</View>
+									</View>
+								</Card>
+							)
 						)}
 
 						{/* Study Time Chart — area fill line chart */}
-						{studyTimeChartData && (
+						{showSkeleton ? (
 							<Card style={styles.chartCard}>
-								<SectionHeader
-									icon="clock-outline"
-									title={`${t("study_time_chart") || "Study Time"} (${t("minutes_short") || "min"})`}
-									theme={theme}
-								/>
-								<LineChart
-									data={studyTimeChartData}
-									width={CHART_WIDTH}
-									height={200}
-									chartConfig={{
-										...chartConfig,
-										color: (opacity = 1) => `rgba(139, 92, 246, ${opacity})`,
-										propsForDots: {
-											r: "4",
-											strokeWidth: "2",
-											stroke: "#8b5cf6",
-										},
-									}}
-									bezier
-									style={styles.chart}
-									fromZero
-									withDots={true}
-									onDataPointClick={({ index, value, x, y }) => {
-										const d = (filledChartData.data || [])[index];
-										setTooltip({
-											x,
-											y,
-											label: d ? formatFullDate(d.date) : "",
-											value: `${value} ${t("minutes_short") || "min"}`,
-											chart: "studytime",
-										});
-									}}
-									decorator={() =>
-										tooltip?.chart === "studytime" ? (
-											<View
-												style={[
-													styles.tooltipContainer,
-													{ left: tooltip.x - 60, top: tooltip.y - 55 },
-												]}
-											>
-												<Text style={styles.tooltipDate}>{tooltip.label}</Text>
-												<Text style={styles.tooltipValue}>{tooltip.value}</Text>
-											</View>
-										) : null
-									}
-								/>
+								<Skeleton height={200} width="100%" />
 							</Card>
+						) : (
+							studyTimeChartData && (
+								<Card style={styles.chartCard}>
+									<SectionHeader
+										icon="clock-outline"
+										title={`${t("study_time_chart") || "Study Time"} (${t("minutes_short") || "min"})`}
+										theme={theme}
+									/>
+									<LineChart
+										data={studyTimeChartData}
+										width={CHART_WIDTH}
+										height={200}
+										chartConfig={{
+											...chartConfig,
+											color: (opacity = 1) => `rgba(139, 92, 246, ${opacity})`,
+											propsForDots: {
+												r: "4",
+												strokeWidth: "2",
+												stroke: "#8b5cf6",
+											},
+										}}
+										bezier
+										style={styles.chart}
+										fromZero
+										withDots={true}
+										onDataPointClick={({ index, value, x, y }) => {
+											const d = (filledChartData.data || [])[index];
+											setTooltip({
+												x,
+												y,
+												label: d ? formatFullDate(d.date) : "",
+												value: `${value} ${t("minutes_short") || "min"}`,
+												chart: "studytime",
+											});
+										}}
+										decorator={() =>
+											tooltip?.chart === "studytime" ? (
+												<View
+													style={[
+														styles.tooltipContainer,
+														{ left: tooltip.x - 60, top: tooltip.y - 55 },
+														]}
+												>
+													<Text style={styles.tooltipDate}>{tooltip.label}</Text>
+													<Text style={styles.tooltipValue}>{tooltip.value}</Text>
+												</View>
+											) : null
+										}
+									/>
+								</Card>
+							)
 						)}
 
 						{/* Card Performance Table */}
@@ -2124,7 +2200,45 @@ const StatsScreen = () => {
 							</View>
 
 							{/* Cards List */}
-							{effectiveCardsTable.length > 0 ? (
+							{showSkeleton ? (
+								<View style={styles.cardsList}>
+									{[...Array(4)].map((_, i) => (
+										<View
+											key={`sk-row-${i}`}
+											style={[
+												styles.cardRow,
+												{ backgroundColor: theme.background.elevated || theme.background.card },
+											]}
+										>
+											<View
+												style={[
+													styles.cardRowAccent,
+													{ backgroundColor: theme.border.main + "30" },
+												]}
+											/>
+											<View style={styles.cardRowBody}>
+												<View style={styles.cardRowTop}>
+													<View style={styles.cardTextBlock}>
+														<Skeleton width="70%" height={14} />
+														<View style={{ height: 6 }} />
+														<Skeleton width="40%" height={12} />
+													</View>
+													<Skeleton width={70} height={22} style={{ borderRadius: 20 }} />
+												</View>
+												<View style={{ height: 10 }} />
+												<View style={styles.cardStatsRow}>
+													<Skeleton width={60} height={14} style={{ borderRadius: 6 }} />
+													<Skeleton width={50} height={14} style={{ borderRadius: 6 }} />
+													<Skeleton width={50} height={14} style={{ borderRadius: 6 }} />
+													<View style={{ flex: 1 }} />
+												</View>
+												<View style={{ height: 8 }} />
+												<Skeleton width="100%" height={6} />
+											</View>
+										</View>
+									))}
+								</View>
+							) : effectiveCardsTable.length > 0 ? (
 								<View style={styles.cardsList}>
 									{effectiveCardsTable.map((card, index) => (
 										<CardPerformanceRow
@@ -2407,6 +2521,7 @@ const styles = StyleSheet.create({
 	chartCard: {
 		padding: spacing.md,
 		marginBottom: spacing.md,
+		alignItems: "center",
 	},
 	sectionHeader: {
 		flexDirection: "row",
@@ -2419,6 +2534,8 @@ const styles = StyleSheet.create({
 	},
 	chart: {
 		borderRadius: borderRadius.md,
+		alignSelf: "center",
+		marginLeft: "-10%",
 	},
 	legendContainer: {
 		flexDirection: "row",

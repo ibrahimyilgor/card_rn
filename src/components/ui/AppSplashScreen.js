@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
-import { View, Text, Image, StyleSheet, Animated, Easing } from "react-native";
+import { View, Text, StyleSheet, Animated, Easing } from "react-native";
+import AppLogo from "./AppLogo";
 
 const AppSplashScreen = ({ opacity }) => {
 	const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -31,13 +32,9 @@ const AppSplashScreen = ({ opacity }) => {
 			<Animated.View
 				style={[styles.logoWrap, { transform: [{ scale: pulseAnim }] }]}
 			>
-				<Image
-					source={require("../../../assets/memodeck.png")}
-					style={styles.logo}
-					resizeMode="contain"
-				/>
+				<AppLogo width={86} height={86} />
+				<Text style={styles.title}>MemoDeck</Text>
 			</Animated.View>
-			<Text style={styles.title}>MemoDeck</Text>
 			{/* <Text style={styles.subtitle}>Learn smarter, every day</Text> */}
 		</Animated.View>
 	);
@@ -52,15 +49,12 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 24,
 	},
 	logoWrap: {
-		width: 132,
-		height: 132,
-		borderRadius: 66,
+		// keep simple container so only logo + text remain (no pill)
+		marginBottom: 20,
 		alignItems: "center",
 		justifyContent: "center",
-		backgroundColor: "rgba(245, 244, 245)",
-		borderWidth: 1,
-		borderColor: "rgba(59, 130, 246, 0.35)",
-		marginBottom: 20,
+		// backgroundColor: "rgba(245, 244, 245)",
+		// removed border/size to avoid pill appearance
 	},
 	logo: {
 		width: 86,

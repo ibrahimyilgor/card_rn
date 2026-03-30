@@ -33,11 +33,49 @@ import {
 import { spacing, borderRadius } from "../styles/theme";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
+// Memoized header to avoid re-renders while content fetch/animations run
+const Header = React.memo(({ primaryColor, title, subtitle, headerAnim }) => {
+	return (
+		<Animated.View
+			style={[
+				styles.header,
+				{
+					opacity: headerAnim,
+					transform: [
+						{
+							translateY: headerAnim.interpolate({
+								inputRange: [0, 1],
+								outputRange: [-15, 0],
+							}),
+						},
+					],
+				},
+			]}
+		>
+			<View style={styles.headerTitle}>
+				<MaterialCommunityIcons name="calendar" size={28} color={primaryColor} />
+				<ThemedText variant="h2" style={styles.headerTitleText}>
+					{title}
+				</ThemedText>
+			</View>
+			<ThemedText color="secondary">{subtitle}</ThemedText>
+		</Animated.View>
+	);
+});
+
 const { width } = Dimensions.get("window");
 
 const PlansScreen = ({ navigation }) => {
 	const { theme } = useTheme();
 	const { t } = useI18n();
+	const { useMemo } = React;
+
+	// Stabilize header props so `Header` (React.memo) doesn't re-render
+	const headerTitle = useMemo(() => t("plans_title"), [t]);
+	const headerSubtitle = useMemo(() => t("plans_subtitle"), [t]);
+	const headerPrimaryColor = useMemo(() => theme.primary.main, [
+		theme.primary.main,
+	]);
 	const { refreshPlan } = usePlan();
 
 	const [loading, setLoading] = useState(true);
@@ -304,6 +342,45 @@ const PlansScreen = ({ navigation }) => {
 		};
 	}, []);
 
+	// Simple skeleton component (pulse)
+	const Skeleton = ({ width = "100%", height = 12, style }) => {
+		const pulse = useRef(new Animated.Value(0.85)).current;
+		useEffect(() => {
+			const loop = Animated.loop(
+				Animated.sequence([
+					Animated.timing(pulse, {
+						toValue: 1,
+						duration: 600,
+						useNativeDriver: true,
+					}),
+					Animated.timing(pulse, {
+						toValue: 0.85,
+						duration: 600,
+						useNativeDriver: true,
+					}),
+				]),
+			);
+			loop.start();
+			return () => loop.stop();
+		}, [pulse]);
+
+		const bg = theme && theme.mode === "dark" ? "#3a3a3a" : "#e6e9ee";
+		return (
+			<Animated.View
+				style={[
+					{
+						width,
+						height,
+						borderRadius: 8,
+						backgroundColor: bg,
+						opacity: pulse,
+					},
+					style,
+				]}
+			/>
+		);
+	};
+
 	const fetchPlansData = async () => {
 		try {
 			const [plansResponse, myPlanResponse] = await Promise.all([
@@ -403,9 +480,60 @@ const PlansScreen = ({ navigation }) => {
 	};
 
 	if (loading) {
+		// Show header and skeleton plan cards while loading (no plain "loading" text)
 		return (
 			<ThemedView variant="gradient" style={styles.container}>
-				<LoadingState fullScreen message={t("loading")} />
+				<SafeAreaView style={styles.safeArea} edges={["top"]}>
+					<ScrollView contentContainerStyle={styles.scrollContent}>
+						{/* Header (visible during skeleton) */}
+						<View style={styles.header}>
+							<View style={styles.headerTitle}>
+								<MaterialCommunityIcons
+									name="calendar"
+									size={28}
+									color={theme.primary.main}
+								/>
+								<ThemedText variant="h2" style={styles.headerTitleText}>
+									{t("plans_title")}
+								</ThemedText>
+							</View>
+							<ThemedText color="secondary">{t("plans_subtitle")}</ThemedText>
+						</View>
+
+						{/* Skeleton plan cards */}
+						<View style={styles.plansContainer}>
+							{[0, 1, 2].map((i) => (
+								<Card key={i} style={styles.planCard}>
+									<Skeleton
+										width="50%"
+										height={28}
+										style={{ marginBottom: spacing.md }}
+									/>
+									<Skeleton
+										width="30%"
+										height={20}
+										style={{ marginBottom: spacing.md }}
+									/>
+									<Skeleton
+										width="100%"
+										height={12}
+										style={{ marginBottom: spacing.sm }}
+									/>
+									<Skeleton
+										width="100%"
+										height={12}
+										style={{ marginBottom: spacing.sm }}
+									/>
+									<Skeleton
+										width="60%"
+										height={36}
+										style={{ marginTop: spacing.md }}
+									/>
+								</Card>
+							))}
+						</View>
+					</ScrollView>
+				</SafeAreaView>
 			</ThemedView>
 		);
 	}
@@ -414,35 +542,13 @@ const PlansScreen = ({ navigation }) => {
 		<ThemedView variant="gradient" style={styles.container}>
 			<SafeAreaView style={styles.safeArea} edges={["top"]}>
 				<ScrollView contentContainerStyle={styles.scrollContent}>
-					{/* Header */}
-					<Animated.View
-						style={[
-							styles.header,
-							{
-								opacity: headerAnim,
-								transform: [
-									{
-										translateY: headerAnim.interpolate({
-											inputRange: [0, 1],
-											outputRange: [-15, 0],
-										}),
-									},
-								],
-							},
-						]}
-					>
-						<View style={styles.headerTitle}>
-							<MaterialCommunityIcons
-								name="calendar"
-								size={28}
-								color={theme.primary.main}
-							/>
-							<ThemedText variant="h2" style={styles.headerTitleText}>
-								{t("plans_title")}
-							</ThemedText>
-						</View>
-						<ThemedText color="secondary">{t("plans_subtitle")}</ThemedText>
-					</Animated.View>
+					{/* Header (memoized to avoid re-renders during fetch/animation) */}
+					<Header
+						primaryColor={headerPrimaryColor}
+						title={headerTitle}
+						subtitle={headerSubtitle}
+						headerAnim={headerAnim}
+					/>
 
 					{/* Plans */}
 					<View style={styles.plansContainer}>

@@ -62,7 +62,7 @@ const SignupScreen = ({ navigation, onLogin }) => {
 						{/* Header */}
 						<View style={styles.header}>
 							<Image
-								source={require("../../assets/memodeck.png")}
+								source={require("../../assets/favicon.svg")}
 								style={styles.logo}
 								resizeMode="contain"
 							/>

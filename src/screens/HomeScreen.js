@@ -142,29 +142,17 @@ const HomeScreen = ({ navigation, onLogout }) => {
 	}, []);
 
 	const startAnimations = useCallback(() => {
-		searchBarAnim.setValue(0);
-		headerAnim.setValue(0);
+		// Make header and search bar immediately visible (no animation)
+		searchBarAnim.setValue(1);
+		headerAnim.setValue(1);
+		// Animate only the deck list
 		listAnim.setValue(0);
-		Animated.stagger(120, [
-			Animated.spring(searchBarAnim, {
-				toValue: 1,
-				tension: 50,
-				friction: 8,
-				useNativeDriver: true,
-			}),
-			Animated.spring(headerAnim, {
-				toValue: 1,
-				tension: 50,
-				friction: 8,
-				useNativeDriver: true,
-			}),
-			Animated.spring(listAnim, {
-				toValue: 1,
-				tension: 50,
-				friction: 8,
-				useNativeDriver: true,
-			}),
-		]).start();
+		Animated.spring(listAnim, {
+			toValue: 1,
+			tension: 50,
+			friction: 8,
+			useNativeDriver: true,
+		}).start();
 	}, []);
 
 	useFocusEffect(
@@ -642,6 +630,63 @@ const HomeScreen = ({ navigation, onLogout }) => {
 	};
 
 	const renderDeckItem = ({ item }) => {
+		if (item && item.__skeleton) {
+			return (
+				<Card style={styles.deckCard}>
+					<View
+						style={[
+							styles.deckAccentBar,
+							{ backgroundColor: theme.background.default },
+						]}
+					/>
+					<View style={[styles.deckContent, styles.skeletonContent]}>
+						<View
+							style={[
+								styles.skeletonLine,
+								{
+									width: "60%",
+									backgroundColor:
+										theme.mode === "dark" ? "#2f2f2f" : "#e6e6e6",
+								},
+							]}
+						/>
+						<View
+							style={[
+								styles.skeletonLine,
+								{
+									marginTop: 8,
+									backgroundColor:
+										theme.mode === "dark" ? "#2f2f2f" : "#e6e6e6",
+								},
+							]}
+						/>
+						<View style={styles.skeletonMetaRow}>
+							<View
+								style={[
+									styles.skeletonCircle,
+									{
+										backgroundColor:
+											theme.mode === "dark" ? "#2f2f2f" : "#e6e6e6",
+									},
+								]}
+							/>
+							<View
+								style={[
+									styles.skeletonLine,
+									{
+										width: 80,
+										height: 12,
+										marginLeft: 12,
+										backgroundColor:
+											theme.mode === "dark" ? "#2f2f2f" : "#e6e6e6",
+									},
+								]}
+							/>
+						</View>
+					</View>
+				</Card>
+			);
+		}
 		if (item.isInlineCreate) {
 			return (
 				<InlineDeckForm
@@ -873,7 +918,10 @@ const HomeScreen = ({ navigation, onLogout }) => {
 								style={({ pressed }) => [
 									styles.actionIconButton,
 									{ backgroundColor: "rgba(239, 68, 68, 0.1)" },
-									pressed && { transform: [{ scale: 0.82 }], backgroundColor: "rgba(239, 68, 68, 0.22)" },
+									pressed && {
+										transform: [{ scale: 0.82 }],
+										backgroundColor: "rgba(239, 68, 68, 0.22)",
+									},
 								]}
 							>
 								<Ionicons name="trash" size={18} color="#ef4444" />
@@ -973,35 +1021,21 @@ const HomeScreen = ({ navigation, onLogout }) => {
 		</View>
 	);
 
+	// Static header (no dynamic deck counts) so it won't refresh on deck list updates
 	const renderHeader = () => (
-		<Animated.View
-			style={[
-				styles.header,
-				{
-					opacity: headerAnim,
-					transform: [
-						{
-							translateY: headerAnim.interpolate({
-								inputRange: [0, 1],
-								outputRange: [15, 0],
-							}),
-						},
-					],
-				},
-			]}
-		>
+		<View style={styles.header}>
 			<View
 				style={[
 					styles.titleRow,
 					{ justifyContent: "space-between", alignItems: "center" },
 				]}
 			>
-				<View style={{ flexDirection: "row", alignItems: "top" }}>
+				<View style={{ flexDirection: "row", alignItems: "center" }}>
 					<MaterialCommunityIcons
 						name="layers"
 						size={24}
 						color={theme.primary.main}
-						style={{ marginRight: spacing.sm, marginTop: 2 }}
+						style={{ marginRight: spacing.sm }}
 					/>
 					<View>
 						<ThemedText variant="h2">{t("my_decks")}</ThemedText>
@@ -1042,39 +1076,25 @@ const HomeScreen = ({ navigation, onLogout }) => {
 					</Pressable>
 				</View>
 			</View>
-		</Animated.View>
+		</View>
 	);
 
-	if (loading && !refreshing) {
-		return (
-			<ThemedView variant="gradient" style={styles.container}>
-				<LoadingState fullScreen message={t("loading")} />
-			</ThemedView>
-		);
-	}
+	const showSkeleton = loading && !refreshing;
+	const skeletonData = useMemo(
+		() =>
+			Array.from({ length: 3 }, (_, i) => ({
+				__skeleton: true,
+				id: `skeleton-${i}`,
+			})),
+		[],
+	);
 
 	return (
 		<ThemedView variant="gradient" style={styles.container}>
 			<SafeAreaView style={styles.safeArea} edges={["top"]}>
-				{/* Search Bar - Outside FlatList to prevent keyboard dismiss */}
-				<Animated.View
-					style={[
-						styles.searchWrapper,
-						{
-							opacity: searchBarAnim,
-							transform: [
-								{
-									translateY: searchBarAnim.interpolate({
-										inputRange: [0, 1],
-										outputRange: [-12, 0],
-									}),
-								},
-							],
-						},
-					]}
-				>
-					{SearchBar}
-				</Animated.View>
+				{/* Search Bar - static (no animation) */}
+				<View style={styles.searchWrapper}>{SearchBar}</View>
+				{renderHeader()}
 				<Animated.View
 					style={{
 						flex: 1,
@@ -1090,69 +1110,70 @@ const HomeScreen = ({ navigation, onLogout }) => {
 					}}
 				>
 					<FlatList
-						data={displayDecks}
+						data={showSkeleton ? skeletonData : displayDecks}
 						renderItem={renderDeckItem}
 						keyExtractor={(item) => item.id.toString()}
-						ListHeaderComponent={renderHeader}
 						ListEmptyComponent={
-							<View style={styles.emptyContainer}>
-								<View
-									style={[
-										styles.emptyIconWrap,
-										{
-											backgroundColor: searchQuery
-												? theme.text.disabled + "18"
-												: theme.primary.main + "18",
-											borderWidth: 1,
-											borderColor: searchQuery
-												? theme.text.disabled + "30"
-												: theme.primary.main + "35",
-										},
-									]}
-								>
-									<MaterialCommunityIcons
-										name={searchQuery ? "magnify-close" : "layers"}
-										size={48}
-										color={
-											searchQuery ? theme.text.disabled : theme.primary.main
-										}
-									/>
-								</View>
-								<ThemedText variant="h3" style={styles.emptyTitle}>
-									{searchQuery ? t("no_results") : t("create_first_deck")}
-								</ThemedText>
-								<ThemedText color="secondary" style={styles.emptyDescription}>
-									{searchQuery
-										? t("no_results_desc")
-										: t("create_first_deck_desc")}
-								</ThemedText>
-								<Pressable
-									onPress={
-										searchQuery ? () => setSearchQuery("") : handleCreateDeck
-									}
-									style={[
-										styles.emptyAction,
-										{
-											backgroundColor: searchQuery
-												? theme.background.paper
-												: theme.primary.main,
-											borderWidth: searchQuery ? 1 : 0,
-											borderColor: theme.border.main,
-										},
-									]}
-								>
-									<Text
+							showSkeleton ? null : (
+								<View style={styles.emptyContainer}>
+									<View
 										style={[
-											styles.emptyActionText,
+											styles.emptyIconWrap,
 											{
-												color: searchQuery ? theme.text.primary : "#ffffff",
+												backgroundColor: searchQuery
+													? theme.text.disabled + "18"
+													: theme.primary.main + "18",
+												borderWidth: 1,
+												borderColor: searchQuery
+													? theme.text.disabled + "30"
+													: theme.primary.main + "35",
 											},
 										]}
 									>
-										{searchQuery ? t("clear_search") : t("create_deck")}
-									</Text>
-								</Pressable>
-							</View>
+										<MaterialCommunityIcons
+											name={searchQuery ? "magnify-close" : "layers"}
+											size={48}
+											color={
+												searchQuery ? theme.text.disabled : theme.primary.main
+											}
+										/>
+									</View>
+									<ThemedText variant="h3" style={styles.emptyTitle}>
+										{searchQuery ? t("no_results") : t("create_first_deck")}
+									</ThemedText>
+									<ThemedText color="secondary" style={styles.emptyDescription}>
+										{searchQuery
+											? t("no_results_desc")
+											: t("create_first_deck_desc")}
+									</ThemedText>
+									<Pressable
+										onPress={
+											searchQuery ? () => setSearchQuery("") : handleCreateDeck
+										}
+										style={[
+											styles.emptyAction,
+											{
+												backgroundColor: searchQuery
+													? theme.background.paper
+													: theme.primary.main,
+												borderWidth: searchQuery ? 1 : 0,
+												borderColor: theme.border.main,
+											},
+										]}
+									>
+										<Text
+											style={[
+												styles.emptyActionText,
+												{
+													color: searchQuery ? theme.text.primary : "#ffffff",
+												},
+											]}
+										>
+											{searchQuery ? t("clear_search") : t("create_deck")}
+										</Text>
+									</Pressable>
+								</View>
+							)
 						}
 						contentContainerStyle={[
 							styles.listContent,
@@ -1332,16 +1353,35 @@ const HomeScreen = ({ navigation, onLogout }) => {
 						setImportDescription("");
 					}}
 					title={
-						<View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
+						<View
+							style={{
+								flexDirection: "row",
+								alignItems: "center",
+								gap: 8,
+								flex: 1,
+							}}
+						>
 							<LinearGradient
 								colors={["#6366f1", "#8b5cf6"]}
 								start={{ x: 0, y: 0 }}
 								end={{ x: 1, y: 1 }}
-								style={{ width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" }}
+								style={{
+									width: 36,
+									height: 36,
+									borderRadius: 10,
+									alignItems: "center",
+									justifyContent: "center",
+								}}
 							>
 								<MaterialCommunityIcons name="layers" size={20} color="#fff" />
 							</LinearGradient>
-							<Text style={{ fontSize: 18, fontWeight: "600", color: theme.text.primary }}>
+							<Text
+								style={{
+									fontSize: 18,
+									fontWeight: "600",
+									color: theme.text.primary,
+								}}
+							>
 								{t("import_deck") || "Import Deck"}
 							</Text>
 						</View>
@@ -1830,12 +1870,14 @@ const styles = StyleSheet.create({
 	},
 	header: {
 		marginBottom: spacing.xs,
+		paddingHorizontal: spacing.md,
+		paddingTop: spacing.md,
 	},
 	titleRow: {
 		flexDirection: "row",
 		justifyContent: "space-between",
 		alignItems: "center",
-		marginBottom: spacing.sm,
+		// marginBottom: spacing.sm,
 	},
 	searchWrapper: {
 		paddingHorizontal: spacing.md,
@@ -2052,6 +2094,27 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		justifyContent: "space-between",
 		gap: spacing.sm,
+	},
+	skeletonContent: {
+		paddingVertical: spacing.sm,
+		paddingHorizontal: spacing.xs,
+		gap: spacing.sm,
+	},
+	skeletonLine: {
+		height: 14,
+		backgroundColor: "#e6e6e6",
+		borderRadius: 6,
+	},
+	skeletonMetaRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		marginTop: spacing.sm,
+	},
+	skeletonCircle: {
+		width: 28,
+		height: 28,
+		borderRadius: 14,
+		backgroundColor: "#e6e6e6",
 	},
 	inlineDeleteText: {
 		fontSize: 13,

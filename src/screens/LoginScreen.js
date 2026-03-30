@@ -7,8 +7,9 @@ import {
 	KeyboardAvoidingView,
 	Platform,
 	ScrollView,
-	Image,
 } from "react-native";
+import Logo from "../../assets/favicon.svg";
+import AppLogo from "../components/ui/AppLogo";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -109,11 +110,7 @@ const LoginScreen = ({ navigation, onLogin }) => {
 					showsVerticalScrollIndicator={false}
 				>
 					<View style={styles.header}>
-						<Image
-							source={require("../../assets/memodeck.png")}
-							style={styles.logo}
-							resizeMode="contain"
-						/>
+						<AppLogo width={100} height={100} />
 						<ThemedText variant="h1" style={styles.title}>
 							MemoDeck
 						</ThemedText>

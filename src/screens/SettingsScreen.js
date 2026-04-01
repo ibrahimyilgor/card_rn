@@ -469,7 +469,7 @@ const SettingsScreen = ({ navigation, onLogout }) => {
 								<AppLogo width={56} height={56} />
 								<View style={styles.aboutInfo}>
 									<ThemedText variant="h3" style={styles.aboutAppName}>
-										MemoDeck v1.0.20
+										MemoDeck v1.0.21
 									</ThemedText>
 									<ThemedText color="secondary" style={styles.aboutTagline}>
 										{"memodeck26@gmail.com"}

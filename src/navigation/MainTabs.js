@@ -4,6 +4,7 @@ import { createStackNavigator } from "@react-navigation/stack";
 import {
 	getFocusedRouteNameFromRoute,
 	StackActions,
+	CommonActions,
 } from "@react-navigation/native";
 import { View, StyleSheet, Animated } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -13,6 +14,7 @@ import { useI18n } from "../context/I18nContext";
 
 // Screens
 import HomeScreen from "../screens/HomeScreen";
+import FlashcardsScreen from "../screens/FlashcardsScreen";
 import StatsScreen from "../screens/StatsScreen";
 import AchievementsScreen from "../screens/AchievementsScreen";
 import SettingsScreen from "../screens/SettingsScreen";
@@ -57,14 +59,37 @@ const HomeStack = ({ onLogout }) => {
 	return (
 		<Stack.Navigator
 			screenOptions={{
-				headerShown: false,
+				headerShown: true,
+				headerStyle: {
+					backgroundColor: theme.background.paper,
+					borderBottomColor: theme.border.main,
+					borderBottomWidth: 1,
+				},
+				headerTintColor: theme.text.primary,
+				headerTitleStyle: {
+					fontSize: 18,
+					fontWeight: "600",
+				},
 				cardStyle: { backgroundColor: theme.background.default },
 			}}
 		>
-			<Stack.Screen name="HomeMain">
+			<Stack.Screen name="HomeMain" options={{ headerShown: false }}>
 				{(props) => <HomeScreen {...props} onLogout={onLogout} />}
 			</Stack.Screen>
-			<Stack.Screen name="Game" component={GameScreen} />
+			<Stack.Screen
+				name="Flashcards"
+				component={FlashcardsScreen}
+				options={({ route }) => ({
+					title: route.params?.deck?.title || "Flashcards",
+				})}
+			/>
+			<Stack.Screen
+				name="Game"
+				options={({ route }) => ({
+					headerShown: route.params?.showHeader ?? false,
+				})}
+				component={GameScreen}
+			/>
 		</Stack.Navigator>
 	);
 };
@@ -140,10 +165,8 @@ const MainTabs = ({ onLogout }) => {
 				}}
 				listeners={({ navigation }) => ({
 					tabPress: (e) => {
-						if (navigation.isFocused()) {
-							// Ensure the Home stack returns to its root screen
-							navigation.navigate("Home", { screen: "HomeMain" });
-						}
+						// Navigate to HomeMain within the Home stack
+						navigation.navigate("Home", { screen: "HomeMain" });
 					},
 				})}
 			>

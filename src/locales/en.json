@@ -283,6 +283,8 @@
 	"plans_fetch_error": "Failed to load plans",
 	"current_plan": "Current Plan",
 	"free_price": "Free",
+	"view_prices_mobile": "View prices in mobile app",
+	"view_price_mobile": "View price in mobile app",
 	"month": "month",
 	"unlimited_decks": "Unlimited decks",
 	"unlimited_flashcards": "Unlimited flashcards",
@@ -480,5 +482,7 @@
 	"deck_limit": "Deck Limit",
 	"flashcard_limit": "Flashcard Limit",
 	"achievements_earned_new": "Achievements Earned",
-	"manage": "Plans"
+	"manage": "Plans",
+	"purchase_cancelled": "Purchase cancelled",
+	"reveal_hint": "Show one more letter"
 }

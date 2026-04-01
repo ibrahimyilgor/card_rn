@@ -45,7 +45,7 @@ import {
 } from "../components/ui";
 import { spacing, borderRadius } from "../styles/theme";
 import LimitWarningModal from "../components/LimitWarningModal";
-import FlashcardsModal from "../components/FlashcardsModal";
+import SortBottomSheet from "../components/SortBottomSheet";
 
 const MAX_TEXT_LENGTH = 512;
 const MAX_DECK_TITLE_LENGTH = 255;
@@ -79,7 +79,6 @@ const HomeScreen = ({ navigation, onLogout }) => {
 	const [selectedDeck, setSelectedDeck] = useState(null);
 	const [saving, setSaving] = useState(false);
 	const [inlineDeckSaving, setInlineDeckSaving] = useState(false);
-	const [flashcardsModalVisible, setFlashcardsModalVisible] = useState(false);
 	const [inlineDeleteDeckId, setInlineDeleteDeckId] = useState(null);
 	const [inlineDeck, setInlineDeck] = useState({
 		mode: null, // 'create' | 'edit' | null
@@ -383,8 +382,7 @@ const HomeScreen = ({ navigation, onLogout }) => {
 
 	const handleManageFlashcards = (deck) => {
 		setInlineDeleteDeckId(null);
-		setSelectedDeck(deck);
-		setFlashcardsModalVisible(true);
+		navigation.navigate("Flashcards", { deck });
 	};
 
 	// Download deck as CSV
@@ -633,11 +631,11 @@ const HomeScreen = ({ navigation, onLogout }) => {
 		if (item && item.__skeleton) {
 			return (
 				<Card style={styles.deckCard}>
-					<View
-						style={[
-							styles.deckAccentBar,
-							{ backgroundColor: theme.background.default },
-						]}
+					<LinearGradient
+						colors={["#3b82f6", "#8b5cf6"]}
+						start={{ x: 0, y: 0 }}
+						end={{ x: 0, y: 0 }}
+						style={styles.deckAccentBar}
 					/>
 					<View style={[styles.deckContent, styles.skeletonContent]}>
 						<View
@@ -1193,22 +1191,6 @@ const HomeScreen = ({ navigation, onLogout }) => {
 					/>
 				</Animated.View>
 
-				{/* Flashcards Modal */}
-				<FlashcardsModal
-					visible={flashcardsModalVisible}
-					onClose={() => setFlashcardsModalVisible(false)}
-					deck={selectedDeck}
-					theme={theme}
-					t={t}
-					showAlert={showAlert}
-					onUpdate={handleFlashcardsCountUpdate}
-					canCreateFlashcard={canCreateFlashcard}
-					onLimitReached={() => {
-						setLimitModalType("flashcard");
-						setLimitModalVisible(true);
-					}}
-				/>
-
 				{/* Plan Limit Modal */}
 				<LimitWarningModal
 					visible={limitModalVisible}
@@ -1234,113 +1216,53 @@ const HomeScreen = ({ navigation, onLogout }) => {
 
 				{/* Import Deck Modal */}
 
-				{/* Sort Options Modal */}
-				<Modal
+				{/* Sort Options Bottom Sheet */}
+				<SortBottomSheet
 					visible={sortModalVisible}
-					onClose={() => setSortModalVisible(false)}
 					title={t("sort_options") || "Sort"}
-				>
-					<View style={styles.sortModalBody}>
-						{[
-							{
-								value: "newest",
-								label: t("sort_newest") || "Newest",
-								icon: "time-outline",
-							},
-							{
-								value: "oldest",
-								label: t("sort_oldest") || "Oldest",
-								icon: "hourglass-outline",
-							},
-							{
-								value: "name_asc",
-								label: t("sort_name_asc") || "Name (A-Z)",
-								icon: "text-outline",
-							},
-							{
-								value: "name_desc",
-								label: t("sort_name_desc") || "Name (Z-A)",
-								icon: "text",
-							},
-							{
-								value: "cards_desc",
-								label: t("sort_most_cards") || "Most cards",
-								icon: "layers-outline",
-							},
-							{
-								value: "cards_asc",
-								label: t("sort_fewest_cards") || "Fewest cards",
-								icon: "layers",
-							},
-						].map((option) => {
-							const isSelected = sortBy === option.value;
-							return (
-								<Pressable
-									key={option.value}
-									onPress={async () => {
-										setSortBy(option.value);
-										try {
-											await AsyncStorage.setItem(
-												DECK_SORT_STORAGE_KEY,
-												option.value,
-											);
-										} catch {
-											// keep in-memory sort as fallback
-										}
-										setSortModalVisible(false);
-									}}
-									style={[
-										styles.sortOptionRow,
-										{
-											backgroundColor: isSelected
-												? theme.primary.main + "12"
-												: theme.background.paper,
-											borderColor: isSelected
-												? theme.primary.main
-												: theme.border.main,
-										},
-									]}
-								>
-									<View
-										style={[
-											styles.sortOptionIconWrap,
-											{
-												backgroundColor: isSelected
-													? theme.primary.main + "20"
-													: "transparent",
-											},
-										]}
-									>
-										<Ionicons
-											name={option.icon}
-											size={16}
-											color={
-												isSelected ? theme.primary.main : theme.text.secondary
-											}
-										/>
-									</View>
-									<ThemedText style={styles.sortOptionText}>
-										{option.label}
-									</ThemedText>
-									{isSelected ? (
-										<View
-											style={[
-												styles.sortSelectedBadge,
-												{ backgroundColor: theme.success.main + "20" },
-											]}
-										>
-											<Ionicons
-												name="checkmark"
-												size={14}
-												color={theme.success.main}
-											/>
-										</View>
-									) : null}
-								</Pressable>
-							);
-						})}
-					</View>
-				</Modal>
+					options={[
+						{
+							value: "newest",
+							label: t("sort_newest") || "Newest",
+							icon: "clock-outline",
+						},
+						{
+							value: "oldest",
+							label: t("sort_oldest") || "Oldest",
+							icon: "history",
+						},
+						{
+							value: "name_asc",
+							label: t("sort_name_asc") || "Name (A-Z)",
+							icon: "sort-alphabetical-ascending",
+						},
+						{
+							value: "name_desc",
+							label: t("sort_name_desc") || "Name (Z-A)",
+							icon: "sort-alphabetical-descending",
+						},
+						{
+							value: "cards_desc",
+							label: t("sort_most_cards") || "Most cards",
+							icon: "layers-outline",
+						},
+						{
+							value: "cards_asc",
+							label: t("sort_fewest_cards") || "Fewest cards",
+							icon: "layers",
+						},
+					]}
+					selectedValue={sortBy}
+					onSelect={async (value) => {
+						setSortBy(value);
+						try {
+							await AsyncStorage.setItem(DECK_SORT_STORAGE_KEY, value);
+						} catch {
+							// keep in-memory sort as fallback
+						}
+					}}
+					onClose={() => setSortModalVisible(false)}
+				/>
 
 				<Modal
 					visible={importModalVisible}

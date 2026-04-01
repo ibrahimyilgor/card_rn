@@ -106,8 +106,115 @@ export const closeBilling = async () => {
 };
 
 export const getSubscriptionProducts = async () => {
-	if (Platform.OS !== "android") return [];
-	return getSubscriptions({ skus: SUBSCRIPTION_SKUS });
+	if (Platform.OS !== "android") {
+		console.log("[GoogleBilling] Not Android, returning empty products");
+		return [];
+	}
+	try {
+		const products = await getSubscriptions({ skus: SUBSCRIPTION_SKUS });
+		console.log("[GoogleBilling] getSubscriptions returned:", products);
+		return products || [];
+	} catch (error) {
+		console.error("[GoogleBilling] getSubscriptions error:", error);
+		return [];
+	}
+};
+
+export const getFormattedPriceForProduct = (product) => {
+	if (!product) return "$0";
+
+	// Try to use localizedPrice first (e.g., "$9.99", "€9,99", etc.)
+	if (product.localizedPrice) {
+		console.log(
+			"[GoogleBilling] Found localizedPrice:",
+			product.localizedPrice,
+		);
+		return product.localizedPrice;
+	}
+
+	// Try price field
+	if (product.price) {
+		// If price is already formatted with currency symbol, return as-is
+		if (product.price.match(/^[$€¥£]/)) {
+			console.log(
+				"[GoogleBilling] Found price with currency symbol:",
+				product.price,
+			);
+			return product.price;
+		}
+		// Otherwise, prepend $ (default for most currencies)
+		console.log("[GoogleBilling] Found price, formatting:", product.price);
+		return `$${product.price}`;
+	}
+
+	// For Google Play subscriptions, check subscriptionOfferDetails
+	// This is where the actual pricing information is stored
+	if (product.subscriptionOfferDetails) {
+		console.log(
+			"[GoogleBilling] Checking subscriptionOfferDetails for",
+			product.productId,
+		);
+
+		// Handle if it's an array or object structure
+		const offerDetailsArray = Array.isArray(product.subscriptionOfferDetails)
+			? product.subscriptionOfferDetails
+			: [product.subscriptionOfferDetails];
+
+		for (let i = 0; i < offerDetailsArray.length; i++) {
+			const offerDetails = offerDetailsArray[i];
+			console.log(
+				`[GoogleBilling] Offer ${i}:`,
+				JSON.stringify(offerDetails, null, 2),
+			);
+
+			if (!offerDetails) continue;
+
+			// pricingPhases might be an array or an object
+			let pricingPhasesArray = [];
+
+			if (Array.isArray(offerDetails.pricingPhases)) {
+				pricingPhasesArray = offerDetails.pricingPhases;
+			} else if (
+				typeof offerDetails.pricingPhases === "object" &&
+				offerDetails.pricingPhases !== null
+			) {
+				console.log(
+					"[GoogleBilling] pricingPhases is object, keys:",
+					Object.keys(offerDetails.pricingPhases),
+				);
+				// If it's an object, check for common patterns
+				if (offerDetails.pricingPhases.pricingPhaseList) {
+					pricingPhasesArray = offerDetails.pricingPhases.pricingPhaseList;
+				} else {
+					// Try to get values as array
+					pricingPhasesArray = Object.values(offerDetails.pricingPhases);
+				}
+			}
+
+			console.log("[GoogleBilling] pricingPhasesArray:", pricingPhasesArray);
+
+			if (pricingPhasesArray.length > 0) {
+				const pricingPhase = pricingPhasesArray[0];
+				console.log(
+					"[GoogleBilling] First pricing phase:",
+					JSON.stringify(pricingPhase, null, 2),
+				);
+
+				const formattedPrice = pricingPhase?.formattedPrice;
+				if (formattedPrice) {
+					console.log("[GoogleBilling] Found formattedPrice:", formattedPrice);
+					return formattedPrice;
+				}
+			}
+		}
+	}
+
+	// Default to free if no price found
+	console.warn(
+		"[GoogleBilling] No price found for product:",
+		product?.productId,
+	);
+	return "$0";
 };
 
 export const purchasePlanOnAndroid = async (

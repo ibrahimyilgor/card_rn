@@ -13,10 +13,14 @@ import {
 	Platform,
 	LayoutAnimation,
 	UIManager,
+	Keyboard,
 } from "react-native";
 
 // Enable LayoutAnimation on Android
-if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+if (
+	Platform.OS === "android" &&
+	UIManager.setLayoutAnimationEnabledExperimental
+) {
 	UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 import { Slider } from "@miblanchard/react-native-slider";
@@ -36,10 +40,10 @@ import {
 	Card,
 	LoadingState,
 	Modal,
-	ConfirmDialog,
 } from "../components/ui";
 import FlipCard from "../components/game/FlipCard";
 import AchievementBadge from "../components/AchievementBadge";
+import AnimatedConfirmBox from "../components/AnimatedConfirmBox";
 import { useTimer, useLives } from "../hooks";
 import sounds, {
 	refreshSoundEnabled,
@@ -116,12 +120,45 @@ const WRITE_CORRECT_DELAY_MS = WRITE_WRONG_DELAY_MS / 10;
 // ─── StatItem for summary ─────────────────────────────────────────────────────
 function SummaryStatItem({ value, label, color, iconName, theme }) {
 	return (
-		<View style={[{ alignItems: "center", padding: 8, borderRadius: 8, borderWidth: 1, minWidth: 70, flex: 1 }, { backgroundColor: `${color}15`, borderColor: `${color}30` }]}>
-			<View style={{ width: 32, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center", marginBottom: 4, backgroundColor: `${color}25` }}>
+		<View
+			style={[
+				{
+					alignItems: "center",
+					padding: 8,
+					borderRadius: 8,
+					borderWidth: 1,
+					minWidth: 70,
+					flex: 1,
+				},
+				{ backgroundColor: `${color}15`, borderColor: `${color}30` },
+			]}
+		>
+			<View
+				style={{
+					width: 32,
+					height: 32,
+					borderRadius: 8,
+					alignItems: "center",
+					justifyContent: "center",
+					marginBottom: 4,
+					backgroundColor: `${color}25`,
+				}}
+			>
 				<MaterialCommunityIcons name={iconName} size={18} color={color} />
 			</View>
-			<Text style={{ fontSize: 18, fontWeight: "700", marginBottom: 2, color }}>{value}</Text>
-			<Text style={{ fontSize: 10, fontWeight: "500", textTransform: "uppercase", color: theme.text.secondary }}>{label}</Text>
+			<Text style={{ fontSize: 18, fontWeight: "700", marginBottom: 2, color }}>
+				{value}
+			</Text>
+			<Text
+				style={{
+					fontSize: 10,
+					fontWeight: "500",
+					textTransform: "uppercase",
+					color: theme.text.secondary,
+				}}
+			>
+				{label}
+			</Text>
 		</View>
 	);
 }
@@ -156,7 +193,13 @@ function AccordionResults({ cardResults, theme, t }) {
 					opacity: pressed ? 0.7 : 1,
 				})}
 			>
-				<Text style={{ color: theme.text.secondary, fontWeight: "600", fontSize: 13 }}>
+				<Text
+					style={{
+						color: theme.text.secondary,
+						fontWeight: "600",
+						fontSize: 13,
+					}}
+				>
 					{t("correct")} / {t("incorrect")}
 				</Text>
 				<MaterialCommunityIcons
@@ -166,7 +209,11 @@ function AccordionResults({ cardResults, theme, t }) {
 				/>
 			</Pressable>
 			<Animated.View style={{ height: animHeight, overflow: "hidden" }}>
-				<ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} style={{ marginTop: 4 }}>
+				<ScrollView
+					nestedScrollEnabled
+					showsVerticalScrollIndicator={false}
+					style={{ marginTop: 4 }}
+				>
 					{cardResults.map((r, i) => (
 						<View
 							key={i}
@@ -179,9 +226,13 @@ function AccordionResults({ cardResults, theme, t }) {
 								marginBottom: 4,
 								borderRadius: 10,
 								width: "100%",
-								backgroundColor: r.isCorrect ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)",
+								backgroundColor: r.isCorrect
+									? "rgba(34,197,94,0.08)"
+									: "rgba(239,68,68,0.08)",
 								borderWidth: 1,
-								borderColor: r.isCorrect ? "rgba(34,197,94,0.2)" : "rgba(239,68,68,0.2)",
+								borderColor: r.isCorrect
+									? "rgba(34,197,94,0.2)"
+									: "rgba(239,68,68,0.2)",
 							}}
 						>
 							<MaterialCommunityIcons
@@ -191,10 +242,23 @@ function AccordionResults({ cardResults, theme, t }) {
 								style={{ marginTop: 2, flexShrink: 0 }}
 							/>
 							<View style={{ flex: 1 }}>
-								<Text style={{ color: theme.text.primary, fontWeight: "600", fontSize: 13, lineHeight: 18 }}>
+								<Text
+									style={{
+										color: theme.text.primary,
+										fontWeight: "600",
+										fontSize: 13,
+										lineHeight: 18,
+									}}
+								>
 									{r.front}
 								</Text>
-								<Text style={{ color: theme.text.secondary, fontSize: 12, lineHeight: 17 }}>
+								<Text
+									style={{
+										color: theme.text.secondary,
+										fontSize: 12,
+										lineHeight: 17,
+									}}
+								>
 									{r.back}
 								</Text>
 							</View>
@@ -214,6 +278,7 @@ const GameScreen = ({ route, navigation }) => {
 	const { planCode, hasAds } = usePlan();
 	const { showInterstitial, showVideoAd } = useAds();
 	const { isSpeaking: ttsSpeaking, speak: ttsSpeak, stop: ttsStop } = useTTS();
+	const canUseTTS = planCode !== "free";
 
 	// Game state
 	const [gameState, setGameState] = useState("mode_select"); // 'mode_select' | 'playing' | 'summary'
@@ -264,6 +329,7 @@ const GameScreen = ({ route, navigation }) => {
 	const [mcOptions, setMcOptions] = useState([]);
 	const [selectedOption, setSelectedOption] = useState(null);
 	const [showHint, setShowHint] = useState(false);
+	const [revealedHintIndices, setRevealedHintIndices] = useState([]);
 
 	// Match game state
 	const [matchCards, setMatchCards] = useState([]);
@@ -288,8 +354,6 @@ const GameScreen = ({ route, navigation }) => {
 	const prevCorrectRef = useRef(0);
 	const prevWrongRef = useRef(0);
 	const prevLivesRef = useRef(-1);
-
-	// Mode select entrance animations
 	const modeHeaderAnim = useRef(new Animated.Value(0)).current;
 	const modeCardsAnim = useRef(
 		[0, 1, 2, 3].map(() => new Animated.Value(0)),
@@ -690,8 +754,10 @@ const GameScreen = ({ route, navigation }) => {
 		return () => {
 			sessionTokenRef.current += 1;
 			timedSessionTokenRef.current = null;
+			// Stop TTS when component unmounts
+			ttsStop();
 		};
-	}, []);
+	}, [ttsStop]);
 
 	const resetSessionStateForExit = useCallback(() => {
 		sessionTokenRef.current += 1;
@@ -702,6 +768,8 @@ const GameScreen = ({ route, navigation }) => {
 		finishingRef.current = false;
 		lastAnswerRef.current = false;
 		sessionRecordedRef.current = false;
+		// Stop TTS when exiting
+		ttsStop();
 		setAnswering(false);
 		setCurrentIndex(0);
 		setCorrectCount(0);
@@ -711,6 +779,7 @@ const GameScreen = ({ route, navigation }) => {
 		setAnswerResult(null);
 		setSelectedOption(null);
 		setShowHint(false);
+		setRevealedHintIndices([]);
 		setMatchedPairs([]);
 		setFlippedIndices([]);
 		setMatchAttempts(0);
@@ -720,7 +789,7 @@ const GameScreen = ({ route, navigation }) => {
 		setNewAchievements([]);
 		setCardResults([]);
 		timer.reset(timeLimit);
-	}, [timeLimit]);
+	}, [timeLimit, ttsStop]);
 
 	const currentCard = cards[currentIndex];
 
@@ -876,6 +945,7 @@ const GameScreen = ({ route, navigation }) => {
 		setAnswerResult(null);
 		setSelectedOption(null);
 		setShowHint(false);
+		setRevealedHintIndices([]);
 		setMatchedPairs([]);
 		setFlippedIndices([]);
 		setMatchAttempts(0);
@@ -943,6 +1013,7 @@ const GameScreen = ({ route, navigation }) => {
 		setAnswerResult(null);
 		setSelectedOption(null);
 		setShowHint(false);
+		setRevealedHintIndices([]);
 		setMatchedPairs([]);
 		setFlippedIndices([]);
 		setMatchAttempts(0);
@@ -1023,11 +1094,14 @@ const GameScreen = ({ route, navigation }) => {
 		try {
 			await gamesAPI.updateCardStats(currentCard.id, isCorrect);
 			// Track result for accordion
-			setCardResults((prev) => [...prev, {
-				front: getFrontText(currentCard),
-				back: getBackText(currentCard),
-				isCorrect,
-			}]);
+			setCardResults((prev) => [
+				...prev,
+				{
+					front: getFrontText(currentCard),
+					back: getBackText(currentCard),
+					isCorrect,
+				},
+			]);
 		} catch (error) {
 			console.error("Error updating stats:", error);
 		}
@@ -1079,6 +1153,7 @@ const GameScreen = ({ route, navigation }) => {
 			setAnswerResult(null);
 			setSelectedOption(null);
 			setShowHint(false);
+			setRevealedHintIndices([]);
 
 			if (gameMode === "multiple_choice" && cards[currentIndex + 1]) {
 				setMcOptions(cards[currentIndex + 1].options || []);
@@ -1090,21 +1165,74 @@ const GameScreen = ({ route, navigation }) => {
 		}, 20);
 	};
 
+	const isMaskableHintChar = (char) => /[A-Za-z0-9]/.test(char);
+
+	const getBaseHintIndices = (answer) => {
+		const indices = [];
+		let shouldRevealNextMaskable = true;
+
+		for (let i = 0; i < answer.length; i += 1) {
+			const char = answer[i];
+			if (!isMaskableHintChar(char)) {
+				if (char === " ") {
+					shouldRevealNextMaskable = true;
+				}
+				continue;
+			}
+
+			if (shouldRevealNextMaskable) {
+				indices.push(i);
+				shouldRevealNextMaskable = false;
+			}
+		}
+
+		return indices;
+	};
+
+	const getHintRevealCandidates = (answer) => {
+		if (!answer) return [];
+		const baseIndices = getBaseHintIndices(answer);
+		const revealedSet = new Set([...baseIndices, ...revealedHintIndices]);
+
+		const candidates = [];
+		for (let i = 0; i < answer.length; i += 1) {
+			if (isMaskableHintChar(answer[i]) && !revealedSet.has(i)) {
+				candidates.push(i);
+			}
+		}
+
+		return candidates;
+	};
+
+	const revealOneMoreHintLetter = () => {
+		const correctAnswer = getBackText(currentCard);
+		const candidates = getHintRevealCandidates(correctAnswer);
+		if (candidates.length === 0) return;
+
+		const randomIndex =
+			candidates[Math.floor(Math.random() * candidates.length)];
+		setRevealedHintIndices((prev) => [...prev, randomIndex]);
+	};
+
 	// Helper function to generate hint
 	const getHint = () => {
 		const correctAnswer = getBackText(currentCard);
 		if (!correctAnswer) return "";
-		const words = correctAnswer.split(" ");
-		if (words.length > 1) {
-			return words
-				.map((word) => word.charAt(0) + "_".repeat(word.length - 1))
-				.join(" ");
-		}
-		return (
-			correctAnswer.charAt(0) +
-			"_".repeat(Math.max(0, correctAnswer.length - 1))
-		);
+		const baseIndices = getBaseHintIndices(correctAnswer);
+		const revealedSet = new Set([...baseIndices, ...revealedHintIndices]);
+
+		return correctAnswer
+			.split("")
+			.map((char, index) => {
+				if (!isMaskableHintChar(char)) return char;
+				return revealedSet.has(index) ? char : "_";
+			})
+			.join("");
 	};
+
+	useEffect(() => {
+		setRevealedHintIndices([]);
+	}, [currentCard?.id]);
 
 	const handleTimeUp = useCallback(() => {
 		if (timedSessionTokenRef.current !== sessionTokenRef.current) {
@@ -1172,6 +1300,8 @@ const GameScreen = ({ route, navigation }) => {
 			console.log("answerr", response.data);
 			// "almost" (similarity >= 0.7) counts as correct
 			const isClose = correct || similarity >= 0.7;
+			const nextCorrectCount = isClose ? correctCount + 1 : correctCount;
+			const nextWrongCount = isClose ? wrongCount : wrongCount + 1;
 
 			const isMobile = Platform.OS === "ios" || Platform.OS === "android";
 
@@ -1208,11 +1338,14 @@ const GameScreen = ({ route, navigation }) => {
 
 			await gamesAPI.updateCardStats(currentCard.id, isClose);
 			// Track result for accordion
-			setCardResults((prev) => [...prev, {
-				front: getFrontText(currentCard),
-				back: getBackText(currentCard),
-				isCorrect: isClose,
-			}]);
+			setCardResults((prev) => [
+				...prev,
+				{
+					front: getFrontText(currentCard),
+					back: getBackText(currentCard),
+					isCorrect: isClose,
+				},
+			]);
 			const writeAdvanceDelay = correct
 				? WRITE_CORRECT_DELAY_MS
 				: WRITE_WRONG_DELAY_MS;
@@ -1235,7 +1368,7 @@ const GameScreen = ({ route, navigation }) => {
 							lastAnswerRef.current = false;
 						}, 50);
 					} else {
-						endGame();
+						endGame(nextCorrectCount, nextWrongCount);
 					}
 				} else {
 					nextCard();
@@ -1256,6 +1389,8 @@ const GameScreen = ({ route, navigation }) => {
 		const option = mcOptions[optionIndex];
 		// Options come as objects with {text, isCorrect} from backend
 		const isCorrect = option?.isCorrect || false;
+		const nextCorrectCount = isCorrect ? correctCount + 1 : correctCount;
+		const nextWrongCount = isCorrect ? wrongCount : wrongCount + 1;
 
 		if (isCorrect) {
 			sounds.correct();
@@ -1270,11 +1405,14 @@ const GameScreen = ({ route, navigation }) => {
 
 		try {
 			await gamesAPI.updateCardStats(currentCard.id, isCorrect);
-			setCardResults((prev) => [...prev, {
-				front: getFrontText(currentCard),
-				back: getBackText(currentCard),
-				isCorrect,
-			}]);
+			setCardResults((prev) => [
+				...prev,
+				{
+					front: getFrontText(currentCard),
+					back: getBackText(currentCard),
+					isCorrect,
+				},
+			]);
 		} catch (error) {
 			console.error("Error updating stats:", error);
 		}
@@ -1299,7 +1437,7 @@ const GameScreen = ({ route, navigation }) => {
 						}
 					}, 50);
 				} else {
-					endGame();
+					endGame(nextCorrectCount, nextWrongCount);
 				}
 			} else {
 				nextCard();
@@ -1378,6 +1516,8 @@ const GameScreen = ({ route, navigation }) => {
 		finishingRef.current = true;
 		setFinishing(true);
 
+		// Stop TTS when game ends
+		ttsStop();
 		timer.pause();
 		timedSessionTokenRef.current = null;
 		timedStartedSessionRef.current = null;
@@ -1463,9 +1603,7 @@ const GameScreen = ({ route, navigation }) => {
 
 				console.log("Achievement response:", achievementResponse.data);
 
-				if (
-					achievementResponse.data?.newlyEarned?.length > 0
-				) {
+				if (achievementResponse.data?.newlyEarned?.length > 0) {
 					setNewAchievements(achievementResponse.data.newlyEarned);
 				}
 			} catch (error) {
@@ -2227,7 +2365,14 @@ const GameScreen = ({ route, navigation }) => {
 						},
 					]}
 				>
-					<Pressable onPress={() => setShowExitDialog(true)}>
+					<Pressable
+						onPress={() => {
+							if (gameMode === "write") {
+								Keyboard.dismiss();
+							}
+							setShowExitDialog(true);
+						}}
+					>
 						<MaterialCommunityIcons
 							name="arrow-left"
 							size={24}
@@ -2293,7 +2438,12 @@ const GameScreen = ({ route, navigation }) => {
 					</View>
 
 					<Pressable
-						onPress={() => setShowRestartDialog(true)}
+						onPress={() => {
+							if (gameMode === "write") {
+								Keyboard.dismiss();
+							}
+							setShowRestartDialog(true);
+						}}
 						style={styles.restartButton}
 					>
 						<MaterialCommunityIcons
@@ -2496,17 +2646,21 @@ const GameScreen = ({ route, navigation }) => {
 					<ThemedText style={styles.questionText}>
 						{getFrontText(currentCard)}
 					</ThemedText>
-					<Pressable
-						onPress={() => ttsSpeaking ? ttsStop() : ttsSpeak(getFrontText(currentCard))}
-						hitSlop={8}
-						style={styles.questionTtsBtn}
-					>
-						<MaterialCommunityIcons
-							name={ttsSpeaking ? "stop" : "volume-high"}
-							size={24}
-							color="#3b82f6"
-						/>
-					</Pressable>
+					{canUseTTS && (
+						<Pressable
+							onPress={() =>
+								ttsSpeaking ? ttsStop() : ttsSpeak(getFrontText(currentCard))
+							}
+							hitSlop={8}
+							style={styles.questionTtsBtn}
+						>
+							<MaterialCommunityIcons
+								name={ttsSpeaking ? "stop" : "volume-high"}
+								size={24}
+								color="#3b82f6"
+							/>
+						</Pressable>
+					)}
 				</Card>
 
 				<TextInput
@@ -2535,30 +2689,52 @@ const GameScreen = ({ route, navigation }) => {
 					editable={!answerResult}
 					autoFocus
 					blurOnSubmit={false}
+					caretHidden={true}
 					onSubmitEditing={handleWriteSubmit}
 				/>
 
 				{/* Hint Section */}
 				{!answerResult && (
-					<View style={styles.writeButtonRow}>
-						<Button
-							onPress={() => setShowHint(!showHint)}
-							size="medium"
-							variant="outline"
-							style={styles.writeModeButton}
-						>
-							{showHint ? t("hide_hint") : t("show_hint")}
-						</Button>
+					<>
+						<View style={styles.writeButtonRow}>
+							<Button
+								onPress={() => setShowHint(!showHint)}
+								size="medium"
+								variant="outline"
+								style={styles.writeModeButton}
+							>
+								{showHint ? t("hide_hint") : t("show_hint")}
+							</Button>
 
-						<Button
-							onPress={handleWriteSubmit}
-							size="medium"
-							disabled={!userAnswer.trim()}
-							style={styles.writeModeButton}
-						>
-							{t("submit")}
-						</Button>
-					</View>
+							<Button
+								onPress={handleWriteSubmit}
+								size="medium"
+								disabled={!userAnswer.trim()}
+								style={styles.writeModeButton}
+							>
+								{t("submit")}
+							</Button>
+						</View>
+
+						{showHint && (
+							<View style={styles.revealHintRow}>
+								<Button
+									onPress={revealOneMoreHintLetter}
+									size="medium"
+									variant="outline"
+									disabled={
+										getHintRevealCandidates(getBackText(currentCard)).length ===
+										0
+									}
+									style={styles.revealHintButton}
+								>
+									<Text style={styles.revealHintButtonText}>
+										{t("reveal_hint")}
+									</Text>
+								</Button>
+							</View>
+						)}
+					</>
 				)}
 
 				{showHint && !answerResult && (
@@ -2659,17 +2835,21 @@ const GameScreen = ({ route, navigation }) => {
 					<ThemedText style={styles.questionText}>
 						{getFrontText(currentCard)}
 					</ThemedText>
-					<Pressable
-						onPress={() => ttsSpeaking ? ttsStop() : ttsSpeak(getFrontText(currentCard))}
-						hitSlop={8}
-						style={styles.questionTtsBtn}
-					>
-						<MaterialCommunityIcons
-							name={ttsSpeaking ? "stop" : "volume-high"}
-							size={24}
-							color="#3b82f6"
-						/>
-					</Pressable>
+					{canUseTTS && (
+						<Pressable
+							onPress={() =>
+								ttsSpeaking ? ttsStop() : ttsSpeak(getFrontText(currentCard))
+							}
+							hitSlop={8}
+							style={styles.questionTtsBtn}
+						>
+							<MaterialCommunityIcons
+								name={ttsSpeaking ? "stop" : "volume-high"}
+								size={24}
+								color="#3b82f6"
+							/>
+						</Pressable>
+					)}
 				</Card>
 
 				<ScrollView
@@ -3075,121 +3255,188 @@ const GameScreen = ({ route, navigation }) => {
 
 	// Render Summary
 	const renderSummary = () => {
-			const totalCards = correctCount + wrongCount;
+		const totalCards = correctCount + wrongCount;
 
-			return (
-				<ScrollView
-					style={styles.summaryScrollView}
-					contentContainerStyle={styles.summaryContainer}
-					showsVerticalScrollIndicator={false}
-				>
-					{/* 1. Buttons */}
-					<View style={styles.summaryActions}>
+		return (
+			<ScrollView
+				style={styles.summaryScrollView}
+				contentContainerStyle={styles.summaryContainer}
+				showsVerticalScrollIndicator={false}
+			>
+				{/* 1. Buttons */}
+				<View style={styles.summaryActions}>
+					<Pressable
+						onPress={restartGame}
+						disabled={finishing}
+						style={({ pressed }) => [
+							styles.summaryButton,
+							styles.summaryButtonPrimary,
+							{ backgroundColor: theme.primary.main },
+							pressed && { opacity: 0.8 },
+							finishing && { opacity: 0.6 },
+						]}
+					>
+						<MaterialCommunityIcons name="refresh" size={20} color="#fff" />
+						<Text style={styles.summaryButtonTextPrimary}>
+							{t("play_again")}
+						</Text>
+					</Pressable>
+
+					<View style={styles.summaryButtonRow}>
 						<Pressable
-							onPress={restartGame}
-							disabled={finishing}
+							onPress={() => navigation.goBack()}
 							style={({ pressed }) => [
 								styles.summaryButton,
-								styles.summaryButtonPrimary,
-								{ backgroundColor: theme.primary.main },
+								styles.summaryButtonSecondary,
+								{
+									backgroundColor: theme.background.card,
+									borderColor: theme.border.main,
+									flex: 1,
+								},
 								pressed && { opacity: 0.8 },
-								finishing && { opacity: 0.6 },
 							]}
 						>
-							<MaterialCommunityIcons name="refresh" size={20} color="#fff" />
-							<Text style={styles.summaryButtonTextPrimary}>{t("play_again")}</Text>
+							<MaterialCommunityIcons
+								name="home"
+								size={18}
+								color={theme.text.primary}
+							/>
+							<Text
+								style={[
+									styles.summaryButtonTextSecondary,
+									{ color: theme.text.primary },
+								]}
+							>
+								{t("back_to_decks")}
+							</Text>
 						</Pressable>
 
-						<View style={styles.summaryButtonRow}>
-							<Pressable
-								onPress={() => navigation.goBack()}
-								style={({ pressed }) => [
-									styles.summaryButton,
-									styles.summaryButtonSecondary,
-									{ backgroundColor: theme.background.card, borderColor: theme.border.main, flex: 1 },
-									pressed && { opacity: 0.8 },
+						<Pressable
+							onPress={() => {
+								resetSessionStateForExit();
+								setGameState("mode_select");
+							}}
+							style={({ pressed }) => [
+								styles.summaryButton,
+								styles.summaryButtonSecondary,
+								{
+									backgroundColor: theme.background.card,
+									borderColor: theme.border.main,
+									flex: 1,
+								},
+								pressed && { opacity: 0.8 },
+							]}
+						>
+							<MaterialCommunityIcons
+								name="cog"
+								size={18}
+								color={theme.text.primary}
+							/>
+							<Text
+								style={[
+									styles.summaryButtonTextSecondary,
+									{ color: theme.text.primary },
 								]}
 							>
-								<MaterialCommunityIcons name="home" size={18} color={theme.text.primary} />
-								<Text style={[styles.summaryButtonTextSecondary, { color: theme.text.primary }]}>
-									{t("back_to_decks")}
-								</Text>
-							</Pressable>
+								{t("change_mode")}
+							</Text>
+						</Pressable>
+					</View>
+				</View>
 
-							<Pressable
-								onPress={() => { resetSessionStateForExit(); setGameState("mode_select"); }}
-								style={({ pressed }) => [
-									styles.summaryButton,
-									styles.summaryButtonSecondary,
-									{ backgroundColor: theme.background.card, borderColor: theme.border.main, flex: 1 },
-									pressed && { opacity: 0.8 },
-								]}
-							>
-								<MaterialCommunityIcons name="cog" size={18} color={theme.text.primary} />
-								<Text style={[styles.summaryButtonTextSecondary, { color: theme.text.primary }]}>
-									{t("change_mode")}
-								</Text>
-							</Pressable>
+				{/* 2. New Achievements */}
+				{newAchievements.length > 0 && (
+					<Card variant="elevated" style={styles.achievementsCard}>
+						<Text style={styles.achievementsCardTitle}>
+							{t("achievements_earned_new") || "KAZANILAN ROZETLER"}
+						</Text>
+						<View style={styles.achievementsRow}>
+							{newAchievements.map((a, i) => (
+								<View key={i} style={styles.achievementItem}>
+									<AchievementBadge
+										type={a.category}
+										size={64}
+										earned
+										interactive
+										value={a.threshold}
+									/>
+									<Text
+										style={[
+											styles.achievementItemLabel,
+											{ color: theme.text.secondary },
+										]}
+										numberOfLines={2}
+									>
+										{t(`achievement_${a.name}`) || a.description}
+									</Text>
+								</View>
+							))}
 						</View>
+					</Card>
+				)}
+
+				{/* 3. Summary Card */}
+				<Card
+					variant="elevated"
+					style={[styles.summaryCard, { marginTop: spacing.lg }]}
+				>
+					<ThemedText variant="h2" style={styles.summaryTitle}>
+						{t("game_summary")}
+					</ThemedText>
+
+					<View style={styles.statsRow}>
+						{gameMode === "match" ? (
+							<>
+								<SummaryStatItem
+									value={matchedPairs.length}
+									label={t("pairs") || "Pairs"}
+									color={theme.primary.main}
+									iconName="layers"
+									theme={theme}
+								/>
+								<SummaryStatItem
+									value={matchAttempts}
+									label={t("attempts") || "Attempts"}
+									color="#ec4899"
+									iconName="grid"
+									theme={theme}
+								/>
+							</>
+						) : (
+							<>
+								<SummaryStatItem
+									value={correctCount}
+									label={t("correct")}
+									color={theme.success.main}
+									iconName="check-circle"
+									theme={theme}
+								/>
+								<SummaryStatItem
+									value={wrongCount}
+									label={t("incorrect")}
+									color={theme.error.main}
+									iconName="close-circle"
+									theme={theme}
+								/>
+								<SummaryStatItem
+									value={totalCards}
+									label={t("total")}
+									color={theme.primary.main}
+									iconName="layers"
+									theme={theme}
+								/>
+							</>
+						)}
 					</View>
 
-					{/* 2. New Achievements */}
-					{newAchievements.length > 0 && (
-						<Card variant="elevated" style={styles.achievementsCard}>
-							<Text style={styles.achievementsCardTitle}>
-								{t("achievements_earned_new") || "KAZANILAN ROZETLER"}
-							</Text>
-							<View style={styles.achievementsRow}>
-								{newAchievements.map((a, i) => (
-									<View key={i} style={styles.achievementItem}>
-										<AchievementBadge
-											type={a.category}
-											size={64}
-											earned
-											interactive
-											value={a.threshold}
-										/>
-										<Text
-											style={[styles.achievementItemLabel, { color: theme.text.secondary }]}
-											numberOfLines={2}
-										>
-											{t(`achievement_${a.name}`) || a.description}
-										</Text>
-									</View>
-								))}
-							</View>
-						</Card>
-					)}
-
-					{/* 3. Summary Card */}
-					<Card variant="elevated" style={[styles.summaryCard, { marginTop: spacing.lg }]}>
-						<ThemedText variant="h2" style={styles.summaryTitle}>
-							{t("game_summary")}
-						</ThemedText>
-
-						<View style={styles.statsRow}>
-							{gameMode === "match" ? (
-								<>
-									<SummaryStatItem value={matchedPairs.length} label={t("pairs") || "Pairs"} color={theme.primary.main} iconName="layers" theme={theme} />
-									<SummaryStatItem value={matchAttempts} label={t("attempts") || "Attempts"} color="#ec4899" iconName="grid" theme={theme} />
-								</>
-							) : (
-								<>
-									<SummaryStatItem value={correctCount} label={t("correct")} color={theme.success.main} iconName="check-circle" theme={theme} />
-									<SummaryStatItem value={wrongCount} label={t("incorrect")} color={theme.error.main} iconName="close-circle" theme={theme} />
-									<SummaryStatItem value={totalCards} label={t("total")} color={theme.primary.main} iconName="layers" theme={theme} />
-								</>
-							)}
-						</View>
-
 					{/* Accordion: Correct / Incorrect */}
-						{cardResults.length > 0 && gameMode !== "match" && (
-							<AccordionResults cardResults={cardResults} theme={theme} t={t} />
-						)}
-					</Card>
-				</ScrollView>
-			);
-		};
+					{cardResults.length > 0 && gameMode !== "match" && (
+						<AccordionResults cardResults={cardResults} theme={theme} t={t} />
+					)}
+				</Card>
+			</ScrollView>
+		);
+	};
 
 	return (
 		<ThemedView variant="gradient" style={styles.container}>
@@ -3199,29 +3446,39 @@ const GameScreen = ({ route, navigation }) => {
 				{gameState === "summary" && renderSummary()}
 			</SafeAreaView>
 
-			<ConfirmDialog
-				visible={showRestartDialog}
+			<AnimatedConfirmBox
+				visible={showRestartDialog && gameState === "playing"}
 				title={t("restart_game")}
 				message={t("restart_game_confirm")}
 				confirmLabel={t("restart")}
 				cancelLabel={t("cancel")}
 				confirmVariant="warning"
+				bottomOffset={56}
+				buttonBorderRadius={16}
 				onConfirm={() => {
 					setShowRestartDialog(false);
+					if (gameMode === "write") {
+						Keyboard.dismiss();
+					}
 					restartGame();
 				}}
 				onClose={() => setShowRestartDialog(false)}
 			/>
 
-			<ConfirmDialog
-				visible={showExitDialog}
+			<AnimatedConfirmBox
+				visible={showExitDialog && gameState === "playing"}
 				title={t("exit_game")}
 				message={t("exit_game_confirm")}
 				confirmLabel={t("exit")}
 				cancelLabel={t("cancel")}
 				confirmVariant="danger"
+				bottomOffset={56}
+				buttonBorderRadius={16}
 				onConfirm={() => {
 					setShowExitDialog(false);
+					if (gameMode === "write") {
+						Keyboard.dismiss();
+					}
 					resetSessionStateForExit();
 					setGameState("mode_select");
 				}}
@@ -3736,6 +3993,25 @@ const styles = StyleSheet.create({
 	},
 	writeModeButton: {
 		flex: 1,
+	},
+	revealHintRow: {
+		marginTop: spacing.sm,
+		width: "100%",
+		alignItems: "flex-start",
+	},
+	revealHintButton: {
+		minWidth: 160,
+		paddingHorizontal: spacing.md,
+		backgroundColor: "#f59e0b20",
+		borderColor: "#f59e0b60",
+		borderWidth: 1,
+	},
+	revealHintButtonText: {
+		fontSize: 14,
+		fontWeight: "700",
+		lineHeight: 18,
+		textAlign: "center",
+		color: "#f59e0b",
 	},
 	hintButton: {
 		flexDirection: "row",

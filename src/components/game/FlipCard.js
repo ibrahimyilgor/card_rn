@@ -10,6 +10,7 @@ import {
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useTheme } from "../../context/ThemeContext";
 import { useI18n } from "../../context/I18nContext";
+import { usePlan } from "../../context/PlanContext";
 import { borderRadius, spacing } from "../../styles/theme";
 import useTTS from "../../hooks/useTTS";
 
@@ -27,8 +28,14 @@ const FlipCard = ({
 }) => {
 	const { theme, shadows } = useTheme();
 	const { t } = useI18n();
+	const { planCode } = usePlan();
 	const { isSpeaking, speak, stop } = useTTS();
-	const { isSpeaking: isSpeakingBack, speak: speakBack, stop: stopBack } = useTTS();
+	const {
+		isSpeaking: isSpeakingBack,
+		speak: speakBack,
+		stop: stopBack,
+	} = useTTS();
+	const canUseTTS = planCode !== "free";
 	const flipAnim = useRef(new Animated.Value(0)).current;
 
 	const frontScrollRef = useRef(null);
@@ -76,10 +83,22 @@ const FlipCard = ({
 	}, [isFlipped]);
 
 	const stopAutoScroll = () => {
-		if (frontAutoScrollTimer.current) { clearInterval(frontAutoScrollTimer.current); frontAutoScrollTimer.current = null; }
-		if (backAutoScrollTimer.current) { clearInterval(backAutoScrollTimer.current); backAutoScrollTimer.current = null; }
-		if (frontResetTimeout.current) { clearTimeout(frontResetTimeout.current); frontResetTimeout.current = null; }
-		if (backResetTimeout.current) { clearTimeout(backResetTimeout.current); backResetTimeout.current = null; }
+		if (frontAutoScrollTimer.current) {
+			clearInterval(frontAutoScrollTimer.current);
+			frontAutoScrollTimer.current = null;
+		}
+		if (backAutoScrollTimer.current) {
+			clearInterval(backAutoScrollTimer.current);
+			backAutoScrollTimer.current = null;
+		}
+		if (frontResetTimeout.current) {
+			clearTimeout(frontResetTimeout.current);
+			frontResetTimeout.current = null;
+		}
+		if (backResetTimeout.current) {
+			clearTimeout(backResetTimeout.current);
+			backResetTimeout.current = null;
+		}
 	};
 
 	useEffect(() => {
@@ -106,7 +125,9 @@ const FlipCard = ({
 					y = maxY;
 					if (!safeScrollTo(ref, y)) return;
 					pausedUntil = now + pauseAtEndsMs;
-					resetTimeoutRef.current = setTimeout(() => { safeScrollTo(ref, 0); }, pauseAtEndsMs);
+					resetTimeoutRef.current = setTimeout(() => {
+						safeScrollTo(ref, 0);
+					}, pauseAtEndsMs);
 					y = 0;
 					pausedUntil = now + pauseAtEndsMs * 2;
 					return;
@@ -116,18 +137,50 @@ const FlipCard = ({
 		};
 		if (!disabled) {
 			if (!isFlipped) {
-				start({ ref: frontScrollRef, viewportH: frontViewportH, contentH: frontContentH, timerRef: frontAutoScrollTimer, resetTimeoutRef: frontResetTimeout });
+				start({
+					ref: frontScrollRef,
+					viewportH: frontViewportH,
+					contentH: frontContentH,
+					timerRef: frontAutoScrollTimer,
+					resetTimeoutRef: frontResetTimeout,
+				});
 			} else {
-				start({ ref: backScrollRef, viewportH: backViewportH, contentH: backContentH, timerRef: backAutoScrollTimer, resetTimeoutRef: backResetTimeout });
+				start({
+					ref: backScrollRef,
+					viewportH: backViewportH,
+					contentH: backContentH,
+					timerRef: backAutoScrollTimer,
+					resetTimeoutRef: backResetTimeout,
+				});
 			}
 		}
 		return () => stopAutoScroll();
-	}, [isFlipped, disabled, frontViewportH, frontContentH, backViewportH, backContentH, cardKey]);
+	}, [
+		isFlipped,
+		disabled,
+		frontViewportH,
+		frontContentH,
+		backViewportH,
+		backContentH,
+		cardKey,
+	]);
 
-	const frontRotate = flipAnim.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "180deg"] });
-	const backRotate = flipAnim.interpolate({ inputRange: [0, 1], outputRange: ["180deg", "360deg"] });
-	const frontOpacity = flipAnim.interpolate({ inputRange: [0, 0.49, 0.5, 1], outputRange: [1, 1, 0, 0] });
-	const backOpacity = flipAnim.interpolate({ inputRange: [0, 0.49, 0.5, 1], outputRange: [0, 0, 1, 1] });
+	const frontRotate = flipAnim.interpolate({
+		inputRange: [0, 1],
+		outputRange: ["0deg", "180deg"],
+	});
+	const backRotate = flipAnim.interpolate({
+		inputRange: [0, 1],
+		outputRange: ["180deg", "360deg"],
+	});
+	const frontOpacity = flipAnim.interpolate({
+		inputRange: [0, 0.49, 0.5, 1],
+		outputRange: [1, 1, 0, 0],
+	});
+	const backOpacity = flipAnim.interpolate({
+		inputRange: [0, 0.49, 0.5, 1],
+		outputRange: [0, 0, 1, 1],
+	});
 
 	return (
 		<Pressable
@@ -135,23 +188,37 @@ const FlipCard = ({
 			style={[styles.container, shadows.large, style]}
 		>
 			{/* Front Side */}
-				<Animated.View
-					pointerEvents={isFlipped ? "none" : "auto"}
-					style={[
+			<Animated.View
+				style={[
 					styles.card,
-					{ backgroundColor: theme.background.elevated, borderColor: theme.border.main },
-					{ transform: [{ perspective: 1000 }, { rotateY: frontRotate }], opacity: frontOpacity, backfaceVisibility: "hidden" },
+					{
+						backgroundColor: theme.background.elevated,
+						borderColor: theme.border.main,
+					},
+					{
+						transform: [{ perspective: 1000 }, { rotateY: frontRotate }],
+						opacity: frontOpacity,
+						backfaceVisibility: "hidden",
+					},
 				]}
 			>
 				<View style={[styles.accentBar, { backgroundColor: FRONT_ACCENT }]} />
-				{/* TTS button inside front face — flips with card */}
-				<Pressable
-					onPress={(e) => { e.stopPropagation?.(); if (isFlipped) return; isSpeaking ? stop() : speak(frontText); }}
-					hitSlop={8}
-					style={styles.ttsButton}
-				>
-					<MaterialCommunityIcons name={isSpeaking ? "stop" : "volume-high"} size={24} color="#3b82f6" />
-				</Pressable>
+				{canUseTTS && (
+					<Pressable
+						onPress={(e) => {
+							e.stopPropagation?.();
+							isSpeaking ? stop() : speak(frontText);
+						}}
+						hitSlop={8}
+						style={styles.ttsButton}
+					>
+						<MaterialCommunityIcons
+							name={isSpeaking ? "stop" : "volume-high"}
+							size={24}
+							color="#3b82f6"
+						/>
+					</Pressable>
+				)}
 				<ScrollView
 					ref={frontScrollRef}
 					style={styles.contentScroll}
@@ -161,35 +228,63 @@ const FlipCard = ({
 					onLayout={(e) => setFrontViewportH(e.nativeEvent.layout.height)}
 					onContentSizeChange={(_w, h) => setFrontContentH(h)}
 				>
-					<Text style={[styles.text, styles.textBreathingRoom, isFrontVeryLong && styles.textSmall, { color: theme.text.primary }]}>
+					<Text
+						style={[
+							styles.text,
+							styles.textBreathingRoom,
+							isFrontVeryLong && styles.textSmall,
+							{ color: theme.text.primary },
+						]}
+					>
 						{frontText}
 					</Text>
 				</ScrollView>
 				<View style={styles.hintRow}>
-					<MaterialCommunityIcons name="gesture-tap" size={15} color={theme.text.disabled} style={styles.hintIcon} />
-					<Text style={[styles.hint, { color: theme.text.disabled }]}>{t("tap_to_flip")}</Text>
+					<MaterialCommunityIcons
+						name="gesture-tap"
+						size={15}
+						color={theme.text.disabled}
+						style={styles.hintIcon}
+					/>
+					<Text style={[styles.hint, { color: theme.text.disabled }]}>
+						{t("tap_to_flip")}
+					</Text>
 				</View>
 			</Animated.View>
 
 			{/* Back Side */}
 			<Animated.View
-				pointerEvents={isFlipped ? "auto" : "none"}
 				style={[
 					styles.card,
-					{ backgroundColor: theme.background.elevated, borderColor: theme.border.main },
-					{ transform: [{ perspective: 1000 }, { rotateY: backRotate }], opacity: backOpacity, backfaceVisibility: "hidden" },
+					{
+						backgroundColor: theme.background.elevated,
+						borderColor: theme.border.main,
+					},
+					{
+						transform: [{ perspective: 1000 }, { rotateY: backRotate }],
+						opacity: backOpacity,
+						backfaceVisibility: "hidden",
+					},
 				]}
 			>
 				<View style={[styles.accentBar, { backgroundColor: BACK_ACCENT }]} />
 				<Text style={styles.backLabel}>{t("flip_back_label")}</Text>
-				{/* TTS button inside back face — mirrored so it appears top-right when flipped */}
-				<Pressable
-					onPress={(e) => { e.stopPropagation?.(); if (!isFlipped) return; isSpeakingBack ? stopBack() : speakBack(backText); }}
-					hitSlop={8}
-					style={styles.ttsButtonMirrored}
-				>
-					<MaterialCommunityIcons name={isSpeakingBack ? "stop" : "volume-high"} size={24} color="#3b82f6" />
-				</Pressable>
+				{canUseTTS && (
+					<Pressable
+						onPress={(e) => {
+							e.stopPropagation?.();
+							isSpeakingBack ? stopBack() : speakBack(backText);
+						}}
+						hitSlop={8}
+						style={styles.ttsButtonMirrored}
+					>
+						<MaterialCommunityIcons
+							name={isSpeakingBack ? "stop" : "volume-high"}
+							size={24}
+							color="#3b82f6"
+						/>
+					</Pressable>
+				)}
 				<ScrollView
 					ref={backScrollRef}
 					style={styles.contentScroll}
@@ -199,13 +294,27 @@ const FlipCard = ({
 					onLayout={(e) => setBackViewportH(e.nativeEvent.layout.height)}
 					onContentSizeChange={(_w, h) => setBackContentH(h)}
 				>
-					<Text style={[styles.text, styles.textBreathingRoom, isBackVeryLong && styles.textSmall, { color: theme.text.primary }]}>
+					<Text
+						style={[
+							styles.text,
+							styles.textBreathingRoom,
+							isBackVeryLong && styles.textSmall,
+							{ color: theme.text.primary },
+						]}
+					>
 						{backText}
 					</Text>
 				</ScrollView>
 				<View style={styles.hintRow}>
-					<MaterialCommunityIcons name="gesture-tap" size={15} color={theme.text.disabled} style={styles.hintIcon} />
-					<Text style={[styles.hint, { color: theme.text.disabled }]}>{t("tap_to_flip_back")}</Text>
+					<MaterialCommunityIcons
+						name="gesture-tap"
+						size={15}
+						color={theme.text.disabled}
+						style={styles.hintIcon}
+					/>
+					<Text style={[styles.hint, { color: theme.text.disabled }]}>
+						{t("tap_to_flip_back")}
+					</Text>
 				</View>
 			</Animated.View>
 		</Pressable>

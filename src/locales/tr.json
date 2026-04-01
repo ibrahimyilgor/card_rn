@@ -283,6 +283,8 @@
 	"plans_fetch_error": "Planlar yüklenemedi",
 	"current_plan": "Mevcut Plan",
 	"free_price": "Ücretsiz",
+	"view_prices_mobile": "Fiyatları mobil uygulamada görüntüleyin",
+	"view_price_mobile": "Fiyatı mobil uygulamada görüntüleyin",
 	"month": "ay",
 	"unlimited_decks": "Sınırsız deste",
 	"unlimited_flashcards": "Sınırsız kart",
@@ -480,5 +482,7 @@
 	"deck_limit": "Deste Limiti",
 	"flashcard_limit": "Kart Limiti",
 	"achievements_earned_new": "Kazanılan Rozetler",
-	"manage": "Planlar"
+	"manage": "Planlar",
+	"purchase_cancelled": "Satın alma iptal edildi",
+	"reveal_hint": "Bir harf daha göster"
 }

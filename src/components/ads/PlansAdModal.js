@@ -8,11 +8,18 @@ import {
 	ScrollView,
 	Animated,
 	ActivityIndicator,
+	Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../context/ThemeContext";
 import { useI18n } from "../../context/I18nContext";
 import { accountAPI } from "../../services/api";
+import {
+	initBilling,
+	getSubscriptionProducts,
+	getFormattedPriceForProduct,
+	SUBSCRIPTION_PRODUCT_MAP,
+} from "../../services/googleBillingService";
 import { spacing, borderRadius } from "../../styles/theme";
 
 const BLOCK_DURATION_SEC = 10;
@@ -100,20 +107,89 @@ const PlansAdModal = ({ visible, onClose, onUpgrade }) => {
 	const fetchPlans = async () => {
 		try {
 			setLoading(true);
-			const [plansRes, myPlanRes] = await Promise.all([
+
+			// Initialize Google Play Billing to retrieve subscription prices
+			if (Platform.OS === "android") {
+				try {
+					const isBillingReady = await initBilling();
+					if (!isBillingReady) {
+						console.warn(
+							"[PlansAdModal] Billing service not ready, will use backend prices",
+						);
+					}
+				} catch (initError) {
+					console.warn("[PlansAdModal] initBilling error:", initError);
+				}
+			}
+
+			const [plansRes, myPlanRes, googlePlayProducts] = await Promise.all([
 				accountAPI.getPlans(),
 				accountAPI.getCurrentPlan(),
+				getSubscriptionProducts(),
 			]);
 			const backendPlans = plansRes.data?.plans || [];
-			const formatted = backendPlans.map((plan) => ({
-				id: plan.code,
-				name: plan.code.charAt(0).toUpperCase() + plan.code.slice(1),
-				price: plan.price_monthly === 0 ? "$0" : `$${plan.price_monthly}`,
-				period: plan.price_monthly === 0 ? t("forever") : t("per_month"),
-				color: getPlanColor(plan.code),
-				icon: getPlanIcon(plan.code),
-				features: getFeaturesList(plan),
-			}));
+
+			// Create a map of plan code -> Google Play product for quick lookup
+			const googlePlayPriceMap = {};
+			if (Array.isArray(googlePlayProducts) && googlePlayProducts.length > 0) {
+				console.log(
+					"[PlansAdModal] Google Play products received:",
+					googlePlayProducts,
+				);
+				googlePlayProducts.forEach((product) => {
+					if (product?.productId) {
+						Object.entries(SUBSCRIPTION_PRODUCT_MAP).forEach(
+							([planCode, sku]) => {
+								if (product.productId === sku) {
+									const formattedPrice = getFormattedPriceForProduct(product);
+									console.log(
+										`[PlansAdModal] Mapped ${planCode} (${sku}) -> ${formattedPrice}`,
+									);
+									googlePlayPriceMap[planCode] = formattedPrice;
+								}
+							},
+						);
+					}
+				});
+			} else {
+				console.log(
+					"[PlansAdModal] No Google Play products available, will use backend prices",
+				);
+			}
+
+			const formatted = backendPlans.map((plan) => {
+				let displayPrice;
+				let displayPeriod;
+
+				if (plan.code === "free") {
+					displayPrice = "$0";
+					displayPeriod = t("forever");
+				} else {
+					displayPeriod = t("month") || "ay";
+					// Paid plan: prefer Google Play price, fallback to backend
+					displayPrice = googlePlayPriceMap[plan.code];
+					if (
+						!displayPrice &&
+						plan.price_monthly &&
+						parseFloat(plan.price_monthly) > 0
+					) {
+						// Fallback to backend price if Google Play price not available
+						const priceNum = parseFloat(plan.price_monthly);
+						displayPrice = `$${priceNum.toFixed(2)}`;
+					}
+					displayPrice = displayPrice || "$0";
+				}
+
+				return {
+					id: plan.code,
+					name: plan.code.charAt(0).toUpperCase() + plan.code.slice(1),
+					price: displayPrice,
+					period: displayPeriod,
+					color: getPlanColor(plan.code),
+					icon: getPlanIcon(plan.code),
+					features: getFeaturesList(plan),
+				};
+			});
 			setPlans(formatted);
 			setCurrentPlan(myPlanRes.data?.plan?.code || "free");
 		} catch (e) {
@@ -219,8 +295,10 @@ const PlansAdModal = ({ visible, onClose, onUpgrade }) => {
 					</View>
 				) : (
 					<ScrollView
+						style={styles.plansScrollView}
 						contentContainerStyle={styles.plansColumn}
 						showsVerticalScrollIndicator={false}
+						nestedScrollEnabled
 					>
 						{plans.map((plan) => {
 							const isCurrent = currentPlan === plan.id;
@@ -392,6 +470,9 @@ const styles = StyleSheet.create({
 		paddingBottom: spacing.xxl || 40,
 		marginTop: spacing.sm,
 		gap: spacing.md,
+	},
+	plansScrollView: {
+		flex: 1,
 	},
 	planCard: {
 		borderRadius: borderRadius.lg,

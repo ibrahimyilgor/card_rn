@@ -20,6 +20,7 @@ import {
 	purchasePlanOnAndroid,
 	syncAndroidEntitlements,
 	getSubscriptionProducts,
+	getFormattedPriceForProduct,
 	SUBSCRIPTION_PRODUCT_MAP,
 } from "../services/googleBillingService";
 import {
@@ -33,49 +34,11 @@ import {
 import { spacing, borderRadius } from "../styles/theme";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
-// Memoized header to avoid re-renders while content fetch/animations run
-const Header = React.memo(({ primaryColor, title, subtitle, headerAnim }) => {
-	return (
-		<Animated.View
-			style={[
-				styles.header,
-				{
-					opacity: headerAnim,
-					transform: [
-						{
-							translateY: headerAnim.interpolate({
-								inputRange: [0, 1],
-								outputRange: [-15, 0],
-							}),
-						},
-					],
-				},
-			]}
-		>
-			<View style={styles.headerTitle}>
-				<MaterialCommunityIcons name="calendar" size={28} color={primaryColor} />
-				<ThemedText variant="h2" style={styles.headerTitleText}>
-					{title}
-				</ThemedText>
-			</View>
-			<ThemedText color="secondary">{subtitle}</ThemedText>
-		</Animated.View>
-	);
-});
-
 const { width } = Dimensions.get("window");
 
 const PlansScreen = ({ navigation }) => {
 	const { theme } = useTheme();
 	const { t } = useI18n();
-	const { useMemo } = React;
-
-	// Stabilize header props so `Header` (React.memo) doesn't re-render
-	const headerTitle = useMemo(() => t("plans_title"), [t]);
-	const headerSubtitle = useMemo(() => t("plans_subtitle"), [t]);
-	const headerPrimaryColor = useMemo(() => theme.primary.main, [
-		theme.primary.main,
-	]);
 	const { refreshPlan } = usePlan();
 
 	const [loading, setLoading] = useState(true);
@@ -383,28 +346,103 @@ const PlansScreen = ({ navigation }) => {
 
 	const fetchPlansData = async () => {
 		try {
-			const [plansResponse, myPlanResponse] = await Promise.all([
-				accountAPI.getPlans(),
-				accountAPI.getCurrentPlan(),
-			]);
+			// Initialize Google Play Billing to retrieve subscription prices
+			if (Platform.OS === "android") {
+				try {
+					const isBillingReady = await initBilling();
+					if (!isBillingReady) {
+						console.warn(
+							"[PlansScreen] Billing service not ready, will use backend prices",
+						);
+					}
+				} catch (initError) {
+					console.warn("[PlansScreen] initBilling error:", initError);
+				}
+			}
+
+			const [plansResponse, myPlanResponse, googlePlayProducts] =
+				await Promise.all([
+					accountAPI.getPlans(),
+					accountAPI.getCurrentPlan(),
+					getSubscriptionProducts(),
+				]);
 
 			// Get plans from backend
 			const backendPlans = plansResponse.data?.plans || [];
 
+			// Create a map of plan code -> Google Play product for quick lookup
+			const googlePlayPriceMap = {};
+			if (Array.isArray(googlePlayProducts) && googlePlayProducts.length > 0) {
+				console.log(
+					"[PlansScreen] Google Play products received:",
+					googlePlayProducts,
+				);
+				googlePlayProducts.forEach((product) => {
+					if (product?.productId) {
+						// Find which plan code this product belongs to (by matching SKU)
+						Object.entries(SUBSCRIPTION_PRODUCT_MAP).forEach(
+							([planCode, sku]) => {
+								if (product.productId === sku) {
+									const formattedPrice = getFormattedPriceForProduct(product);
+									console.log(
+										`[PlansScreen] Mapped ${planCode} (${sku}) -> ${formattedPrice}`,
+									);
+									googlePlayPriceMap[planCode] = formattedPrice;
+								}
+							},
+						);
+					}
+				});
+			} else {
+				console.log(
+					"[PlansScreen] No Google Play products available, will use backend prices",
+				);
+			}
+
 			// Map backend plans to display format
-			const formattedPlans = backendPlans.map((plan) => ({
-				id: plan.code,
-				name: plan.code.toUpperCase()[0] + plan.code.slice(1), // Capitalize first letter
-				price: plan.price_monthly === 0 ? "$0" : `$${plan.price_monthly}`,
-				period: plan.price_monthly === 0 ? t("forever") : t("per_month"),
-				description: plan.description,
-				maxDecks: plan.max_decks,
-				maxFlashcards: plan.max_flashcards,
-				advancedStats: plan.advanced_stats,
-				features: getFeaturesList(plan),
-				// Show recommended badge for Pro (not Premium)
-				recommended: false,
-			}));
+			const formattedPlans = backendPlans.map((plan) => {
+				// For free plan, always show $0 and Forever
+				if (plan.code === "free") {
+					return {
+						id: plan.code,
+						name: plan.code.toUpperCase()[0] + plan.code.slice(1),
+						price: "$0",
+						period: t("forever"),
+						description: plan.description,
+						maxDecks: plan.max_decks,
+						maxFlashcards: plan.max_flashcards,
+						advancedStats: plan.advanced_stats,
+						features: getFeaturesList(plan),
+						recommended: false,
+					};
+				}
+
+				// For paid plans, prefer Google Play price, fallback to backend price
+				let displayPrice = "$0";
+
+				// Try Google Play price first
+				if (googlePlayPriceMap[plan.code]) {
+					displayPrice = googlePlayPriceMap[plan.code];
+				} else if (plan.price_monthly && parseFloat(plan.price_monthly) > 0) {
+					// Fallback to backend price if Google Play price not available
+					const priceNum = parseFloat(plan.price_monthly);
+					displayPrice = `$${priceNum.toFixed(2)}`;
+				}
+
+				return {
+					id: plan.code,
+					name: plan.code.toUpperCase()[0] + plan.code.slice(1), // Capitalize first letter
+					price: displayPrice,
+					period: t("per_month"),
+					description: plan.description,
+					maxDecks: plan.max_decks,
+					maxFlashcards: plan.max_flashcards,
+					advancedStats: plan.advanced_stats,
+					features: getFeaturesList(plan),
+					// Show recommended badge for Pro (not Premium)
+					recommended: false,
+				};
+			});
 
 			setPlans(formattedPlans);
 
@@ -542,13 +580,35 @@ const PlansScreen = ({ navigation }) => {
 		<ThemedView variant="gradient" style={styles.container}>
 			<SafeAreaView style={styles.safeArea} edges={["top"]}>
 				<ScrollView contentContainerStyle={styles.scrollContent}>
-					{/* Header (memoized to avoid re-renders during fetch/animation) */}
-					<Header
-						primaryColor={headerPrimaryColor}
-						title={headerTitle}
-						subtitle={headerSubtitle}
-						headerAnim={headerAnim}
-					/>
+					{/* Header */}
+					<Animated.View
+						style={[
+							styles.header,
+							{
+								opacity: headerAnim,
+								transform: [
+									{
+										translateY: headerAnim.interpolate({
+											inputRange: [0, 1],
+											outputRange: [-15, 0],
+										}),
+									},
+								],
+							},
+						]}
+					>
+						<View style={styles.headerTitle}>
+							<MaterialCommunityIcons
+								name="calendar"
+								size={28}
+								color={theme.primary.main}
+							/>
+							<ThemedText variant="h2" style={styles.headerTitleText}>
+								{t("plans_title")}
+							</ThemedText>
+						</View>
+						<ThemedText color="secondary">{t("plans_subtitle")}</ThemedText>
+					</Animated.View>
 
 					{/* Plans */}
 					<View style={styles.plansContainer}>
